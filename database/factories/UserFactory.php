@@ -34,6 +34,7 @@ class UserFactory extends Factory
             'hr_fim' => fake()->time('H:i'),
             'salario' => fake()->randomFloat(2, 1518, 8000),
             'vr_cred' => fake()->randomFloat(2, 350, 1500),
+            'tb2_id' => 1,
         ];
     }
 

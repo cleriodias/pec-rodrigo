@@ -31,6 +31,14 @@ const formatCurrency = (value) => {
     return parsed.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
 
+const formatUnitIds = (user) => {
+    if (user.units && user.units.length > 0) {
+        return user.units.map((unit) => unit.tb2_id).join(', ');
+    }
+
+    return user.tb2_id ?? '---';
+};
+
 export default function UserIndex({ auth, users }) {
 
     const { flash } = usePage().props;
@@ -69,6 +77,7 @@ export default function UserIndex({ auth, users }) {
                                 <td className="px-4 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">Jornada</td>
                                 <td className="px-4 py-3 text-right text-sm font-medium text-gray-500 tracking-wider">{'Sal\u00E1rio'}</td>
                                 <td className="px-4 py-3 text-right text-sm font-medium text-gray-500 tracking-wider">{'Cr\u00E9dito VR'}</td>
+                                <td className="px-4 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">Unidades (IDs)</td>
                                 <td className="px-4 py-3 text-center text-sm font-medium text-gray-500 tracking-wider">{'A\u00E7\u00F5es'}</td>
                             </tr>
                         </thead>
@@ -95,6 +104,9 @@ export default function UserIndex({ auth, users }) {
                                     </td>
                                     <td className="px-4 py-2 text-sm text-gray-500 tracking-wider text-right">
                                         {formatCurrency(user.vr_cred)}
+                                    </td>
+                                    <td className="px-4 py-2 text-sm text-gray-500 tracking-wider">
+                                        {formatUnitIds(user)}
                                     </td>
                                     <td className="px-4 py-2 text-sm text-gray-500 tracking-wider">
                                         <Link href={route('users.show', { user: user.id })}>
