@@ -21,6 +21,11 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'funcao',
+        'hr_ini',
+        'hr_fim',
+        'salario',
+        'vr_cred',
     ];
 
     /**
@@ -43,6 +48,11 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'funcao' => 'integer',
+            'hr_ini' => 'string',
+            'hr_fim' => 'string',
+            'salario' => 'float',
+            'vr_cred' => 'float',
         ];
     }
 }
