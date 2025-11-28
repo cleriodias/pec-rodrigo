@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Unidade;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redirect;
 use Inertia\Inertia;
@@ -194,6 +195,25 @@ class UserController extends Controller
         $user->units()->sync($unitIds);
 
         return Redirect::route('users.show', ['user' => $user->id])->with('success', 'Usuário editado com sucesso!');
+    }
+
+    public function search(Request $request): JsonResponse
+    {
+        $term = trim((string) $request->input('q', ''));
+
+        if ($term === '') {
+            return response()->json([]);
+        }
+
+        $safeTerm = str_replace(['%', '_'], ['\\%', '\\_'], $term);
+
+        $users = User::query()
+            ->where('name', 'like', '%' . $safeTerm . '%')
+            ->orderBy('name')
+            ->limit(10)
+            ->get(['id', 'name']);
+
+        return response()->json($users);
     }
 
     public function destroy(User $user)
