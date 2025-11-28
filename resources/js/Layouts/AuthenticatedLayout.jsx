@@ -7,6 +7,7 @@ import { useState } from 'react';
 
 export default function AuthenticatedLayout({ header, children }) {
     const user = usePage().props.auth.user;
+    const canSeeUnits = user && [0, 1].includes(Number(user.funcao));
 
     const [showingNavigationDropdown, setShowingNavigationDropdown] =
         useState(false);
@@ -37,6 +38,15 @@ export default function AuthenticatedLayout({ header, children }) {
                                 >
                                     Usuários
                                 </NavLink>
+
+                                {canSeeUnits && (
+                                    <NavLink
+                                        href={route('units.index')}
+                                        active={route().current('units.index')}
+                                    >
+                                        Unidades
+                                    </NavLink>
+                                )}
                             </div>
                         </div>
 
@@ -141,6 +151,22 @@ export default function AuthenticatedLayout({ header, children }) {
                         >
                             Dashboard
                         </ResponsiveNavLink>
+
+                        <ResponsiveNavLink
+                            href={route('users.index')}
+                            active={route().current('users.index')}
+                        >
+                            {'Usu\u00E1rios'}
+                        </ResponsiveNavLink>
+
+                        {canSeeUnits && (
+                            <ResponsiveNavLink
+                                href={route('units.index')}
+                                active={route().current('units.index')}
+                            >
+                                Unidades
+                            </ResponsiveNavLink>
+                        )}
                     </div>
 
                     <div className="border-t border-gray-200 pb-1 pt-4 dark:border-gray-600">
