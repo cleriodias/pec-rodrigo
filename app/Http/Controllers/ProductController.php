@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Produto;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\Validation\Rule;
@@ -81,6 +82,51 @@ class ProductController extends Controller
 
         return Redirect::route('products.index')
             ->with('success', 'Produto removido com sucesso!');
+    }
+
+    public function search(Request $request): JsonResponse
+    {
+        $term = trim((string) $request->input('q', ''));
+
+        $isNumeric = ctype_digit($term);
+
+        if (mb_strlen($term) < 3 && !$isNumeric) {
+            return response()->json([]);
+        }
+
+        $safeTerm = str_replace(['%', '_'], ['\\%', '\\_'], $term);
+        $likeTerm = '%' . $safeTerm . '%';
+        $numericTerm = $isNumeric ? (int) $term : null;
+        $isLongNumeric = $isNumeric && mb_strlen($term) > 4;
+
+        $products = Produto::query()
+            ->where(function ($query) use ($isNumeric, $isLongNumeric, $likeTerm, $numericTerm) {
+                if ($isNumeric) {
+                    if ($isLongNumeric) {
+                        $query->where('tb1_codbar', 'like', $likeTerm);
+                    } else {
+                        $query->where('tb1_id', $numericTerm);
+                    }
+
+                    return;
+                }
+
+                $query->where('tb1_nome', 'like', $likeTerm);
+            })
+            ->orderByDesc('tb1_status')
+            ->orderBy('tb1_nome')
+            ->limit(10)
+            ->get([
+                'tb1_id',
+                'tb1_nome',
+                'tb1_codbar',
+                'tb1_vlr_custo',
+                'tb1_vlr_venda',
+                'tb1_tipo',
+                'tb1_status',
+            ]);
+
+        return response()->json($products);
     }
 
     private function validateProduct(Request $request, ?Produto $product = null): array
