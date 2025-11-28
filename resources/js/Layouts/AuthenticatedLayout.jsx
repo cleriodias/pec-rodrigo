@@ -10,6 +10,7 @@ export default function AuthenticatedLayout({ header, children }) {
     const user = pageProps.auth.user;
     const activeUnitName = pageProps.auth.unit?.name ?? 'Dashboard';
     const canSeeUnits = user && [0, 1].includes(Number(user.funcao));
+    const canSeeReports = canSeeUnits;
 
     const [showingNavigationDropdown, setShowingNavigationDropdown] =
         useState(false);
@@ -91,6 +92,13 @@ export default function AuthenticatedLayout({ header, children }) {
                                         >
                                             Profile
                                         </Dropdown.Link>
+                                        {canSeeReports && (
+                                            <Dropdown.Link
+                                                href={route('reports.sales.today')}
+                                            >
+                                                Vendas hoje
+                                            </Dropdown.Link>
+                                        )}
                                         <Dropdown.Link
                                             href={route('logout')}
                                             method="post"
@@ -197,6 +205,14 @@ export default function AuthenticatedLayout({ header, children }) {
                             <ResponsiveNavLink href={route('profile.edit')}>
                                 Profile
                             </ResponsiveNavLink>
+                            {canSeeReports && (
+                                <ResponsiveNavLink
+                                    href={route('reports.sales.today')}
+                                    active={route().current('reports.sales.today')}
+                                >
+                                    Vendas hoje
+                                </ResponsiveNavLink>
+                            )}
                             <ResponsiveNavLink
                                 method="post"
                                 href={route('logout')}

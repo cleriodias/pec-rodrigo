@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SaleController;
+use App\Http\Controllers\SalesReportController;
 use App\Http\Controllers\UnitController;
 use App\Http\Controllers\UserController;
 use Illuminate\Foundation\Application;
@@ -33,6 +35,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/edit-user/{user}', [UserController::class, 'edit'])->name('users.edit');
     route::put('/update-user/{user}', [UserController::class, 'update'])->name('users.update');
     route::delete('/destroy-user/{user}', [UserController::class, 'destroy'])->name('users.destroy');
+    Route::get('/users/search', [UserController::class, 'search'])->name('users.search');
 
     Route::get('/units', [UnitController::class, 'index'])->name('units.index');
     Route::get('/units/create', [UnitController::class, 'create'])->name('units.create');
@@ -44,6 +47,8 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/products/search', [ProductController::class, 'search'])->name('products.search');
     Route::resource('products', ProductController::class);
+    Route::post('/sales', [SaleController::class, 'store'])->name('sales.store');
+    Route::get('/reports/sales-today', [SalesReportController::class, 'today'])->name('reports.sales.today');
 });
 
 require __DIR__.'/auth.php';
