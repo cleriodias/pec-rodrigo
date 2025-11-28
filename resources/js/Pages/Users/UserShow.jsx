@@ -30,6 +30,7 @@ const formatCurrency = (value) => {
 export default function UserShow({ auth, user }) {
 
     const { flash } = usePage().props;
+    const linkedUnits = user.units ?? [];
     return (
         <AuthenticatedLayout
             user={auth.user}
@@ -89,6 +90,26 @@ export default function UserShow({ auth, user }) {
                         <div className="mb-4">
                             <p className="text-md font-semibold text-gray-700 dark:text-gray-200">{'Cr\u00E9dito VR'}</p>
                             <p className="text-gray-600 dark:text-gray-400">{formatCurrency(user.vr_cred)}</p>
+                        </div>
+
+                        <div className="mb-4">
+                            <p className="text-md font-semibold text-gray-700 dark:text-gray-200">Unidade principal (ID)</p>
+                            <p className="text-gray-600 dark:text-gray-400">{user.tb2_id ?? '---'}</p>
+                        </div>
+
+                        <div className="mb-4">
+                            <p className="text-md font-semibold text-gray-700 dark:text-gray-200">Unidades vinculadas</p>
+                            {linkedUnits.length ? (
+                                <ul className="list-disc list-inside text-gray-600 dark:text-gray-400">
+                                    {linkedUnits.map((unit) => (
+                                        <li key={unit.tb2_id}>
+                                            #{unit.tb2_id} - {unit.tb2_nome}
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p className="text-gray-600 dark:text-gray-400">Nenhuma unidade vinculada.</p>
+                            )}
                         </div>
 
                     </div>

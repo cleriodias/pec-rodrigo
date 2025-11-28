@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Unidade;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redirect;
 use Inertia\Inertia;
@@ -12,19 +13,29 @@ class UserController extends Controller
 {
     public function index(): Response
     {
-        $users = User::orderByDesc('id')->paginate(10);
+        $users = User::with('units:tb2_id,tb2_nome')
+            ->orderByDesc('id')
+            ->paginate(10);
 
-        return Inertia::render('Users/UserIndex', ['users' => $users]);
+        return Inertia::render('Users/UserIndex', [
+            'users' => $users,
+        ]);
     }
 
     public function show(User $user): Response
     {
+        $user->load('units:tb2_id,tb2_nome');
+
         return Inertia::render('Users/UserShow', ['user' => $user]);
     }
 
     public function create(): Response
     {
-        return Inertia::render('Users/UserCreate');
+        $units = Unidade::orderBy('tb2_nome')->get(['tb2_id', 'tb2_nome']);
+
+        return Inertia::render('Users/UserCreate', [
+            'units' => $units,
+        ]);
     }
 
     public function store(Request $request)
@@ -39,6 +50,8 @@ class UserController extends Controller
                 'hr_fim' => 'required|date_format:H:i|after:hr_ini',
                 'salario' => 'required|numeric|min:0',
                 'vr_cred' => 'required|numeric|min:0',
+                'tb2_id' => 'required|array|min:1',
+                'tb2_id.*' => 'integer|exists:tb2_unidades,tb2_id',
             ],
             [
                 'name.required' => 'O campo nome é obrigatório!',
@@ -68,8 +81,22 @@ class UserController extends Controller
                 'vr_cred.required' => 'Informe o crédito de refeição.',
                 'vr_cred.numeric' => 'O crédito deve ser numérico.',
                 'vr_cred.min' => 'O crédito deve ser maior ou igual a zero.',
+                'tb2_id.required' => 'Selecione pelo menos uma unidade.',
+                'tb2_id.array' => 'Selecao de unidades invalida.',
+                'tb2_id.min' => 'Selecione pelo menos uma unidade.',
+                'tb2_id.*.integer' => 'Unidade selecionada invalida.',
+                'tb2_id.*.exists' => 'Unidade selecionada nao existe.',
             ]
         );
+
+        $unitIds = collect($request->input('tb2_id', []))
+            ->map(fn ($value) => (int) $value)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $primaryUnit = $unitIds[0] ?? 1;
 
         $user = User::create([
             'name' => $request->name,
@@ -80,14 +107,23 @@ class UserController extends Controller
             'hr_fim' => $request->hr_fim,
             'salario' => $request->salario,
             'vr_cred' => $request->vr_cred,
+            'tb2_id' => $primaryUnit,
         ]);
+
+        $user->units()->sync($unitIds);
 
         return Redirect::route('users.show', ['user' => $user->id])->with('success', 'Usuário cadastrado com sucesso!');
     }
 
     public function edit(User $user): Response
     {
-        return Inertia::render('Users/UserEdit', ['user' => $user]);
+        $units = Unidade::orderBy('tb2_nome')->get(['tb2_id', 'tb2_nome']);
+        $user->load('units:tb2_id,tb2_nome');
+
+        return Inertia::render('Users/UserEdit', [
+            'user' => $user,
+            'units' => $units,
+        ]);
     }
 
     public function update(Request $request, User $user)
@@ -101,6 +137,8 @@ class UserController extends Controller
                 'hr_fim' => 'required|date_format:H:i|after:hr_ini',
                 'salario' => 'required|numeric|min:0',
                 'vr_cred' => 'required|numeric|min:0',
+                'tb2_id' => 'required|array|min:1',
+                'tb2_id.*' => 'integer|exists:tb2_unidades,tb2_id',
             ],
             [
                 'name.required' => 'O campo nome é obrigatório!',
@@ -125,8 +163,22 @@ class UserController extends Controller
                 'vr_cred.required' => 'Informe o crédito de refeição.',
                 'vr_cred.numeric' => 'O crédito deve ser numérico.',
                 'vr_cred.min' => 'O crédito deve ser maior ou igual a zero.',
+                'tb2_id.required' => 'Selecione pelo menos uma unidade.',
+                'tb2_id.array' => 'Selecao de unidades invalida.',
+                'tb2_id.min' => 'Selecione pelo menos uma unidade.',
+                'tb2_id.*.integer' => 'Unidade selecionada invalida.',
+                'tb2_id.*.exists' => 'Unidade selecionada nao existe.',
             ]
         );
+
+        $unitIds = collect($request->input('tb2_id', []))
+            ->map(fn ($value) => (int) $value)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $primaryUnit = $unitIds[0] ?? 1;
 
         $user->update([
             'name' => $request->name,
@@ -136,7 +188,10 @@ class UserController extends Controller
             'hr_fim' => $request->hr_fim,
             'salario' => $request->salario,
             'vr_cred' => $request->vr_cred,
+            'tb2_id' => $primaryUnit,
         ]);
+
+        $user->units()->sync($unitIds);
 
         return Redirect::route('users.show', ['user' => $user->id])->with('success', 'Usuário editado com sucesso!');
     }

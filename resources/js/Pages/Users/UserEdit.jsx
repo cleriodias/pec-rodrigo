@@ -21,8 +21,11 @@ const formatTime = (value) => {
     return value.substring(0, 5);
 };
 
-export default function UserEdit({ auth, user }) {
+export default function UserEdit({ auth, user, units = [] }) {
 
+    const initialUnits = user.units && user.units.length
+        ? user.units.map((unit) => String(unit.tb2_id))
+        : (user.tb2_id ? [String(user.tb2_id)] : []);
     const { data, setData, put, processing, errors } = useForm({
         id: user.id || '',
         name: user.name || '',
@@ -32,6 +35,7 @@ export default function UserEdit({ auth, user }) {
         hr_fim: formatTime(user.hr_fim) || '17:00',
         salario: user.salario !== undefined && user.salario !== null ? String(user.salario) : '1518',
         vr_cred: user.vr_cred !== undefined && user.vr_cred !== null ? String(user.vr_cred) : '350',
+        tb2_id: initialUnits,
     });
 
     const handleSubmit = (e) => {
@@ -40,6 +44,16 @@ export default function UserEdit({ auth, user }) {
 
         put(route('users.update', {user: data.id}));
     }
+
+    const selectedUnits = data.tb2_id ?? [];
+
+    const handleUnitToggle = (unitId) => {
+        if (selectedUnits.includes(unitId)) {
+            setData('tb2_id', selectedUnits.filter((value) => value !== unitId));
+        } else {
+            setData('tb2_id', [...selectedUnits, unitId]);
+        }
+    };
 
     return (
         <AuthenticatedLayout
@@ -105,6 +119,34 @@ export default function UserEdit({ auth, user }) {
                                     ))}
                                 </select>
                                 {errors.funcao && <span className="text-red-600">{errors.funcao}</span>}
+                            </div>
+
+                            <div className="mb-4">
+                                <p className="block text-sm font-medium text-gray-700">Unidades</p>
+                                {units.length ? (
+                                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                                        {units.map((unit) => {
+                                            const unitId = String(unit.tb2_id);
+                                            return (
+                                                <label key={unit.tb2_id} className="inline-flex items-center space-x-2 text-sm text-gray-700 dark:text-gray-200">
+                                                    <input
+                                                        type="checkbox"
+                                                        value={unitId}
+                                                        checked={selectedUnits.includes(unitId)}
+                                                        onChange={() => handleUnitToggle(unitId)}
+                                                        className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                                                    />
+                                                    <span>#{unit.tb2_id} - {unit.tb2_nome}</span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                        Nenhuma unidade cadastrada. Cadastre ao menos uma unidade para prosseguir.
+                                    </p>
+                                )}
+                                {errors.tb2_id && <span className="text-red-600">{errors.tb2_id}</span>}
                             </div>
 
                             <div className="mb-4 grid gap-4 sm:grid-cols-2">

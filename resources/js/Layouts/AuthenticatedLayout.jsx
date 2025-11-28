@@ -6,7 +6,9 @@ import { Link, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 
 export default function AuthenticatedLayout({ header, children }) {
-    const user = usePage().props.auth.user;
+    const pageProps = usePage().props;
+    const user = pageProps.auth.user;
+    const activeUnitName = pageProps.auth.unit?.name ?? 'Dashboard';
     const canSeeUnits = user && [0, 1].includes(Number(user.funcao));
 
     const [showingNavigationDropdown, setShowingNavigationDropdown] =
@@ -29,7 +31,7 @@ export default function AuthenticatedLayout({ header, children }) {
                                     href={route('dashboard')}
                                     active={route().current('dashboard')}
                                 >
-                                    Dashboard
+                                    {activeUnitName}
                                 </NavLink>
 
                                 <NavLink
@@ -149,7 +151,7 @@ export default function AuthenticatedLayout({ header, children }) {
                             href={route('dashboard')}
                             active={route().current('dashboard')}
                         >
-                            Dashboard
+                            {activeUnitName}
                         </ResponsiveNavLink>
 
                         <ResponsiveNavLink

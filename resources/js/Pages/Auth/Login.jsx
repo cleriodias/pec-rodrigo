@@ -1,20 +1,27 @@
 import Checkbox from '@/Components/Checkbox';
 import InputError from '@/Components/InputError';
 import InputLabel from '@/Components/InputLabel';
-import PrimaryButton from '@/Components/Button/PrimaryButton';
 import TextInput from '@/Components/TextInput';
 import GuestLayout from '@/Layouts/GuestLayout';
 import { Head, Link, useForm } from '@inertiajs/react';
 
-export default function Login({ status, canResetPassword }) {
-    const { data, setData, post, processing, errors, reset } = useForm({
+export default function Login({ status, canResetPassword, units = [] }) {
+    const { data, setData, post, processing, errors, reset, transform } = useForm({
         email: '',
         password: '',
         remember: false,
+        unit_id: '',
     });
 
-    const submit = (e) => {
+    const preventSubmit = (e) => {
         e.preventDefault();
+    };
+
+    const handleUnitLogin = (unitId) => {
+        transform((formData) => ({
+            ...formData,
+            unit_id: unitId,
+        }));
 
         post(route('login'), {
             onFinish: () => reset('password'),
@@ -31,7 +38,7 @@ export default function Login({ status, canResetPassword }) {
                 </div>
             )}
 
-            <form onSubmit={submit}>
+            <form onSubmit={preventSubmit}>
                 <div>
                     <InputLabel htmlFor="email" value="E-mail" />
 
@@ -92,9 +99,32 @@ export default function Login({ status, canResetPassword }) {
                         </Link>
                     )}
 
-                    <PrimaryButton className="ms-4" disabled={processing}>
-                        Acessar
-                    </PrimaryButton>
+                </div>
+
+                <div className="mt-6">
+                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                        Escolha a unidade
+                    </p>
+                    {units.length ? (
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                            {units.map((unit) => (
+                                <button
+                                    type="button"
+                                    key={unit.tb2_id}
+                                    disabled={processing}
+                                    onClick={() => handleUnitLogin(unit.tb2_id)}
+                                    className="rounded-md border border-indigo-500 px-4 py-2 text-sm font-semibold text-indigo-600 transition duration-150 ease-in-out hover:bg-indigo-500 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 dark:border-indigo-400 dark:text-indigo-200 dark:hover:bg-indigo-400 dark:hover:text-gray-900"
+                                >
+                                    {unit.tb2_nome}
+                                </button>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                            Nenhuma unidade cadastrada.
+                        </p>
+                    )}
+                    <InputError message={errors.unit_id} className="mt-2" />
                 </div>
 
         </form>

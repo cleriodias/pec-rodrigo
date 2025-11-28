@@ -29,6 +29,7 @@ class LoginRequest extends FormRequest
         return [
             'email' => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
+            'unit_id' => ['required', 'integer', 'exists:tb2_unidades,tb2_id'],
         ];
     }
 

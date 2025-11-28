@@ -6,6 +6,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class User extends Authenticatable
 {
@@ -26,6 +28,7 @@ class User extends Authenticatable
         'hr_fim',
         'salario',
         'vr_cred',
+        'tb2_id',
     ];
 
     /**
@@ -53,6 +56,17 @@ class User extends Authenticatable
             'hr_fim' => 'string',
             'salario' => 'float',
             'vr_cred' => 'float',
+            'tb2_id' => 'integer',
         ];
+    }
+
+    public function units(): BelongsToMany
+    {
+        return $this->belongsToMany(Unidade::class, 'tb2_unidade_user', 'user_id', 'tb2_id')->withTimestamps();
+    }
+
+    public function primaryUnit(): BelongsTo
+    {
+        return $this->belongsTo(Unidade::class, 'tb2_id', 'tb2_id');
     }
 }

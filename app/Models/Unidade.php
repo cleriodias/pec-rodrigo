@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Unidade extends Model
 {
@@ -21,4 +22,9 @@ class Unidade extends Model
         'tb2_cnpj',
         'tb2_localizacao',
     ];
+
+    public function users(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'tb2_unidade_user', 'tb2_id', 'user_id')->withTimestamps();
+    }
 }
