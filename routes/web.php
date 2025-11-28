@@ -42,6 +42,7 @@ Route::middleware('auth')->group(function () {
     Route::put('/units/{unit}', [UnitController::class, 'update'])->name('units.update');
     Route::delete('/units/{unit}', [UnitController::class, 'destroy'])->name('units.destroy');
 
+    Route::get('/products/search', [ProductController::class, 'search'])->name('products.search');
     Route::resource('products', ProductController::class);
 });
 
