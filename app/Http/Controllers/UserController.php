@@ -1,0 +1,150 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Redirect;
+use Inertia\Inertia;
+use Inertia\Response;
+
+class UserController extends Controller
+{
+    public function index(): Response
+    {
+        $users = User::orderByDesc('id')->paginate(10);
+
+        return Inertia::render('Users/UserIndex', ['users' => $users]);
+    }
+
+    public function show(User $user): Response
+    {
+        return Inertia::render('Users/UserShow', ['user' => $user]);
+    }
+
+    public function create(): Response
+    {
+        return Inertia::render('Users/UserCreate');
+    }
+
+    public function store(Request $request)
+    {
+        $request->validate(
+            [
+                'name' => 'required|string|max:255',
+                'email' => 'required|string|email|max:255|unique:users',
+                'password' => 'required|string|min:8|max:255|confirmed',
+                'funcao' => 'required|integer|between:0,6',
+                'hr_ini' => 'required|date_format:H:i',
+                'hr_fim' => 'required|date_format:H:i|after:hr_ini',
+                'salario' => 'required|numeric|min:0',
+                'vr_cred' => 'required|numeric|min:0',
+            ],
+            [
+                'name.required' => 'O campo nome é obrigatório!',
+                'name.string' => 'O nome deve ser uma string válida.',
+                'name.max' => 'O nome não pode ter mais que :max caracteres.',
+                'email.required' => 'O campo e-mail é obrigatório.',
+                'email.string' => 'O e-mail deve ser uma string válida.',
+                'email.email' => 'O e-mail deve ser um endereço válido.',
+                'email.max' => 'O e-mail não pode ter mais que :max caracteres.',
+                'email.unique' => 'Este e-mail já está cadastrado.',
+                'password.required' => 'O campo senha é obrigatório.',
+                'password.string' => 'A senha deve ser uma string válida.',
+                'password.min' => 'A senha não pode ter menos que :min caracteres.',
+                'password.max' => 'A senha não pode ter mais que :max caracteres.',
+                'password.confirmed' => 'A confirmação da senha não corresponde.',
+                'funcao.required' => 'Selecione a função do usuário.',
+                'funcao.integer' => 'Função inválida.',
+                'funcao.between' => 'Função não reconhecida.',
+                'hr_ini.required' => 'Informe o início da jornada.',
+                'hr_ini.date_format' => 'Horário inicial inválido (HH:MM).',
+                'hr_fim.required' => 'Informe o fim da jornada.',
+                'hr_fim.date_format' => 'Horário final inválido (HH:MM).',
+                'hr_fim.after' => 'O fim da jornada deve ser após o início.',
+                'salario.required' => 'Informe o salário.',
+                'salario.numeric' => 'O salário deve ser numérico.',
+                'salario.min' => 'O salário deve ser maior ou igual a zero.',
+                'vr_cred.required' => 'Informe o crédito de refeição.',
+                'vr_cred.numeric' => 'O crédito deve ser numérico.',
+                'vr_cred.min' => 'O crédito deve ser maior ou igual a zero.',
+            ]
+        );
+
+        $user = User::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => $request->password,
+            'funcao' => $request->funcao,
+            'hr_ini' => $request->hr_ini,
+            'hr_fim' => $request->hr_fim,
+            'salario' => $request->salario,
+            'vr_cred' => $request->vr_cred,
+        ]);
+
+        return Redirect::route('users.show', ['user' => $user->id])->with('success', 'Usuário cadastrado com sucesso!');
+    }
+
+    public function edit(User $user): Response
+    {
+        return Inertia::render('Users/UserEdit', ['user' => $user]);
+    }
+
+    public function update(Request $request, User $user)
+    {
+        $request->validate(
+            [
+                'name' => 'required|string|max:255',
+                'email' => "required|string|email|max:255|unique:users,email,{$user->id}",
+                'funcao' => 'required|integer|between:0,6',
+                'hr_ini' => 'required|date_format:H:i',
+                'hr_fim' => 'required|date_format:H:i|after:hr_ini',
+                'salario' => 'required|numeric|min:0',
+                'vr_cred' => 'required|numeric|min:0',
+            ],
+            [
+                'name.required' => 'O campo nome é obrigatório!',
+                'name.string' => 'O nome deve ser uma string válida.',
+                'name.max' => 'O nome não pode ter mais que :max caracteres.',
+                'email.required' => 'O campo e-mail é obrigatório.',
+                'email.string' => 'O e-mail deve ser uma string válida.',
+                'email.email' => 'O e-mail deve ser um endereço válido.',
+                'email.max' => 'O e-mail não pode ter mais que :max caracteres.',
+                'email.unique' => 'Este e-mail já está cadastrado.',
+                'funcao.required' => 'Selecione a função do usuário.',
+                'funcao.integer' => 'Função inválida.',
+                'funcao.between' => 'Função não reconhecida.',
+                'hr_ini.required' => 'Informe o início da jornada.',
+                'hr_ini.date_format' => 'Horário inicial inválido (HH:MM).',
+                'hr_fim.required' => 'Informe o fim da jornada.',
+                'hr_fim.date_format' => 'Horário final inválido (HH:MM).',
+                'hr_fim.after' => 'O fim da jornada deve ser após o início.',
+                'salario.required' => 'Informe o salário.',
+                'salario.numeric' => 'O salário deve ser numérico.',
+                'salario.min' => 'O salário deve ser maior ou igual a zero.',
+                'vr_cred.required' => 'Informe o crédito de refeição.',
+                'vr_cred.numeric' => 'O crédito deve ser numérico.',
+                'vr_cred.min' => 'O crédito deve ser maior ou igual a zero.',
+            ]
+        );
+
+        $user->update([
+            'name' => $request->name,
+            'email' => $request->email,
+            'funcao' => $request->funcao,
+            'hr_ini' => $request->hr_ini,
+            'hr_fim' => $request->hr_fim,
+            'salario' => $request->salario,
+            'vr_cred' => $request->vr_cred,
+        ]);
+
+        return Redirect::route('users.show', ['user' => $user->id])->with('success', 'Usuário editado com sucesso!');
+    }
+
+    public function destroy(User $user)
+    {
+        $user->delete();
+
+        return Redirect::route('users.index')->with('success', 'Usuário apagado com sucesso!');
+    }
+}
