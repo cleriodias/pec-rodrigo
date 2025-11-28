@@ -43,8 +43,8 @@ export default function UserShow({ auth, user }) {
                         <h3 className="text-lg">Visualizar</h3>
                         <div className="flex space-x-4">
                             <Link href={route('users.index')}>
-                                <InfoButton>
-                                    Listar
+                                <InfoButton aria-label="Listar" title="Listar">
+                                    <i className="bi bi-list text-lg" aria-hidden="true"></i>
                                 </InfoButton>
                             </Link>
                         </div>

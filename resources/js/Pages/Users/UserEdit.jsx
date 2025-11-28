@@ -54,8 +54,8 @@ export default function UserEdit({ auth, user }) {
                         <h3 className="text-lg">Editar</h3>
                         <div className="flex space-x-4">
                             <Link href={route('users.index')}>
-                                <InfoButton>
-                                    Listar
+                                <InfoButton aria-label="Listar" title="Listar">
+                                    <i className="bi bi-list text-lg" aria-hidden="true"></i>
                                 </InfoButton>
                             </Link>
                         </div>
@@ -166,8 +166,10 @@ export default function UserEdit({ auth, user }) {
                                     type="submit"
                                     disabled={processing}
                                     className="text-sm"
+                                    aria-label="Salvar"
+                                    title="Salvar"
                                 >
-                                    Salvar
+                                    <i className="bi bi-floppy text-lg" aria-hidden="true"></i>
                                 </WarningButton>
                             </div>
                         </form>

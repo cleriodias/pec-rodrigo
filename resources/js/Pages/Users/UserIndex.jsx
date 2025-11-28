@@ -48,8 +48,8 @@ export default function UserIndex({ auth, users }) {
                         <h3 className="text-lg">Listar</h3>
                         <div className="flex space-x-4">
                             <Link href={route('users.create')}>
-                                <SuccessButton>
-                                    Cadastrar
+                                <SuccessButton aria-label="Cadastrar" title="Cadastrar">
+                                    <i className="bi bi-plus-lg text-lg" aria-hidden="true"></i>
                                 </SuccessButton>
                             </Link>
                         </div>
@@ -98,13 +98,21 @@ export default function UserIndex({ auth, users }) {
                                     </td>
                                     <td className="px-4 py-2 text-sm text-gray-500 tracking-wider">
                                         <Link href={route('users.show', { user: user.id })}>
-                                            <PrimaryButton className="ms-1">
-                                                Visualizar
+                                            <PrimaryButton
+                                                className="ms-1"
+                                                aria-label="Visualizar"
+                                                title="Visualizar"
+                                            >
+                                                <i className="bi bi-eye text-lg" aria-hidden="true"></i>
                                             </PrimaryButton>
                                         </Link>
                                         <Link href={route('users.edit', { user: user.id })}>
-                                            <WarningButton className="ms-1">
-                                                Editar
+                                            <WarningButton
+                                                className="ms-1"
+                                                aria-label="Editar"
+                                                title="Editar"
+                                            >
+                                                <i className="bi bi-pencil-square text-lg" aria-hidden="true"></i>
                                             </WarningButton>
                                         </Link>
                                         <ConfirmDeleteButton id={user.id} routeName="users.destroy" />

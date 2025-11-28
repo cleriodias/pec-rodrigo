@@ -34,8 +34,8 @@ export default function UnitEdit({ auth, unit }) {
                         <h3 className="text-lg">Editar</h3>
                         <div className="flex space-x-4">
                             <Link href={route('units.index')}>
-                                <InfoButton>
-                                    Listar
+                                <InfoButton aria-label="Listar" title="Listar">
+                                    <i className="bi bi-list text-lg" aria-hidden="true"></i>
                                 </InfoButton>
                             </Link>
                         </div>
@@ -128,8 +128,10 @@ export default function UnitEdit({ auth, unit }) {
                                     type="submit"
                                     disabled={processing}
                                     className="text-sm"
+                                    aria-label="Salvar"
+                                    title="Salvar"
                                 >
-                                    Salvar
+                                    <i className="bi bi-floppy text-lg" aria-hidden="true"></i>
                                 </WarningButton>
                             </div>
                         </form>
