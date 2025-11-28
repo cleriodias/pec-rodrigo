@@ -97,11 +97,7 @@ export default function Login({ status, canResetPassword }) {
                     </PrimaryButton>
                 </div>
 
-                <div className="ms-2 text-sm text-gray-600 dark:text-gray-400">
-                    Usuário: cesar@celke.com.br
-                    Senha: 123456A#
-                </div>
-            </form>
+        </form>
         </GuestLayout>
     );
 }
