@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UnitController;
 use App\Http\Controllers\UserController;
@@ -40,6 +41,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/units/{unit}/edit', [UnitController::class, 'edit'])->name('units.edit');
     Route::put('/units/{unit}', [UnitController::class, 'update'])->name('units.update');
     Route::delete('/units/{unit}', [UnitController::class, 'destroy'])->name('units.destroy');
+
+    Route::resource('products', ProductController::class);
 });
 
 require __DIR__.'/auth.php';

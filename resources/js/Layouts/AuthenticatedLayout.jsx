@@ -49,6 +49,12 @@ export default function AuthenticatedLayout({ header, children }) {
                                         Unidades
                                     </NavLink>
                                 )}
+                                <NavLink
+                                    href={route('products.index')}
+                                    active={route().current('products.*')}
+                                >
+                                    Produtos
+                                </NavLink>
                             </div>
                         </div>
 
@@ -169,6 +175,12 @@ export default function AuthenticatedLayout({ header, children }) {
                                 Unidades
                             </ResponsiveNavLink>
                         )}
+                        <ResponsiveNavLink
+                            href={route('products.index')}
+                            active={route().current('products.*')}
+                        >
+                            Produtos
+                        </ResponsiveNavLink>
                     </div>
 
                     <div className="border-t border-gray-200 pb-1 pt-4 dark:border-gray-600">
