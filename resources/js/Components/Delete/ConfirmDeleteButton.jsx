@@ -12,8 +12,13 @@ function ConfirmDeleteButton({ id, routeName }){
     }
 
     return (
-        <DangerButton className="ms-1 text-sm" onClick={handleDelete}>
-            Apagar
+        <DangerButton
+            className="ms-1 text-sm"
+            onClick={handleDelete}
+            aria-label="Apagar"
+            title="Apagar"
+        >
+            <i className="bi bi-trash text-lg" aria-hidden="true"></i>
         </DangerButton>
     )
 }

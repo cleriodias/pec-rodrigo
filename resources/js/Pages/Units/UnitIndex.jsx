@@ -23,8 +23,8 @@ export default function UnitIndex({ auth, units }) {
                         <h3 className="text-lg">Listar</h3>
                         <div className="flex space-x-4">
                             <Link href={route('units.create')}>
-                                <SuccessButton>
-                                    Cadastrar
+                                <SuccessButton aria-label="Cadastrar" title="Cadastrar">
+                                    <i className="bi bi-plus-lg text-lg" aria-hidden="true"></i>
                                 </SuccessButton>
                             </Link>
                         </div>
@@ -41,7 +41,7 @@ export default function UnitIndex({ auth, units }) {
                                 <td className="px-4 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">CEP</td>
                                 <td className="px-4 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">Telefone</td>
                                 <td className="px-4 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">CNPJ</td>
-                                <td className="px-4 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">Localiza\u00E7\u00E3o</td>
+                                <td className="px-4 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">{'Localiza\u00E7\u00E3o'}</td>
                                 <td className="px-4 py-3 text-center text-sm font-medium text-gray-500 tracking-wider">{'A\u00E7\u00F5es'}</td>
                             </tr>
                         </thead>
@@ -78,13 +78,21 @@ export default function UnitIndex({ auth, units }) {
                                     </td>
                                     <td className="px-4 py-2 text-sm text-gray-500 tracking-wider">
                                         <Link href={route('units.show', { unit: unit.tb2_id })}>
-                                            <PrimaryButton className="ms-1">
-                                                Visualizar
+                                            <PrimaryButton
+                                                className="ms-1"
+                                                aria-label="Visualizar"
+                                                title="Visualizar"
+                                            >
+                                                <i className="bi bi-eye text-lg" aria-hidden="true"></i>
                                             </PrimaryButton>
                                         </Link>
                                         <Link href={route('units.edit', { unit: unit.tb2_id })}>
-                                            <WarningButton className="ms-1">
-                                                Editar
+                                            <WarningButton
+                                                className="ms-1"
+                                                aria-label="Editar"
+                                                title="Editar"
+                                            >
+                                                <i className="bi bi-pencil-square text-lg" aria-hidden="true"></i>
                                             </WarningButton>
                                         </Link>
                                         <ConfirmDeleteButton id={unit.tb2_id} routeName="units.destroy" />

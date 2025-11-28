@@ -47,8 +47,8 @@ export default function UserCreate({ auth }) {
                         <h3 className="text-lg">Cadastrar</h3>
                         <div className="flex space-x-4">
                             <Link href={route('users.index')}>
-                                <InfoButton>
-                                    Listar
+                                <InfoButton aria-label="Listar" title="Listar">
+                                    <i className="bi bi-list text-lg" aria-hidden="true"></i>
                                 </InfoButton>
                             </Link>
                         </div>
@@ -187,8 +187,10 @@ export default function UserCreate({ auth }) {
                                     type="submit"
                                     disabled={processing}
                                     className="text-sm"
+                                    aria-label="Cadastrar"
+                                    title="Cadastrar"
                                 >
-                                    Cadastrar
+                                    <i className="bi bi-plus-lg text-lg" aria-hidden="true"></i>
                                 </SuccessButton>
                             </div>
                         </form>

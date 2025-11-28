@@ -20,8 +20,8 @@ export default function UnitShow({ auth, unit }) {
                         <h3 className="text-lg">Visualizar</h3>
                         <div className="flex space-x-4">
                             <Link href={route('units.index')}>
-                                <InfoButton>
-                                    Listar
+                                <InfoButton aria-label="Listar" title="Listar">
+                                    <i className="bi bi-list text-lg" aria-hidden="true"></i>
                                 </InfoButton>
                             </Link>
                         </div>
@@ -61,7 +61,7 @@ export default function UnitShow({ auth, unit }) {
                         </div>
 
                         <div className="mb-4">
-                            <p className="text-md font-semibold text-gray-700 dark:text-gray-200">Localiza\u00E7\u00E3o</p>
+                            <p className="text-md font-semibold text-gray-700 dark:text-gray-200">{'Localiza\u00E7\u00E3o'}</p>
                             <a
                                 href={unit.tb2_localizacao}
                                 target="_blank"
