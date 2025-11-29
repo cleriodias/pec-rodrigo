@@ -49,6 +49,8 @@ Route::middleware('auth')->group(function () {
     Route::resource('products', ProductController::class);
     Route::post('/sales', [SaleController::class, 'store'])->name('sales.store');
     Route::get('/reports/sales-today', [SalesReportController::class, 'today'])->name('reports.sales.today');
+    Route::get('/reports/sales-period', [SalesReportController::class, 'period'])->name('reports.sales.period');
+    Route::get('/reports/sales-detailed', [SalesReportController::class, 'detailed'])->name('reports.sales.detailed');
 });
 
 require __DIR__.'/auth.php';

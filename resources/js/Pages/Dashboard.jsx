@@ -564,7 +564,7 @@ export default function Dashboard() {
                     <p>Troco: ${formatCurrency(receiptData.payment.troco ?? 0)}</p>
                     ${
                         receiptData.payment.dois_pgto > 0
-                            ? `<p>Cartão (compl.): ${formatCurrency(receiptData.payment.dois_pgto)}</p>`
+                            ? `<p>Cartao (compl.): ${formatCurrency(receiptData.payment.dois_pgto)}</p>`
                             : ''
                     }
                 `
@@ -957,7 +957,7 @@ export default function Dashboard() {
                             </p>
                             {receiptData.payment?.dois_pgto > 0 && (
                                 <p>
-                                    <span className="font-medium">Cartão (compl.):</span>{' '}
+                                    <span className="font-medium">Cartao (compl.):</span>{' '}
                                     {formatCurrency(receiptData.payment.dois_pgto)}
                                 </p>
                             )}

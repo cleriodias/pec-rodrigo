@@ -1,6 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head } from '@inertiajs/react';
-import { useMemo, useState } from 'react';
+import { Head, useForm } from '@inertiajs/react';
+import { useMemo } from 'react';
 
 const formatCurrency = (value) =>
     Number(value ?? 0).toLocaleString('pt-BR', {
@@ -8,25 +8,26 @@ const formatCurrency = (value) =>
         currency: 'BRL',
     });
 
-const formatDate = (value) => {
-    if (!value) {
-        return '--';
-    }
+export default function SalesPeriod({
+    chartData,
+    totals,
+    dailyTotals,
+    mode,
+    dateValue,
+    startDate,
+    endDate,
+}) {
+    const { data, setData, get, processing } = useForm({ mode, date: dateValue ?? '' });
 
-    const date = new Date(value);
-    return date.toLocaleString('pt-BR', {
-        dateStyle: 'short',
-        timeStyle: 'short',
-    });
-};
-
-export default function SalesToday({ meta, chartData, details, totals, dateLabel }) {
-    const initialType = useMemo(() => {
-        const withValue = chartData.find((item) => item.total > 0);
-        return withValue?.type ?? 'dinheiro';
-    }, [chartData]);
-
-    const [selectedType, setSelectedType] = useState(initialType);
+    const handleSubmit = (event) => {
+        event.preventDefault();
+        get(route('reports.sales.period'), {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            data,
+        });
+    };
 
     const totalSum = chartData.reduce((sum, item) => sum + item.total, 0);
 
@@ -54,40 +55,69 @@ export default function SalesToday({ meta, chartData, details, totals, dateLabel
         };
     }, [chartData, totalSum]);
 
-    const selectedDetails = details[selectedType] ?? [];
-    const selectedMeta = meta[selectedType] ?? { label: selectedType, color: '#111827' };
-    const selectedTotal = totals[selectedType] ?? 0;
-
-    const observations = (record) => {
-        if (record.origin === 'dinheiro' && selectedType === 'maquina') {
-            return 'Complemento no cartao';
-        }
-
-        if (record.origin === 'dinheiro') {
-            return 'Venda em dinheiro (pode conter complemento)';
-        }
-
-        return 'Pagamento direto';
-    };
-
     const headerContent = (
         <div>
             <h2 className="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">
-                Vendas de hoje ({dateLabel})
+                Vendas por periodo
             </h2>
             <p className="text-sm text-gray-500 dark:text-gray-300">
-                Visao geral dos pagamentos registrados no dia, com destaque para cada forma de
-                pagamento.
+                Consulte o desempenho por mes completo ou dia especifico.
             </p>
         </div>
     );
 
+    const dateInputType = data.mode === 'day' ? 'date' : 'month';
+
     return (
         <AuthenticatedLayout header={headerContent}>
-            <Head title="Vendas de hoje" />
+            <Head title="Vendas por periodo" />
 
             <div className="py-12">
                 <div className="mx-auto max-w-7xl space-y-8 px-4 sm:px-6 lg:px-8">
+                    <form
+                        onSubmit={handleSubmit}
+                        className="rounded-2xl bg-white p-6 shadow dark:bg-gray-800"
+                    >
+                        <div className="grid gap-4 sm:grid-cols-3">
+                            <div>
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                    Tipo de filtro
+                                </label>
+                                <select
+                                    value={data.mode}
+                                    onChange={(event) => setData('mode', event.target.value)}
+                                    className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-gray-800 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                                >
+                                    <option value="month">Mes inteiro</option>
+                                    <option value="day">Dia especifico</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                    {dateInputType === 'date' ? 'Dia' : 'Mes'}
+                                </label>
+                                <input
+                                    type={dateInputType}
+                                    value={data.date}
+                                    onChange={(event) => setData('date', event.target.value)}
+                                    className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-gray-800 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                                />
+                            </div>
+                            <div className="flex items-end">
+                                <button
+                                    type="submit"
+                                    disabled={processing}
+                                    className="w-full rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-indigo-700 disabled:opacity-60"
+                                >
+                                    Atualizar
+                                </button>
+                            </div>
+                        </div>
+                        <p className="mt-4 text-xs text-gray-500 dark:text-gray-300">
+                            Intervalo considerado: {startDate} a {endDate}
+                        </p>
+                    </form>
+
                     <div className="grid gap-6 rounded-2xl bg-white p-6 shadow dark:bg-gray-800 lg:grid-cols-2">
                         <div>
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -150,80 +180,34 @@ export default function SalesToday({ meta, chartData, details, totals, dateLabel
                     </div>
 
                     <div className="rounded-2xl bg-white p-6 shadow dark:bg-gray-800">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                                    Detalhes por pagamento
-                                </h3>
-                                <p className="text-sm text-gray-500 dark:text-gray-300">
-                                    Selecione uma forma de pagamento para listar as vendas.
-                                </p>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                                {chartData.map((item) => (
-                                    <button
-                                        type="button"
-                                        key={item.type}
-                                        onClick={() => setSelectedType(item.type)}
-                                        className={`rounded-full px-4 py-2 text-sm font-semibold text-white shadow ${
-                                            selectedType === item.type
-                                                ? 'ring-2 ring-offset-2 ring-offset-gray-50 dark:ring-offset-gray-800'
-                                                : 'opacity-70'
-                                        }`}
-                                        style={{ backgroundColor: item.color }}
-                                    >
-                                        {item.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="mt-6 rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/40">
-                            <p className="text-sm font-medium text-gray-600 dark:text-gray-200">
-                                Total em {selectedMeta.label}
-                            </p>
-                            <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                                {formatCurrency(selectedTotal)}
-                            </p>
-                        </div>
-
-                        <div className="mt-6 overflow-x-auto">
-                            {selectedDetails.length === 0 ? (
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                            Totais diarios
+                        </h3>
+                        <div className="mt-4 overflow-x-auto">
+                            {dailyTotals.length === 0 ? (
                                 <p className="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-300">
-                                    Nenhuma venda registrada nesta forma de pagamento hoje.
+                                    Nenhuma venda registrada neste periodo.
                                 </p>
                             ) : (
                                 <table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-700">
                                     <thead className="bg-gray-100 dark:bg-gray-900/60">
                                         <tr>
                                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
-                                                ID
-                                            </th>
-                                            <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
-                                                Data/Hora
+                                                Dia
                                             </th>
                                             <th className="px-3 py-2 text-right font-medium text-gray-600 dark:text-gray-300">
-                                                Valor considerado
-                                            </th>
-                                            <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
-                                                Observacao
+                                                Total
                                             </th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                                        {selectedDetails.map((record) => (
-                                            <tr key={`${record.tb4_id}-${record.origin}-${record.applied_total}`}>
-                                                <td className="px-3 py-2 text-gray-800 dark:text-gray-100">
-                                                    #{record.tb4_id}
-                                                </td>
+                                        {dailyTotals.map((day) => (
+                                            <tr key={day.date}>
                                                 <td className="px-3 py-2 text-gray-700 dark:text-gray-200">
-                                                    {formatDate(record.created_at)}
+                                                    {day.label}
                                                 </td>
                                                 <td className="px-3 py-2 text-right font-semibold text-gray-900 dark:text-white">
-                                                    {formatCurrency(record.applied_total)}
-                                                </td>
-                                                <td className="px-3 py-2 text-gray-600 dark:text-gray-300">
-                                                    {observations(record)}
+                                                    {formatCurrency(day.total)}
                                                 </td>
                                             </tr>
                                         ))}
