@@ -11,6 +11,7 @@ export default function AuthenticatedLayout({ header, children }) {
     const activeUnitName = pageProps.auth.unit?.name ?? 'Dashboard';
     const canSeeUnits = user && [0, 1].includes(Number(user.funcao));
     const canSeeReports = canSeeUnits;
+    const canSwitchUnit = user && Number(user.funcao) === 0;
 
     const [showingNavigationDropdown, setShowingNavigationDropdown] =
         useState(false);
@@ -102,6 +103,11 @@ export default function AuthenticatedLayout({ header, children }) {
                                                     Detalhado
                                                 </Dropdown.Link>
                                             </>
+                                        )}
+                                        {canSwitchUnit && (
+                                            <Dropdown.Link href={route('reports.switch-unit')}>
+                                                Trocar unidade
+                                            </Dropdown.Link>
                                         )}
                                         <Dropdown.Link href={route('logout')} method="post" as="button">
                                             Log Out
@@ -226,6 +232,14 @@ export default function AuthenticatedLayout({ header, children }) {
                                         Detalhado
                                     </ResponsiveNavLink>
                                 </>
+                            )}
+                            {canSwitchUnit && (
+                                <ResponsiveNavLink
+                                    href={route('reports.switch-unit')}
+                                    active={route().current('reports.switch-unit')}
+                                >
+                                    Trocar unidade
+                                </ResponsiveNavLink>
                             )}
                             <ResponsiveNavLink
                                 method="post"
