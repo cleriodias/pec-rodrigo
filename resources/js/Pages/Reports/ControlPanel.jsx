@@ -156,7 +156,7 @@ export default function ControlPanel({ unit, period, metrics, filterUnits = [], 
                                 Folha e benefícios
                             </h3>
                             <p className="text-sm text-gray-600 dark:text-gray-300">
-                                Considera colaboradores atribuídos à unidade selecionada.
+                                Valores sempre consideram todos os colaboradores (todas as unidades).
                             </p>
                         </div>
 

@@ -5,10 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\Unidade;
 use App\Models\Venda;
+use App\Models\SalaryAdvance;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -41,7 +44,49 @@ class UserController extends Controller
     {
         $user->load('units:tb2_id,tb2_nome');
 
-        return Inertia::render('Users/UserShow', ['user' => $user]);
+        $valeSales = Venda::query()
+            ->select(['tb3_id', 'tb4_id', 'valor_total', 'data_hora', 'tipo_pago', 'id_unidade'])
+            ->with('unidade:tb2_id,tb2_nome')
+            ->where('id_user_vale', $user->id)
+            ->where('tipo_pago', 'vale')
+            ->orderByDesc('data_hora')
+            ->get();
+
+        $vrSales = Venda::query()
+            ->select(['tb3_id', 'tb4_id', 'valor_total', 'data_hora', 'tipo_pago', 'id_unidade'])
+            ->with('unidade:tb2_id,tb2_nome')
+            ->where('id_user_vale', $user->id)
+            ->where('tipo_pago', 'refeicao')
+            ->orderByDesc('data_hora')
+            ->get();
+
+        $advances = SalaryAdvance::query()
+            ->where('user_id', $user->id)
+            ->orderByDesc('advance_date')
+            ->get(['id', 'advance_date', 'amount', 'reason']);
+
+        $valeUsage = $this->groupSalesByPeriod($valeSales);
+        $vrUsage = $this->groupSalesByPeriod($vrSales);
+        $advanceUsage = $this->groupAdvancesByPeriod($advances);
+
+        $valeTotal = (float) $valeSales->sum('valor_total');
+        $vrTotal = (float) $vrSales->sum('valor_total');
+        $advancesTotal = (float) $advances->sum('amount');
+
+        $financialSummary = [
+            'valeTotal' => round($valeTotal, 2),
+            'vrCreditTotal' => round($vrTotal, 2),
+            'advanceTotal' => round($advancesTotal, 2),
+            'balance' => round((float) $user->salario - $advancesTotal, 2),
+        ];
+
+        return Inertia::render('Users/UserShow', [
+            'user' => $user,
+            'valeUsage' => $valeUsage,
+            'vrUsage' => $vrUsage,
+            'advanceUsage' => $advanceUsage,
+            'financialSummary' => $financialSummary,
+        ]);
     }
 
     public function create(): Response
@@ -259,8 +304,80 @@ class UserController extends Controller
 
     public function destroy(User $user)
     {
+        if ($this->userHasTransactions($user)) {
+            return Redirect::back()->with('error', 'Não é possível excluir usuários com lançamentos associados.');
+        }
+
         $user->delete();
 
         return Redirect::route('users.index')->with('success', 'Usuário apagado com sucesso!');
+    }
+
+    private function groupSalesByPeriod(Collection $sales): array
+    {
+        return $sales
+            ->groupBy(fn ($sale) => optional($sale->data_hora)->format('Y-m') ?? 'sem-data')
+            ->map(function ($group, $period) {
+                $referenceDate = optional($group->first()->data_hora) ?: Carbon::now();
+
+                return [
+                    'period' => $period,
+                    'label' => Str::title($referenceDate->translatedFormat('F Y')),
+                    'total' => round($group->sum('valor_total'), 2),
+                    'count' => $group->count(),
+                    'items' => $group->map(function ($sale) {
+                        return [
+                            'id' => $sale->tb3_id,
+                            'cupom' => $sale->tb4_id,
+                            'date_time' => optional($sale->data_hora)->toDateTimeString(),
+                            'total' => (float) $sale->valor_total,
+                            'type' => $sale->tipo_pago,
+                            'unit' => optional($sale->unidade)->tb2_nome,
+                        ];
+                    })->values()->all(),
+                ];
+            })
+            ->sortByDesc('period')
+            ->values()
+            ->all();
+    }
+
+    private function groupAdvancesByPeriod(Collection $advances): array
+    {
+        return $advances
+            ->groupBy(fn ($advance) => optional($advance->advance_date)->format('Y-m') ?? 'sem-data')
+            ->map(function ($group, $period) {
+                $referenceDate = optional($group->first()->advance_date) ?: Carbon::now();
+
+                return [
+                    'period' => $period,
+                    'label' => Str::title($referenceDate->translatedFormat('F Y')),
+                    'total' => round($group->sum('amount'), 2),
+                    'count' => $group->count(),
+                    'items' => $group->map(function ($advance) {
+                        return [
+                            'id' => $advance->id,
+                            'date' => optional($advance->advance_date)->toDateString(),
+                            'amount' => (float) $advance->amount,
+                            'reason' => $advance->reason,
+                        ];
+                    })->values()->all(),
+                ];
+            })
+            ->sortByDesc('period')
+            ->values()
+            ->all();
+    }
+
+    private function userHasTransactions(User $user): bool
+    {
+        $hasSales = Venda::query()
+            ->where('id_user_caixa', $user->id)
+            ->orWhere('id_user_vale', $user->id)
+            ->exists();
+
+        $hasAdvances = SalaryAdvance::where('user_id', $user->id)->exists();
+
+        return $hasSales || $hasAdvances;
     }
 }

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ProfileUpdateRequest;
+use App\Models\SalaryAdvance;
+use App\Models\Venda;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -29,13 +31,20 @@ class ProfileController extends Controller
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
-        $request->user()->fill($request->validated());
+        $user = $request->user();
+        $data = $request->validated();
+        $data['name'] = $user->name;
 
-        if ($request->user()->isDirty('email')) {
-            $request->user()->email_verified_at = null;
+        $user->fill([
+            'name' => $data['name'],
+            'email' => $data['email'],
+        ]);
+
+        if ($user->isDirty('email')) {
+            $user->email_verified_at = null;
         }
 
-        $request->user()->save();
+        $user->save();
 
         return Redirect::route('profile.edit');
     }
@@ -51,6 +60,12 @@ class ProfileController extends Controller
 
         $user = $request->user();
 
+        if ($this->userHasTransactions($user)) {
+            return Redirect::route('profile.edit')->withErrors([
+                'password' => 'Não é possível excluir usuários que possuem lançamentos vinculados.',
+            ]);
+        }
+
         Auth::logout();
 
         $user->delete();
@@ -59,5 +74,17 @@ class ProfileController extends Controller
         $request->session()->regenerateToken();
 
         return Redirect::to('/');
+    }
+
+    private function userHasTransactions($user): bool
+    {
+        $hasSales = Venda::query()
+            ->where('id_user_caixa', $user->id)
+            ->orWhere('id_user_vale', $user->id)
+            ->exists();
+
+        $hasAdvances = SalaryAdvance::where('user_id', $user->id)->exists();
+
+        return $hasSales || $hasAdvances;
     }
 }

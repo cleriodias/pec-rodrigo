@@ -9,7 +9,7 @@ const paymentLabels = {
     dinheiro: 'Dinheiro',
     vale: 'Vale',
     faturar: 'Faturar',
-    refeicao: 'Refei\u00e7\u00e3o',
+    refeicao: 'Refeição',
 };
 const paymentOptions = [
     {
@@ -33,6 +33,9 @@ const paymentOptions = [
         classes: 'bg-gray-900 hover:bg-gray-800 focus:ring-gray-200 text-white',
     },
 ];
+
+const ITEMS_STORAGE_KEY = 'dashboard.selectedItems';
+const SAVED_CARTS_STORAGE_KEY = 'dashboard.savedCarts';
 
 const formatCurrency = (value) => {
     const parsed = Number(value ?? 0);
@@ -82,6 +85,43 @@ export default function Dashboard() {
     const [cashInputVisible, setCashInputVisible] = useState(false);
     const [cashValue, setCashValue] = useState('');
     const cashInputRef = useRef(null);
+    const [savedCarts, setSavedCarts] = useState([]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        const storedItems = window.localStorage.getItem(ITEMS_STORAGE_KEY);
+
+        if (!storedItems) {
+            return;
+        }
+
+        try {
+            const parsed = JSON.parse(storedItems);
+
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                setItems(parsed);
+            }
+        } catch (storageError) {
+            console.error('Failed to parse stored sale items', storageError);
+            window.localStorage.removeItem(ITEMS_STORAGE_KEY);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        if (items.length === 0) {
+            window.localStorage.removeItem(ITEMS_STORAGE_KEY);
+            return;
+        }
+
+        window.localStorage.setItem(ITEMS_STORAGE_KEY, JSON.stringify(items));
+    }, [items]);
 
     const totalAmount = useMemo(
         () => items.reduce((sum, item) => sum + item.quantity * item.price, 0),
@@ -117,6 +157,45 @@ export default function Dashboard() {
     useEffect(() => {
         inputRef.current?.focus();
     }, []);
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        const storedCarts = window.localStorage.getItem(SAVED_CARTS_STORAGE_KEY);
+
+        if (!storedCarts) {
+            return;
+        }
+
+        try {
+            const parsed = JSON.parse(storedCarts);
+
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                setSavedCarts(parsed);
+            }
+        } catch (storageError) {
+            console.error('Failed to parse saved carts', storageError);
+            window.localStorage.removeItem(SAVED_CARTS_STORAGE_KEY);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        if (savedCarts.length === 0) {
+            window.localStorage.removeItem(SAVED_CARTS_STORAGE_KEY);
+            return;
+        }
+
+        window.localStorage.setItem(
+            SAVED_CARTS_STORAGE_KEY,
+            JSON.stringify(savedCarts),
+        );
+    }, [savedCarts]);
+
     useEffect(() => {
         const term = texto.trim();
         const isNumericTerm = numericRegex.test(term);
@@ -300,6 +379,35 @@ export default function Dashboard() {
     };
     const handleSelect = (product) => {
         addItemFromProduct(product);
+    };
+
+    const incrementItemQuantity = (itemId) => {
+        setItems((prevItems) =>
+            prevItems.map((item) =>
+                item.id === itemId
+                    ? { ...item, quantity: item.quantity + 1 }
+                    : item,
+            ),
+        );
+    };
+
+    const decrementItemQuantity = (itemId) => {
+        setItems((prevItems) =>
+            prevItems
+                .map((item) => {
+                    if (item.id !== itemId) {
+                        return item;
+                    }
+
+                    const nextQuantity = Math.max(item.quantity - 1, 0);
+                    return { ...item, quantity: nextQuantity };
+                })
+                .filter((item) => item.quantity > 0),
+        );
+    };
+
+    const removeItem = (itemId) => {
+        setItems((prevItems) => prevItems.filter((item) => item.id !== itemId));
     };
 
     const fetchProductAndAdd = (productId) => {
@@ -608,7 +716,7 @@ export default function Dashboard() {
                     ${
                         receiptData.vale_user_name
                             ? `<p>Vale: ${receiptData.vale_user_name}${
-                                  receiptData.vale_type === 'refeicao' ? ' (Refei\u00e7\u00e3o)' : ''
+                                  receiptData.vale_type === 'refeicao' ? ' (Refeição)' : ''
                               }</p>`
                             : ''
                     }
@@ -634,14 +742,15 @@ export default function Dashboard() {
         resetAfterReceipt();
     };
 
-    const resetAfterReceipt = () => {
+    const resetSaleState = () => {
         setTexto('');
         setSuggestions([]);
         setLastManualSearch(false);
         setItems([]);
+        if (typeof window !== 'undefined') {
+            window.localStorage.removeItem(ITEMS_STORAGE_KEY);
+        }
         setSaleError('');
-        setReceiptData(null);
-        setShowReceipt(false);
         resetValePicker();
         setCashInputVisible(false);
         setCashValue('');
@@ -651,9 +760,60 @@ export default function Dashboard() {
         });
     };
 
-    const handleCloseReceipt = () => {
-        setShowReceipt(false);
+    const resetAfterReceipt = () => {
+        resetSaleState();
         setReceiptData(null);
+        setShowReceipt(false);
+    };
+
+    const handleCloseReceipt = () => {
+        resetAfterReceipt();
+    };
+
+    const handleSaveCart = () => {
+        if (items.length === 0) {
+            setSaleError('Nenhum item para guardar.');
+            return;
+        }
+
+        const snapshot = items.map((item) => ({ ...item }));
+        const cartId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+        setSavedCarts((prev) => [
+            ...prev,
+            {
+                id: cartId,
+                items: snapshot,
+                total: totalAmount,
+            },
+        ]);
+
+        resetSaleState();
+    };
+
+    const handleRestoreCart = (cartId) => {
+        const targetCart = savedCarts.find((cart) => cart.id === cartId);
+
+        if (!targetCart) {
+            return;
+        }
+
+        setSavedCarts((prev) => prev.filter((cart) => cart.id !== cartId));
+        setItems(targetCart.items);
+        setSaleError('');
+        setTexto('');
+        setHideSuggestions(true);
+        setCashInputVisible(false);
+        setCashValue('');
+        if (typeof window !== 'undefined') {
+            window.localStorage.setItem(
+                ITEMS_STORAGE_KEY,
+                JSON.stringify(targetCart.items),
+            );
+        }
+        requestAnimationFrame(() => {
+            inputRef.current?.focus();
+        });
     };
 
     const headerContent = (
@@ -759,13 +919,24 @@ export default function Dashboard() {
                                 )}
 
                                 <div className="rounded-2xl border border-gray-200 p-4 shadow-sm dark:border-gray-700">
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex flex-wrap items-center justify-between gap-3">
                                         <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
                                             Itens adicionados
                                         </h3>
-                                        <span className="text-sm text-gray-500 dark:text-gray-300">
-                                            {items.length} produto(s)
-                                        </span>
+                                        <div className="flex items-center gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={handleSaveCart}
+                                                disabled={items.length === 0}
+                                                className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-indigo-400 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-200"
+                                            >
+                                                <i className="bi bi-download" aria-hidden="true"></i>
+                                                Guardar lista
+                                            </button>
+                                            <span className="text-sm text-gray-500 dark:text-gray-300">
+                                                {items.length} produto(s)
+                                            </span>
+                                        </div>
                                     </div>
                                     {items.length === 0 ? (
                                         <p className="mt-4 text-sm text-gray-600 dark:text-gray-300">
@@ -788,6 +959,9 @@ export default function Dashboard() {
                                                         <th className="px-3 py-2 text-right font-medium text-gray-600 dark:text-gray-300">
                                                             Subtotal
                                                         </th>
+                                                        <th className="px-3 py-2 text-center font-medium text-gray-600 dark:text-gray-300">
+                                                            Remover
+                                                        </th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -802,13 +976,44 @@ export default function Dashboard() {
                                                                 </p>
                                                             </td>
                                                             <td className="px-3 py-2 text-center text-gray-800 dark:text-gray-100">
-                                                                {item.quantity}
+                                                                <div className="flex items-center justify-center gap-2">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => incrementItemQuantity(item.id)}
+                                                                        className="text-indigo-600 transition hover:text-indigo-400 focus:outline-none disabled:opacity-50"
+                                                                        disabled={saleLoading}
+                                                                        aria-label={`Adicionar uma unidade de ${item.name}`}
+                                                                    >
+                                                                        <i className="bi bi-plus-circle-fill text-lg" aria-hidden="true"></i>
+                                                                    </button>
+                                                                    <span className="text-base font-semibold">{item.quantity}</span>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => decrementItemQuantity(item.id)}
+                                                                        className="text-red-500 transition hover:text-red-400 focus:outline-none disabled:opacity-50"
+                                                                        disabled={saleLoading}
+                                                                        aria-label={`Remover uma unidade de ${item.name}`}
+                                                                    >
+                                                                        <i className="bi bi-dash-circle-fill text-lg" aria-hidden="true"></i>
+                                                                    </button>
+                                                                </div>
                                                             </td>
                                                             <td className="px-3 py-2 text-right text-gray-800 dark:text-gray-100">
                                                                 {formatCurrency(item.price)}
                                                             </td>
                                                             <td className="px-3 py-2 text-right font-semibold text-gray-900 dark:text-gray-50">
                                                                 {formatCurrency(item.quantity * item.price)}
+                                                            </td>
+                                                            <td className="px-3 py-2 text-center">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => removeItem(item.id)}
+                                                                    className="text-red-600 transition hover:text-red-400 focus:outline-none disabled:opacity-50"
+                                                                    disabled={saleLoading}
+                                                                >
+                                                                    <i className="bi bi-trash-fill text-lg" aria-hidden="true"></i>
+                                                                    <span className="sr-only">Remover {item.name}</span>
+                                                                </button>
                                                             </td>
                                                         </tr>
                                                     ))}
@@ -837,12 +1042,32 @@ export default function Dashboard() {
                                                 key={option.value}
                                                 onClick={() => handlePaymentClick(option.value)}
                                                 disabled={saleLoading || items.length === 0}
-                                                className={`rounded-2xl px-4 py-3 text-center text-base font-semibold shadow focus:outline-none focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60 ${option.classes}`}
+                                                className={`rounded-lg px-4 py-3 text-center text-base font-semibold shadow focus:outline-none focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60 ${option.classes}`}
                                             >
                                                 {option.label}
                                             </button>
                                         ))}
                                     </div>
+
+                                    {savedCarts.length > 0 && (
+                                        <div className="mt-6 border-t border-gray-100 pt-4 dark:border-gray-700">
+                                            <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                                Pedidos guardados
+                                            </p>
+                                            <div className="mt-3 flex flex-wrap gap-2">
+                                                {savedCarts.map((cart) => (
+                                                    <button
+                                                        type="button"
+                                                        key={cart.id}
+                                                        onClick={() => handleRestoreCart(cart.id)}
+                                                        className="rounded-full border border-indigo-200 px-4 py-2 text-sm font-semibold text-indigo-700 shadow-sm transition hover:border-indigo-400 hover:bg-indigo-50 dark:border-indigo-500 dark:text-indigo-200"
+                                                    >
+                                                        {formatCurrency(cart.total)}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {cashInputVisible && (
                                         <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 p-4 shadow dark:border-green-500/40 dark:bg-green-900/20">
@@ -929,12 +1154,12 @@ export default function Dashboard() {
                                                     onChange={() => setSelectedValeType('refeicao')}
                                                     className="h-4 w-4 text-amber-600 focus:ring-amber-500"
                                                 />
-                                                Refei\u00e7\u00e3o
+                                                Refeição
                                             </label>
                                         </div>
                                         <p className="mt-2 text-xs text-amber-800 dark:text-amber-100">
                                             {selectedValeType === 'refeicao'
-                                                ? 'O saldo de Refei\u00e7\u00e3o do colaborador ser\u00e1 utilizado; saldo insuficiente impede a venda.'
+                                                ? 'O saldo de Refeição do colaborador ser\u00e1 utilizado; saldo insuficiente impede a venda.'
                                                 : 'Utilize esta op\u00e7\u00e3o para lan\u00e7ar o valor no vale tradicional do colaborador.'}
                                         </p>
                                         <div className="mt-4">
@@ -1037,7 +1262,7 @@ export default function Dashboard() {
                                 <p>
                                     <span className="font-medium">Cliente Vale:</span> {receiptData.vale_user_name}
                                     {receiptData.vale_type === 'refeicao' && (
-                                        <span className="ml-1 text-xs text-amber-600 dark:text-amber-200">(Refei\u00e7\u00e3o)</span>
+                                        <span className="ml-1 text-xs text-amber-600 dark:text-amber-200">(Refeição)</span>
                                     )}
                                 </p>
                             )}
