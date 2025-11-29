@@ -9,9 +9,12 @@ export default function AuthenticatedLayout({ header, children }) {
     const pageProps = usePage().props;
     const user = pageProps.auth.user;
     const activeUnitName = pageProps.auth.unit?.name ?? 'Dashboard';
+    const effectiveRole = user ? Number(user.funcao) : null;
+    const originalRole = user ? Number(user.funcao_original ?? user.funcao) : null;
     const canSeeUnits = user && [0, 1].includes(Number(user.funcao));
     const canSeeReports = canSeeUnits;
-    const canSwitchUnit = user && Number(user.funcao) === 0;
+    const canSwitchUnit = user && originalRole === 0;
+    const canSwitchRole = user && originalRole === 0;
 
     const [showingNavigationDropdown, setShowingNavigationDropdown] =
         useState(false);
@@ -107,6 +110,11 @@ export default function AuthenticatedLayout({ header, children }) {
                                         {canSwitchUnit && (
                                             <Dropdown.Link href={route('reports.switch-unit')}>
                                                 Trocar unidade
+                                            </Dropdown.Link>
+                                        )}
+                                        {canSwitchRole && (
+                                            <Dropdown.Link href={route('reports.switch-role')}>
+                                                Trocar funcao
                                             </Dropdown.Link>
                                         )}
                                         <Dropdown.Link href={route('logout')} method="post" as="button">
@@ -239,6 +247,14 @@ export default function AuthenticatedLayout({ header, children }) {
                                     active={route().current('reports.switch-unit')}
                                 >
                                     Trocar unidade
+                                </ResponsiveNavLink>
+                            )}
+                            {canSwitchRole && (
+                                <ResponsiveNavLink
+                                    href={route('reports.switch-role')}
+                                    active={route().current('reports.switch-role')}
+                                >
+                                    Trocar funcao
                                 </ResponsiveNavLink>
                             )}
                             <ResponsiveNavLink
