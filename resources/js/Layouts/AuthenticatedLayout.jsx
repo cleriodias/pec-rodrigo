@@ -87,23 +87,23 @@ export default function AuthenticatedLayout({ header, children }) {
                                     </Dropdown.Trigger>
 
                                     <Dropdown.Content>
-                                        <Dropdown.Link
-                                            href={route('profile.edit')}
-                                        >
+                                        <Dropdown.Link href={route('profile.edit')}>
                                             Profile
                                         </Dropdown.Link>
                                         {canSeeReports && (
-                                            <Dropdown.Link
-                                                href={route('reports.sales.today')}
-                                            >
-                                                Vendas hoje
-                                            </Dropdown.Link>
+                                            <>
+                                                <Dropdown.Link href={route('reports.sales.today')}>
+                                                    Vendas hoje
+                                                </Dropdown.Link>
+                                                <Dropdown.Link href={route('reports.sales.period')}>
+                                                    Vendas periodo
+                                                </Dropdown.Link>
+                                                <Dropdown.Link href={route('reports.sales.detailed')}>
+                                                    Detalhado
+                                                </Dropdown.Link>
+                                            </>
                                         )}
-                                        <Dropdown.Link
-                                            href={route('logout')}
-                                            method="post"
-                                            as="button"
-                                        >
+                                        <Dropdown.Link href={route('logout')} method="post" as="button">
                                             Log Out
                                         </Dropdown.Link>
                                     </Dropdown.Content>
@@ -206,12 +206,26 @@ export default function AuthenticatedLayout({ header, children }) {
                                 Profile
                             </ResponsiveNavLink>
                             {canSeeReports && (
-                                <ResponsiveNavLink
-                                    href={route('reports.sales.today')}
-                                    active={route().current('reports.sales.today')}
-                                >
-                                    Vendas hoje
-                                </ResponsiveNavLink>
+                                <>
+                                    <ResponsiveNavLink
+                                        href={route('reports.sales.today')}
+                                        active={route().current('reports.sales.today')}
+                                    >
+                                        Vendas hoje
+                                    </ResponsiveNavLink>
+                                    <ResponsiveNavLink
+                                        href={route('reports.sales.period')}
+                                        active={route().current('reports.sales.period')}
+                                    >
+                                        Vendas periodo
+                                    </ResponsiveNavLink>
+                                    <ResponsiveNavLink
+                                        href={route('reports.sales.detailed')}
+                                        active={route().current('reports.sales.detailed')}
+                                    >
+                                        Detalhado
+                                    </ResponsiveNavLink>
+                                </>
                             )}
                             <ResponsiveNavLink
                                 method="post"
