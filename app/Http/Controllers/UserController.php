@@ -12,6 +12,18 @@ use Inertia\Response;
 
 class UserController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware(function ($request, $next) {
+            $user = $request->user();
+            if (! $user || ! in_array((int) $user->funcao, [0, 1], true)) {
+                abort(403);
+            }
+
+            return $next($request);
+        });
+    }
+
     public function index(): Response
     {
         $users = User::with('units:tb2_id,tb2_nome')

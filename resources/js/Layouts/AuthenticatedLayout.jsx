@@ -11,10 +11,20 @@ export default function AuthenticatedLayout({ header, children }) {
     const activeUnitName = pageProps.auth.unit?.name ?? 'Dashboard';
     const effectiveRole = user ? Number(user.funcao) : null;
     const originalRole = user ? Number(user.funcao_original ?? user.funcao) : null;
-    const canSeeUnits = user && [0, 1].includes(Number(user.funcao));
+    const canSeeUsers = user && [0, 1].includes(effectiveRole);
+    const canSeeUnits = canSeeUsers;
     const canSeeReports = canSeeUnits;
     const canSwitchUnit = user && originalRole === 0;
     const canSwitchRole = user && originalRole === 0;
+    const roleLabels = {
+        0: 'MASTER',
+        1: 'GERENTE',
+        2: 'SUB-GERENTE',
+        3: 'CAIXA',
+        4: 'LANCHONETE',
+        5: 'FUNCIONARIO',
+        6: 'CLIENTE',
+    };
 
     const [showingNavigationDropdown, setShowingNavigationDropdown] =
         useState(false);
@@ -39,12 +49,14 @@ export default function AuthenticatedLayout({ header, children }) {
                                     {activeUnitName}
                                 </NavLink>
 
-                                <NavLink
-                                    href={route('users.index')}
-                                    active={route().current('users.index')}
-                                >
-                                    Usuários
-                                </NavLink>
+                                {canSeeUsers && (
+                                    <NavLink
+                                        href={route('users.index')}
+                                        active={route().current('users.index')}
+                                    >
+                                        Usuários
+                                    </NavLink>
+                                )}
 
                                 {canSeeUnits && (
                                     <NavLink
@@ -73,6 +85,9 @@ export default function AuthenticatedLayout({ header, children }) {
                                                 className="inline-flex items-center rounded-md border border-transparent bg-white px-3 py-2 text-sm font-medium leading-4 text-gray-500 transition duration-150 ease-in-out hover:text-gray-700 focus:outline-none dark:bg-gray-800 dark:text-gray-400 dark:hover:text-gray-300"
                                             >
                                                 {user.name}
+                                                <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600 dark:bg-gray-700 dark:text-gray-200">
+                                                    {roleLabels[effectiveRole] ?? '---'}
+                                                </span>
 
                                                 <svg
                                                     className="-me-0.5 ms-2 h-4 w-4"
@@ -182,12 +197,14 @@ export default function AuthenticatedLayout({ header, children }) {
                             {activeUnitName}
                         </ResponsiveNavLink>
 
-                        <ResponsiveNavLink
-                            href={route('users.index')}
-                            active={route().current('users.index')}
-                        >
-                            {'Usu\u00E1rios'}
-                        </ResponsiveNavLink>
+                        {canSeeUsers && (
+                            <ResponsiveNavLink
+                                href={route('users.index')}
+                                active={route().current('users.index')}
+                            >
+                                {'Usu\u00E1rios'}
+                            </ResponsiveNavLink>
+                        )}
 
                         {canSeeUnits && (
                             <ResponsiveNavLink
@@ -209,6 +226,9 @@ export default function AuthenticatedLayout({ header, children }) {
                         <div className="px-4">
                             <div className="text-base font-medium text-gray-800 dark:text-gray-200">
                                 {user.name}
+                                <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600 dark:bg-gray-700 dark:text-gray-200">
+                                    {roleLabels[effectiveRole] ?? '---'}
+                                </span>
                             </div>
                             <div className="text-sm font-medium text-gray-500">
                                 {user.email}
