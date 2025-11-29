@@ -9,6 +9,7 @@ const paymentLabels = {
     dinheiro: 'Dinheiro',
     vale: 'Vale',
     faturar: 'Faturar',
+    refeicao: 'Refei\u00e7\u00e3o',
 };
 const paymentOptions = [
     {
@@ -74,6 +75,7 @@ export default function Dashboard() {
     const [valePickerVisible, setValePickerVisible] = useState(false);
     const [valeSearchTerm, setValeSearchTerm] = useState('');
     const [valeResults, setValeResults] = useState([]);
+    const [selectedValeType, setSelectedValeType] = useState('vale');
     const [valeLoading, setValeLoading] = useState(false);
     const [receiptData, setReceiptData] = useState(null);
     const [showReceipt, setShowReceipt] = useState(false);
@@ -378,6 +380,7 @@ export default function Dashboard() {
         setValeSearchTerm('');
         setValeResults([]);
         setValeLoading(false);
+        setSelectedValeType('vale');
     };
 
     const handleCashValueChange = (event) => {
@@ -402,7 +405,7 @@ export default function Dashboard() {
         finalizeSale('dinheiro', { cashAmount: numericCashValue });
     };
 
-    const finalizeSale = (type, { valeUserId = null, cashAmount = null } = {}) => {
+    const finalizeSale = (type, { valeUserId = null, valeType = null, cashAmount = null } = {}) => {
         if (items.length === 0) {
             setSaleError('Adicione pelo menos um item antes de finalizar.');
             return;
@@ -432,6 +435,7 @@ export default function Dashboard() {
                 })),
                 tipo_pago: type,
                 vale_user_id: valeUserId,
+                vale_type: type === 'vale' ? valeType : null,
                 valor_pago: cashAmount,
             }),
         })
@@ -492,6 +496,7 @@ export default function Dashboard() {
             setValePickerVisible(true);
             setValeSearchTerm('');
             setValeResults([]);
+            setSelectedValeType('vale');
             setSaleError('');
             return;
         }
@@ -524,7 +529,17 @@ export default function Dashboard() {
     };
 
     const handleSelectValeUser = (user) => {
-        finalizeSale('vale', { valeUserId: user.id });
+        if (selectedValeType === 'refeicao') {
+            const balance = Number(user.refeicao_balance ?? user.vr_cred ?? 0);
+            if (totalAmount > balance) {
+                setSaleError(
+                    `Saldo de refeicao insuficiente para ${user.name}. Disponivel: ${formatCurrency(balance)}`,
+                );
+                return;
+            }
+        }
+
+        finalizeSale('vale', { valeUserId: user.id, valeType: selectedValeType });
     };
 
     const handlePrintReceipt = () => {
@@ -590,7 +605,13 @@ export default function Dashboard() {
                 <body>
                     <h1>${activeUnitName || 'Registro de venda'}</h1>
                     <p>Caixa: ${receiptData.cashier_name}</p>
-                    ${receiptData.vale_user_name ? `<p>Vale: ${receiptData.vale_user_name}</p>` : ''}
+                    ${
+                        receiptData.vale_user_name
+                            ? `<p>Vale: ${receiptData.vale_user_name}${
+                                  receiptData.vale_type === 'refeicao' ? ' (Refei\u00e7\u00e3o)' : ''
+                              }</p>`
+                            : ''
+                    }
                     <p>Data: ${formatDateTime(receiptData.date_time)}</p>
                     <div class="divider"></div>
                     ${itemsHtml}
@@ -875,6 +896,47 @@ export default function Dashboard() {
                                                 Cancelar
                                             </button>
                                         </div>
+                                        <div className="mt-4 flex flex-wrap gap-3">
+                                            <label
+                                                className={`flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition ${
+                                                    selectedValeType === 'vale'
+                                                        ? 'border-amber-500 bg-white text-amber-800 dark:bg-gray-900'
+                                                        : 'border-gray-200 bg-white/70 text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200'
+                                                }`}
+                                            >
+                                                <input
+                                                    type="radio"
+                                                    name="vale-type"
+                                                    value="vale"
+                                                    checked={selectedValeType === 'vale'}
+                                                    onChange={() => setSelectedValeType('vale')}
+                                                    className="h-4 w-4 text-amber-600 focus:ring-amber-500"
+                                                />
+                                                Vale
+                                            </label>
+                                            <label
+                                                className={`flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition ${
+                                                    selectedValeType === 'refeicao'
+                                                        ? 'border-amber-500 bg-white text-amber-800 dark:bg-gray-900'
+                                                        : 'border-gray-200 bg-white/70 text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200'
+                                                }`}
+                                            >
+                                                <input
+                                                    type="radio"
+                                                    name="vale-type"
+                                                    value="refeicao"
+                                                    checked={selectedValeType === 'refeicao'}
+                                                    onChange={() => setSelectedValeType('refeicao')}
+                                                    className="h-4 w-4 text-amber-600 focus:ring-amber-500"
+                                                />
+                                                Refei\u00e7\u00e3o
+                                            </label>
+                                        </div>
+                                        <p className="mt-2 text-xs text-amber-800 dark:text-amber-100">
+                                            {selectedValeType === 'refeicao'
+                                                ? 'O saldo de Refei\u00e7\u00e3o do colaborador ser\u00e1 utilizado; saldo insuficiente impede a venda.'
+                                                : 'Utilize esta op\u00e7\u00e3o para lan\u00e7ar o valor no vale tradicional do colaborador.'}
+                                        </p>
                                         <div className="mt-4">
                                             <label className="text-sm text-gray-700 dark:text-gray-200">
                                                 Buscar usuarios
@@ -891,7 +953,7 @@ export default function Dashboard() {
                                             {valeLoading && (
                                                 <p className="text-sm text-gray-600 dark:text-gray-200">Buscando usuarios...</p>
                                             )}
-                                            {!valeLoading && valeResults.length === 0 && (
+                                            {!valeLoading && valeResults.length === 0 && valeSearchTerm.trim().length >= 2 && (
                                                 <p className="text-sm text-gray-600 dark:text-gray-200">
                                                     Nenhum usuario encontrado.
                                                 </p>
@@ -905,7 +967,14 @@ export default function Dashboard() {
                                                                 onClick={() => handleSelectValeUser(user)}
                                                                 className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium text-gray-800 hover:bg-indigo-50 dark:text-gray-100 dark:hover:bg-indigo-900/30"
                                                             >
-                                                                <span>{user.name}</span>
+                                                                <div>
+                                                                    <p className="font-semibold">{user.name}</p>
+                                                                    {selectedValeType === 'refeicao' && (
+                                                                        <p className="text-xs text-amber-700 dark:text-amber-200">
+                                                                            Saldo: {formatCurrency(user.refeicao_balance ?? user.vr_cred ?? 0)}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
                                                                 <span className="text-xs text-gray-500 dark:text-gray-300">
                                                                     Selecionar
                                                                 </span>
@@ -967,6 +1036,9 @@ export default function Dashboard() {
                             {receiptData.vale_user_name && (
                                 <p>
                                     <span className="font-medium">Cliente Vale:</span> {receiptData.vale_user_name}
+                                    {receiptData.vale_type === 'refeicao' && (
+                                        <span className="ml-1 text-xs text-amber-600 dark:text-amber-200">(Refei\u00e7\u00e3o)</span>
+                                    )}
                                 </p>
                             )}
                             <p>

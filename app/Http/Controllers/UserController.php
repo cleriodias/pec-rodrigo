@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Unidade;
+use App\Models\Venda;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redirect;
@@ -218,14 +220,41 @@ class UserController extends Controller
         }
 
         $safeTerm = str_replace(['%', '_'], ['\\%', '\\_'], $term);
+        $monthStart = Carbon::now()->startOfMonth();
+        $monthEnd = Carbon::now()->endOfMonth();
 
         $users = User::query()
             ->where('name', 'like', '%' . $safeTerm . '%')
             ->orderBy('name')
             ->limit(10)
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'vr_cred']);
 
-        return response()->json($users);
+        if ($users->isEmpty()) {
+            return response()->json([]);
+        }
+
+        $usagePerUser = Venda::query()
+            ->selectRaw('id_user_vale, SUM(valor_total) as total')
+            ->where('tipo_pago', 'refeicao')
+            ->whereBetween('data_hora', [$monthStart, $monthEnd])
+            ->whereIn('id_user_vale', $users->pluck('id'))
+            ->groupBy('id_user_vale')
+            ->pluck('total', 'id_user_vale');
+
+        $response = $users->map(function ($user) use ($usagePerUser) {
+            $used = (float) ($usagePerUser[$user->id] ?? 0);
+            $balance = max(0, (float) $user->vr_cred - $used);
+
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'vr_cred' => (float) $user->vr_cred,
+                'refeicao_used' => $used,
+                'refeicao_balance' => round($balance, 2),
+            ];
+        });
+
+        return response()->json($response);
     }
 
     public function destroy(User $user)

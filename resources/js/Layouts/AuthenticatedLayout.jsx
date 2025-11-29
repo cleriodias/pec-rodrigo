@@ -72,6 +72,14 @@ export default function AuthenticatedLayout({ header, children }) {
                                 >
                                     Produtos
                                 </NavLink>
+                                {canSeeReports && (
+                                    <NavLink
+                                        href={route('reports.control')}
+                                        active={route().current('reports.control')}
+                                    >
+                                        Controle
+                                    </NavLink>
+                                )}
                             </div>
                         </div>
 
@@ -130,6 +138,11 @@ export default function AuthenticatedLayout({ header, children }) {
                                         {canSwitchRole && (
                                             <Dropdown.Link href={route('reports.switch-role')}>
                                                 Trocar funcao
+                                            </Dropdown.Link>
+                                        )}
+                                        {canSeeReports && (
+                                            <Dropdown.Link href={route('salary-advances.index')}>
+                                                Adiantamento
                                             </Dropdown.Link>
                                         )}
                                         <Dropdown.Link href={route('logout')} method="post" as="button">
@@ -220,6 +233,14 @@ export default function AuthenticatedLayout({ header, children }) {
                         >
                             Produtos
                         </ResponsiveNavLink>
+                        {canSeeReports && (
+                            <ResponsiveNavLink
+                                href={route('reports.control')}
+                                active={route().current('reports.control')}
+                            >
+                                Controle
+                            </ResponsiveNavLink>
+                        )}
                     </div>
 
                     <div className="border-t border-gray-200 pb-1 pt-4 dark:border-gray-600">
@@ -275,6 +296,14 @@ export default function AuthenticatedLayout({ header, children }) {
                                     active={route().current('reports.switch-role')}
                                 >
                                     Trocar funcao
+                                </ResponsiveNavLink>
+                            )}
+                            {canSeeReports && (
+                                <ResponsiveNavLink
+                                    href={route('salary-advances.index')}
+                                    active={route().current('salary-advances.*')}
+                                >
+                                    Adiantamento
                                 </ResponsiveNavLink>
                             )}
                             <ResponsiveNavLink
