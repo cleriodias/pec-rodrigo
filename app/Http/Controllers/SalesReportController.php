@@ -22,11 +22,12 @@ class SalesReportController extends Controller
     public function today(Request $request): Response
     {
         $this->ensureManager($request);
+        $unitId = $this->resolveUnitId($request);
 
         $start = Carbon::today();
         $end = Carbon::today()->endOfDay();
 
-        $payments = $this->fetchPayments($start, $end);
+        $payments = $this->fetchPayments($start, $end, $unitId);
         [$totals, $details, $chartData] = $this->summarizePayments($payments);
 
         return Inertia::render('Reports/SalesToday', [
@@ -41,6 +42,7 @@ class SalesReportController extends Controller
     public function period(Request $request): Response
     {
         $this->ensureManager($request);
+        $unitId = $this->resolveUnitId($request);
 
         $mode = $request->query('mode', 'month') === 'day' ? 'day' : 'month';
         $dateValue = $request->query('date');
@@ -57,7 +59,7 @@ class SalesReportController extends Controller
             $dateValue = $month->format('Y-m');
         }
 
-        $payments = $this->fetchPayments($start, $end);
+        $payments = $this->fetchPayments($start, $end, $unitId);
         [$totals, $details, $chartData] = $this->summarizePayments($payments);
 
         $dailyTotals = $payments
@@ -90,6 +92,7 @@ class SalesReportController extends Controller
     public function detailed(Request $request): Response
     {
         $this->ensureManager($request);
+        $unitId = $this->resolveUnitId($request);
 
         $dateValue = $request->query('date');
         $date = $this->parseDate($dateValue, 'Y-m-d', Carbon::today());
@@ -109,6 +112,9 @@ class SalesReportController extends Controller
             ]);
         }])
             ->whereBetween('created_at', [$start, $end])
+            ->whereHas('vendas', function ($query) use ($unitId) {
+                $query->where('id_unidade', $unitId);
+            })
             ->orderByDesc('tb4_id')
             ->get([
                 'tb4_id',
@@ -157,10 +163,13 @@ class SalesReportController extends Controller
         }
     }
 
-    private function fetchPayments(Carbon $start, Carbon $end): Collection
+    private function fetchPayments(Carbon $start, Carbon $end, int $unitId): Collection
     {
         return VendaPagamento::query()
             ->whereBetween('created_at', [$start, $end])
+            ->whereHas('vendas', function ($query) use ($unitId) {
+                $query->where('id_unidade', $unitId);
+            })
             ->orderByDesc('tb4_id')
             ->get([
                 'tb4_id',
@@ -259,5 +268,16 @@ class SalesReportController extends Controller
         } catch (InvalidFormatException $exception) {
             return $fallback;
         }
+    }
+
+    private function resolveUnitId(Request $request): int
+    {
+        $unit = $request->session()->get('active_unit');
+
+        if (isset($unit['id'])) {
+            return (int) $unit['id'];
+        }
+
+        return (int) ($request->user()?->tb2_id ?? 0);
     }
 }
