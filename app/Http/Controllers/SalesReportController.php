@@ -190,28 +190,19 @@ class SalesReportController extends Controller
 
         $payments = $this->fetchPayments($start, $end, $filterUnitId);
         $totalSales = (float) $payments->sum('valor_total');
+        $globalValeTotals = $this->valeBreakdown($start, $end, null);
+        $globalStandardVale = $globalValeTotals['vale'];
+        $globalMealVale = $globalValeTotals['refeicao'];
 
         $valeTotals = $this->valeBreakdown($start, $end, $filterUnitId);
         $standardVale = $valeTotals['vale'];
         $mealVale = $valeTotals['refeicao'];
         $netSales = max(0, $totalSales - $standardVale - $mealVale);
 
-        if ($filterUnitId) {
-            $unitUserQuery = User::where('tb2_id', $filterUnitId);
-        } else {
-            $unitUserQuery = User::query();
-        }
-
-        $totalPayroll = (float) $unitUserQuery->sum('salario');
-        $userIds = $filterUnitId ? $unitUserQuery->pluck('id') : null;
-
-        $advanceQuery = SalaryAdvance::whereBetween('advance_date', [$start->toDateString(), $end->toDateString()]);
-        if ($userIds) {
-            $advanceQuery->whereIn('user_id', $userIds);
-        }
-        $totalAdvances = (float) $advanceQuery->sum('amount');
-
-        $netPayroll = max(0, $totalPayroll - $standardVale - $mealVale - $totalAdvances);
+        $totalPayrollGlobal = (float) User::sum('salario');
+        $totalAdvancesGlobal = (float) SalaryAdvance::whereBetween('advance_date', [$start->toDateString(), $end->toDateString()])
+            ->sum('amount');
+        $netPayrollGlobal = max(0, $totalPayrollGlobal - $globalStandardVale - $globalMealVale - $totalAdvancesGlobal);
 
         $selectedUnit = $filterUnitId
             ? $availableUnits->firstWhere('id', $filterUnitId)
@@ -234,9 +225,9 @@ class SalesReportController extends Controller
                 'total_vale' => round($standardVale, 2),
                 'total_refeicao' => round($mealVale, 2),
                 'net_sales' => round($netSales, 2),
-                'total_advances' => round($totalAdvances, 2),
-                'total_payroll' => round($totalPayroll, 2),
-                'net_payroll' => round($netPayroll, 2),
+                'total_advances' => round($totalAdvancesGlobal, 2),
+                'total_payroll' => round($totalPayrollGlobal, 2),
+                'net_payroll' => round($netPayrollGlobal, 2),
             ],
         ]);
     }
