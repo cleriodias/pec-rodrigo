@@ -67,6 +67,14 @@ export default function SalesToday({ meta, chartData, details, totals, dateLabel
             return 'Venda em dinheiro (pode conter complemento)';
         }
 
+        if (record.origin === 'refeicao') {
+            return 'Vale refeicao';
+        }
+
+        if (record.origin === 'vale') {
+            return 'Vale tradicional';
+        }
+
         return 'Pagamento direto';
     };
 

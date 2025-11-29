@@ -2,9 +2,10 @@
 
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\RoleSwitchController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\SalesReportController;
-use App\Http\Controllers\RoleSwitchController;
+use App\Http\Controllers\SalaryAdvanceController;
 use App\Http\Controllers\UnitController;
 use App\Http\Controllers\UnitSwitchController;
 use App\Http\Controllers\UserController;
@@ -53,10 +54,15 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/sales-today', [SalesReportController::class, 'today'])->name('reports.sales.today');
     Route::get('/reports/sales-period', [SalesReportController::class, 'period'])->name('reports.sales.period');
     Route::get('/reports/sales-detailed', [SalesReportController::class, 'detailed'])->name('reports.sales.detailed');
+    Route::get('/reports/control', [SalesReportController::class, 'control'])->name('reports.control');
     Route::get('/reports/switch-unit', [UnitSwitchController::class, 'index'])->name('reports.switch-unit');
     Route::post('/reports/switch-unit', [UnitSwitchController::class, 'update'])->name('reports.switch-unit.update');
     Route::get('/reports/switch-role', [RoleSwitchController::class, 'index'])->name('reports.switch-role');
     Route::post('/reports/switch-role', [RoleSwitchController::class, 'update'])->name('reports.switch-role.update');
+    Route::get('/salary-advances', [SalaryAdvanceController::class, 'index'])->name('salary-advances.index');
+    Route::get('/salary-advances/create', [SalaryAdvanceController::class, 'create'])->name('salary-advances.create');
+    Route::post('/salary-advances', [SalaryAdvanceController::class, 'store'])->name('salary-advances.store');
+    Route::delete('/salary-advances/{salaryAdvance}', [SalaryAdvanceController::class, 'destroy'])->name('salary-advances.destroy');
 });
 
 require __DIR__.'/auth.php';
