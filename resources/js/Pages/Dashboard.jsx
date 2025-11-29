@@ -86,6 +86,7 @@ export default function Dashboard() {
     const [cashValue, setCashValue] = useState('');
     const cashInputRef = useRef(null);
     const [savedCarts, setSavedCarts] = useState([]);
+    const [favoriteProducts, setFavoriteProducts] = useState([]);
 
     useEffect(() => {
         if (typeof window === 'undefined') {
@@ -195,6 +196,41 @@ export default function Dashboard() {
             JSON.stringify(savedCarts),
         );
     }, [savedCarts]);
+
+    useEffect(() => {
+        let isMounted = true;
+
+        fetch(route('products.favorites'), {
+            headers: {
+                Accept: 'application/json',
+            },
+        })
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error('Falha ao carregar favoritos');
+                }
+
+                return response.json();
+            })
+            .then((data) => {
+                if (!isMounted) {
+                    return;
+                }
+
+                setFavoriteProducts(Array.isArray(data) ? data : []);
+            })
+            .catch(() => {
+                if (!isMounted) {
+                    return;
+                }
+
+                setFavoriteProducts([]);
+            });
+
+        return () => {
+            isMounted = false;
+        };
+    }, []);
 
     useEffect(() => {
         const term = texto.trim();
@@ -816,14 +852,34 @@ export default function Dashboard() {
         });
     };
 
+    const handleFavoriteQuickAdd = (product) => {
+        addItemFromProduct(product, { preserveInput: true });
+    };
+
     const headerContent = (
         <div className="space-y-3">
-            <label
-                htmlFor="campo-dashboard"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-200"
-            >
-                Busca por produto
-            </label>
+            <div className="flex flex-wrap items-center gap-3">
+                <label
+                    htmlFor="campo-dashboard"
+                    className="text-sm font-medium text-gray-700 dark:text-gray-200"
+                >
+                    Busca por produto
+                </label>
+                {favoriteProducts.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                        {favoriteProducts.map((product) => (
+                            <button
+                                type="button"
+                                key={`favorite-${product.tb1_id}`}
+                                onClick={() => handleFavoriteQuickAdd(product)}
+                                className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 transition hover:border-indigo-400 hover:text-indigo-600 dark:border-gray-600 dark:text-gray-200"
+                            >
+                                {product.tb1_nome}
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
                 <div className="flex-1">
                     <input
