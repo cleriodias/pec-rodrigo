@@ -23,14 +23,44 @@ class ProductController extends Controller
         1 => 'Ativo',
     ];
 
-    public function index(): Response
+    public function index(Request $request): Response
     {
-        $products = Produto::orderByDesc('tb1_id')->paginate(10);
+        $search = trim((string) $request->input('search', ''));
+        $query = Produto::query();
+
+        if ($search !== '') {
+            $isNumeric = ctype_digit($search);
+            $safeTerm = str_replace(['%', '_'], ['\%', '\_'], $search);
+            $likeTerm = '%' . $safeTerm . '%';
+            $numericTerm = $isNumeric ? (int) $search : null;
+            $isLongNumeric = $isNumeric && mb_strlen($search) > 4;
+
+            $query->where(function ($builder) use ($isNumeric, $isLongNumeric, $likeTerm, $numericTerm) {
+                if ($isNumeric) {
+                    if ($isLongNumeric) {
+                        $builder->where('tb1_codbar', 'like', $likeTerm);
+                    } else {
+                        $builder->where('tb1_id', $numericTerm);
+                    }
+
+                    return;
+                }
+
+                $builder->where('tb1_nome', 'like', $likeTerm);
+            });
+        }
+
+        $products = $query
+            ->orderByDesc('tb1_favorito')
+            ->orderByDesc('tb1_id')
+            ->paginate(10)
+            ->withQueryString();
 
         return Inertia::render('Products/ProductIndex', [
             'products' => $products,
             'typeLabels' => self::TYPE_LABELS,
             'statusLabels' => self::STATUS_LABELS,
+            'search' => $search,
         ]);
     }
 
@@ -82,6 +112,38 @@ class ProductController extends Controller
 
         return Redirect::route('products.index')
             ->with('success', 'Produto removido com sucesso!');
+    }
+
+    public function toggleFavorite(Request $request, Produto $product)
+    {
+        $data = $request->validate([
+            'favorite' => 'required|boolean',
+        ]);
+
+        $product->update([
+            'tb1_favorito' => $data['favorite'],
+        ]);
+
+        return Redirect::back()->with('success', $data['favorite'] ? 'Produto marcado como favorito.' : 'Produto removido dos favoritos.');
+    }
+
+    public function favorites(): JsonResponse
+    {
+        $favorites = Produto::query()
+            ->where('tb1_favorito', true)
+            ->where('tb1_status', 1)
+            ->orderBy('tb1_nome')
+            ->get([
+                'tb1_id',
+                'tb1_nome',
+                'tb1_codbar',
+                'tb1_vlr_custo',
+                'tb1_vlr_venda',
+                'tb1_tipo',
+                'tb1_status',
+            ]);
+
+        return response()->json($favorites);
     }
 
     public function search(Request $request): JsonResponse

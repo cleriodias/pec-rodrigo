@@ -1,5 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
 
 const formatCurrency = (value) =>
@@ -20,13 +20,36 @@ const formatDate = (value) => {
     });
 };
 
-export default function SalesToday({ meta, chartData, details, totals, dateLabel }) {
+export default function SalesToday({ meta, chartData, details, totals, dateLabel, filterUnits = [], selectedUnitId = null }) {
     const initialType = useMemo(() => {
         const withValue = chartData.find((item) => item.total > 0);
         return withValue?.type ?? 'dinheiro';
     }, [chartData]);
 
     const [selectedType, setSelectedType] = useState(initialType);
+
+    const unitOptions = useMemo(() => {
+        const base = [{ id: null, name: 'Todas as unidades' }];
+        if (!Array.isArray(filterUnits) || filterUnits.length === 0) {
+            return base;
+        }
+
+        return base.concat(
+            filterUnits.map((unit) => ({
+                id: unit.id ?? unit.tb2_id ?? null,
+                name: unit.name ?? unit.tb2_nome ?? '---',
+            })),
+        );
+    }, [filterUnits]);
+
+    const handleFilterChange = (unitId) => {
+        if ((unitId ?? null) === (selectedUnitId ?? null)) {
+            return;
+        }
+
+        const params = unitId ? { unit_id: unitId } : {};
+        router.get(route('reports.sales.today'), params, { preserveScroll: true });
+    };
 
     const totalSum = chartData.reduce((sum, item) => sum + item.total, 0);
 
@@ -68,7 +91,7 @@ export default function SalesToday({ meta, chartData, details, totals, dateLabel
         }
 
         if (record.origin === 'refeicao') {
-            return 'Vale refeicao';
+            return 'Vale refei\u00e7\u00e3o';
         }
 
         if (record.origin === 'vale') {
@@ -96,6 +119,33 @@ export default function SalesToday({ meta, chartData, details, totals, dateLabel
 
             <div className="py-12">
                 <div className="mx-auto max-w-7xl space-y-8 px-4 sm:px-6 lg:px-8">
+                    <div className="rounded-2xl bg-white p-6 shadow dark:bg-gray-800">
+                        <div className="flex flex-col gap-2">
+                            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-gray-400">Filtro</p>
+                            <p className="text-sm text-gray-600 dark:text-gray-300">Escolha a unidade para visualizar os dados do dia.</p>
+                        </div>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                            {unitOptions.map((unit) => {
+                                const isActive = (unit.id ?? null) === (selectedUnitId ?? null);
+
+                                return (
+                                    <button
+                                        type="button"
+                                        key={`unit-filter-${unit.id ?? 'all'}`}
+                                        onClick={() => handleFilterChange(unit.id)}
+                                        className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                                            isActive
+                                                ? 'bg-indigo-600 text-white shadow'
+                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200'
+                                        }`}
+                                    >
+                                        {unit.name}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
                     <div className="grid gap-6 rounded-2xl bg-white p-6 shadow dark:bg-gray-800 lg:grid-cols-2">
                         <div>
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">

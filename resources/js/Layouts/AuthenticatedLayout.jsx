@@ -73,12 +73,20 @@ export default function AuthenticatedLayout({ header, children }) {
                                     Produtos
                                 </NavLink>
                                 {canSeeReports && (
-                                    <NavLink
-                                        href={route('reports.control')}
-                                        active={route().current('reports.control')}
-                                    >
-                                        Controle
-                                    </NavLink>
+                                    <>
+                                        <NavLink
+                                            href={route('reports.control')}
+                                            active={route().current('reports.control')}
+                                        >
+                                            Controle
+                                        </NavLink>
+                                        <NavLink
+                                            href={route('reports.cash.closure')}
+                                            active={route().current('reports.cash.closure')}
+                                        >
+                                            Fechamento de CAIXA
+                                        </NavLink>
+                                    </>
                                 )}
                             </div>
                         </div>
@@ -127,6 +135,9 @@ export default function AuthenticatedLayout({ header, children }) {
                                                 </Dropdown.Link>
                                                 <Dropdown.Link href={route('reports.sales.detailed')}>
                                                     Detalhado
+                                                </Dropdown.Link>
+                                                <Dropdown.Link href={route('reports.cash.closure')}>
+                                                    Fechamento de CAIXA
                                                 </Dropdown.Link>
                                             </>
                                         )}
@@ -234,12 +245,20 @@ export default function AuthenticatedLayout({ header, children }) {
                             Produtos
                         </ResponsiveNavLink>
                         {canSeeReports && (
-                            <ResponsiveNavLink
-                                href={route('reports.control')}
-                                active={route().current('reports.control')}
-                            >
-                                Controle
-                            </ResponsiveNavLink>
+                            <>
+                                <ResponsiveNavLink
+                                    href={route('reports.control')}
+                                    active={route().current('reports.control')}
+                                >
+                                    Controle
+                                </ResponsiveNavLink>
+                                <ResponsiveNavLink
+                                    href={route('reports.cash.closure')}
+                                    active={route().current('reports.cash.closure')}
+                                >
+                                    Fechamento de CAIXA
+                                </ResponsiveNavLink>
+                            </>
                         )}
                     </div>
 
@@ -279,6 +298,12 @@ export default function AuthenticatedLayout({ header, children }) {
                                         active={route().current('reports.sales.detailed')}
                                     >
                                         Detalhado
+                                    </ResponsiveNavLink>
+                                    <ResponsiveNavLink
+                                        href={route('reports.cash.closure')}
+                                        active={route().current('reports.cash.closure')}
+                                    >
+                                        Fechamento de CAIXA
                                     </ResponsiveNavLink>
                                 </>
                             )}

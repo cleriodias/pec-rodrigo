@@ -27,22 +27,26 @@ class SalesReportController extends Controller
     public function today(Request $request): Response
     {
         $this->ensureManager($request);
-        $unitId = $this->resolveUnitId($request);
+        $user = $request->user();
+        $availableUnits = $this->availableUnits($user);
+        $requestedUnitId = $request->query('unit_id');
+        $filterUnitId = $requestedUnitId !== null && $requestedUnitId !== '' ? (int) $requestedUnitId : null;
+
+        if ($filterUnitId && !$availableUnits->contains(fn ($unit) => $unit['id'] === $filterUnitId)) {
+            $filterUnitId = null;
+        }
 
         $start = Carbon::today();
         $end = Carbon::today()->endOfDay();
 
-        $payments = $this->fetchPayments($start, $end, $unitId);
+        $payments = $this->fetchPayments($start, $end, $filterUnitId);
         [$totals, $details, $chartData] = $this->summarizePayments($payments);
-
-        [$totals, $details] = $this->applyGlobalValeTotals($start, $end, $totals, $details, $unitId);
+        [$totals, $details] = $this->applyGlobalValeTotals($start, $end, $totals, $details, $filterUnitId);
         $chartData = $this->buildChartData($totals);
 
-        [$totals, $details] = $this->applyGlobalValeTotals($start, $end, $totals, $details, $unitId);
-        $chartData = $this->buildChartData($totals);
-
-        [$totals, $details] = $this->applyGlobalValeTotals($start, $end, $totals, $details);
-        $chartData = $this->buildChartData($totals);
+        $selectedUnit = $filterUnitId
+            ? $availableUnits->firstWhere('id', $filterUnitId)
+            : ['id' => null, 'name' => 'Todas as unidades'];
 
         return Inertia::render('Reports/SalesToday', [
             'meta' => self::TYPE_META,
@@ -50,6 +54,125 @@ class SalesReportController extends Controller
             'details' => $details,
             'totals' => $totals,
             'dateLabel' => $start->translatedFormat('d/m/Y'),
+            'filterUnits' => $availableUnits->values(),
+            'selectedUnitId' => $filterUnitId,
+            'selectedUnit' => $selectedUnit,
+        ]);
+    }
+
+    public function cashClosure(Request $request): Response
+    {
+        $this->ensureManager($request);
+        $user = $request->user();
+        $availableUnits = $this->availableUnits($user);
+
+        $requestedUnitId = $request->query('unit_id');
+        $filterUnitId = $requestedUnitId !== null && $requestedUnitId !== '' ? (int) $requestedUnitId : null;
+        if ($filterUnitId && !$availableUnits->contains(fn ($unit) => $unit['id'] === $filterUnitId)) {
+            $filterUnitId = null;
+        }
+
+        $dateInput = $request->query('date');
+        $date = $this->parseDate($dateInput, 'Y-m-d', Carbon::today());
+        $start = $date->copy()->startOfDay();
+        $end = $date->copy()->endOfDay();
+        $dateDisplay = $date->translatedFormat('d/m/Y');
+        $dateValue = $date->format('Y-m-d');
+
+        $paymentsQuery = VendaPagamento::query()
+            ->whereBetween('created_at', [$start, $end])
+            ->with(['vendas' => function ($query) use ($filterUnitId) {
+                $query->select('tb3_id', 'tb4_id', 'id_user_caixa', 'id_unidade')
+                    ->orderBy('tb3_id');
+
+                if ($filterUnitId) {
+                    $query->where('id_unidade', $filterUnitId);
+                }
+            }]);
+
+        if ($filterUnitId) {
+            $paymentsQuery->whereHas('vendas', function ($query) use ($filterUnitId) {
+                $query->where('id_unidade', $filterUnitId);
+            });
+        }
+
+        $payments = $paymentsQuery->get([
+            'tb4_id',
+            'valor_total',
+            'tipo_pagamento',
+            'valor_pago',
+            'troco',
+            'dois_pgto',
+            'created_at',
+        ]);
+
+        $cashierIds = $payments
+            ->map(fn (VendaPagamento $payment) => optional($payment->vendas->first())->id_user_caixa)
+            ->filter()
+            ->unique();
+
+        $unitIds = $payments
+            ->map(fn (VendaPagamento $payment) => optional($payment->vendas->first())->id_unidade)
+            ->filter()
+            ->unique();
+
+        $cashiers = User::whereIn('id', $cashierIds)->get(['id', 'name'])->keyBy('id');
+        $units = Unidade::whereIn('tb2_id', $unitIds)->get(['tb2_id', 'tb2_nome'])->keyBy('tb2_id');
+
+        $grouped = [];
+
+        foreach ($payments as $payment) {
+            $firstSale = optional($payment->vendas->first());
+            $cashierId = $firstSale?->id_user_caixa;
+            $unitId = $firstSale?->id_unidade;
+
+            if (!$cashierId) {
+                continue;
+            }
+
+            if (!isset($grouped[$cashierId])) {
+                $grouped[$cashierId] = [
+                    'cashier_id' => $cashierId,
+                    'cashier_name' => $cashiers[$cashierId]->name ?? 'Caixa #' . $cashierId,
+                    'unit_name' => $unitId ? ($units[$unitId]->tb2_nome ?? ('Unidade #' . $unitId)) : '---',
+                    'totals' => [
+                        'dinheiro' => 0.0,
+                        'maquina' => 0.0,
+                        'vale' => 0.0,
+                        'refeicao' => 0.0,
+                        'faturar' => 0.0,
+                    ],
+                    'grand_total' => 0.0,
+                ];
+            }
+
+            foreach ($this->breakdownPayment($payment) as $type => $amount) {
+                $grouped[$cashierId]['totals'][$type] += $amount;
+                $grouped[$cashierId]['grand_total'] += $amount;
+            }
+        }
+
+        $records = collect($grouped)
+            ->map(function (array $record) {
+                $record['totals'] = array_map(fn ($value) => round($value, 2), $record['totals']);
+                $record['grand_total'] = round($record['grand_total'], 2);
+
+                return $record;
+            })
+            ->sortByDesc('grand_total')
+            ->values();
+
+        $selectedUnit = $filterUnitId
+            ? $availableUnits->firstWhere('id', $filterUnitId)
+            : ['id' => null, 'name' => 'Todas as unidades'];
+
+        return Inertia::render('Reports/CashClosure', [
+            'records' => $records,
+            'dateValue' => $dateDisplay,
+            'dateInputValue' => $dateValue,
+            'filterUnits' => $availableUnits->values(),
+            'selectedUnitId' => $filterUnitId,
+            'selectedUnit' => $selectedUnit,
         ]);
     }
 
@@ -460,6 +583,33 @@ class SalesReportController extends Controller
                 ];
             })
             ->values();
+    }
+
+    private function breakdownPayment(VendaPagamento $payment): array
+    {
+        $type = $payment->tipo_pagamento;
+
+        if ($type === 'dinheiro') {
+            $cardPortion = max((float) $payment->dois_pgto, 0);
+            $cashPortion = max((float) $payment->valor_total - $cardPortion, 0);
+            $entries = [];
+            if ($cashPortion > 0) {
+                $entries['dinheiro'] = $cashPortion;
+            }
+            if ($cardPortion > 0) {
+                $entries['maquina'] = $cardPortion;
+            }
+
+            return $entries;
+        }
+
+        if (!array_key_exists($type, self::TYPE_META)) {
+            return [];
+        }
+
+        $amount = max((float) $payment->valor_total, 0);
+
+        return $amount > 0 ? [$type => $amount] : [];
     }
 
     private function availableUnits(User $user): Collection

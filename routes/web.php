@@ -49,11 +49,14 @@ Route::middleware('auth')->group(function () {
     Route::delete('/units/{unit}', [UnitController::class, 'destroy'])->name('units.destroy');
 
     Route::get('/products/search', [ProductController::class, 'search'])->name('products.search');
+    Route::get('/products/favorites', [ProductController::class, 'favorites'])->name('products.favorites');
+    Route::post('/products/{product}/favorite', [ProductController::class, 'toggleFavorite'])->name('products.favorite');
     Route::resource('products', ProductController::class);
     Route::post('/sales', [SaleController::class, 'store'])->name('sales.store');
     Route::get('/reports/sales-today', [SalesReportController::class, 'today'])->name('reports.sales.today');
     Route::get('/reports/sales-period', [SalesReportController::class, 'period'])->name('reports.sales.period');
     Route::get('/reports/sales-detailed', [SalesReportController::class, 'detailed'])->name('reports.sales.detailed');
+    Route::get('/reports/cash-closure', [SalesReportController::class, 'cashClosure'])->name('reports.cash.closure');
     Route::get('/reports/control', [SalesReportController::class, 'control'])->name('reports.control');
     Route::get('/reports/switch-unit', [UnitSwitchController::class, 'index'])->name('reports.switch-unit');
     Route::post('/reports/switch-unit', [UnitSwitchController::class, 'update'])->name('reports.switch-unit.update');

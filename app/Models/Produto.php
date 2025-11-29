@@ -20,6 +20,7 @@ class Produto extends Model
         'tb1_codbar',
         'tb1_tipo',
         'tb1_status',
+        'tb1_favorito',
     ];
 
     protected $casts = [
@@ -27,6 +28,7 @@ class Produto extends Model
         'tb1_vlr_venda' => 'float',
         'tb1_tipo' => 'integer',
         'tb1_status' => 'integer',
+        'tb1_favorito' => 'boolean',
     ];
 }
 
