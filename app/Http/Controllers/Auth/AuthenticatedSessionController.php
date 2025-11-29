@@ -55,6 +55,10 @@ class AuthenticatedSessionController extends Controller
             'name' => $selectedUnit->tb2_nome,
         ]);
 
+        if ($user->funcao_original === null) {
+            $user->forceFill(['funcao_original' => $user->funcao])->save();
+        }
+
         return redirect()->intended(route('dashboard', absolute: false));
     }
 

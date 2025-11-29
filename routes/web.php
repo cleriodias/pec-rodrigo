@@ -4,6 +4,7 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\SalesReportController;
+use App\Http\Controllers\RoleSwitchController;
 use App\Http\Controllers\UnitController;
 use App\Http\Controllers\UnitSwitchController;
 use App\Http\Controllers\UserController;
@@ -54,6 +55,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/sales-detailed', [SalesReportController::class, 'detailed'])->name('reports.sales.detailed');
     Route::get('/reports/switch-unit', [UnitSwitchController::class, 'index'])->name('reports.switch-unit');
     Route::post('/reports/switch-unit', [UnitSwitchController::class, 'update'])->name('reports.switch-unit.update');
+    Route::get('/reports/switch-role', [RoleSwitchController::class, 'index'])->name('reports.switch-role');
+    Route::post('/reports/switch-role', [RoleSwitchController::class, 'update'])->name('reports.switch-role.update');
 });
 
 require __DIR__.'/auth.php';
