@@ -19,7 +19,17 @@ const MetricCard = ({ title, value, description, accent }) => (
     </div>
 );
 
-export default function ControlPanel({ unit, period, metrics, filterUnits = [], selectedUnitId = null }) {
+export default function ControlPanel({
+    unit,
+    period,
+    metrics,
+    filterUnits = [],
+    selectedUnitId = null,
+    monthOptions = [],
+    selectedMonth = null,
+    yearOptions = [],
+    selectedYear = null,
+}) {
     const safeMetrics = {
         total_sales: metrics?.total_sales ?? 0,
         total_vale: metrics?.total_vale ?? 0,
@@ -52,16 +62,62 @@ export default function ControlPanel({ unit, period, metrics, filterUnits = [], 
         (option, index, self) => index === self.findIndex((item) => item.id === option.id),
     );
 
+    const currentMonthValue = selectedMonth ?? (period?.start?.slice(0, 7) ?? '');
+    const currentYearValue = selectedYear ?? (currentMonthValue?.slice(0, 4) ?? '');
+
     const handleFilter = (unitId) => {
+        const params = {
+            unit_id: unitId ?? '',
+        };
+
+        if (currentMonthValue) {
+            params.month = currentMonthValue;
+        }
+
         router.get(
             route('reports.control'),
-            { unit_id: unitId ?? '' },
+            params,
             {
                 preserveState: true,
                 preserveScroll: true,
                 replace: true,
             },
         );
+    };
+
+    const handleMonthChange = (value) => {
+        if ((value ?? '') === currentMonthValue) {
+            return;
+        }
+
+        const params = {
+            unit_id: selectedUnitId ?? '',
+        };
+
+        if (value) {
+            params.month = value;
+        }
+
+        router.get(
+            route('reports.control'),
+            params,
+            {
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
+            },
+        );
+    };
+
+    const handleYearChange = (year) => {
+        if (!year || year === currentYearValue) {
+            return;
+        }
+
+        const targetMonth = currentMonthValue
+            ? currentMonthValue.slice(5, 7)
+            : '01';
+        handleMonthChange(`${year}-${targetMonth}`);
     };
 
     return (
@@ -98,6 +154,55 @@ export default function ControlPanel({ unit, period, metrics, filterUnits = [], 
                                             }`}
                                         >
                                             {option.name}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <div className="mt-6 border-t border-gray-100 pt-6 dark:border-gray-700">
+                            <p className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
+                                Mês de referência
+                            </p>
+                            <p className="text-sm text-gray-500 dark:text-gray-300">
+                                Escolha outro mês para comparar variações.
+                            </p>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                                {(yearOptions.length ? yearOptions : [{ value: currentYearValue, label: currentYearValue }]).map((option) => {
+                                    const isActive = option.value === currentYearValue;
+
+                                    return (
+                                        <button
+                                            key={`year-${option.value}`}
+                                            type="button"
+                                            onClick={() => handleYearChange(option.value)}
+                                            className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wider shadow transition focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
+                                                isActive
+                                                    ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
+                                                    : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-200'
+                                            }`}
+                                        >
+                                            {option.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                                {(monthOptions.length ? monthOptions : [{ value: currentMonthValue, label: period?.label ?? 'Atual' }]).map((option) => {
+                                    const isActive = option.value === currentMonthValue;
+
+                                    return (
+                                        <button
+                                            key={`month-${option.value}`}
+                                            type="button"
+                                            onClick={() => handleMonthChange(option.value)}
+                                            className={`rounded-full px-4 py-2 text-sm font-semibold shadow transition focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
+                                                isActive
+                                                    ? 'bg-indigo-600 text-white'
+                                                    : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-200'
+                                            }`}
+                                        >
+                                            {option.label}
                                         </button>
                                     );
                                 })}

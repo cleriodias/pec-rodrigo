@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Models\CashierClosure;
 use App\Models\Unidade;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -38,6 +40,19 @@ class AuthenticatedSessionController extends Controller
 
         $unitId = (int) $request->input('unit_id');
         $user = $request->user();
+        if ((int) $user->funcao === 3) {
+            $closedToday = CashierClosure::where('user_id', $user->id)
+                ->whereDate('closed_date', Carbon::today())
+                ->exists();
+
+            if ($closedToday) {
+                Auth::logout();
+
+                throw ValidationException::withMessages([
+                    'email' => 'Seu caixa já foi fechado hoje. Novo acesso disponível apenas amanhã.',
+                ]);
+            }
+        }
         $hasAccess = $user->units()->where('tb2_unidades.tb2_id', $unitId)->exists() || (int) $user->tb2_id === $unitId;
 
         if (! $hasAccess) {

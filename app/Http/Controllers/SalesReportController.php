@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CashierClosure;
+use App\Models\ProductDiscard;
 use App\Models\SalaryAdvance;
 use App\Models\Venda;
 use App\Models\VendaPagamento;
@@ -36,8 +38,15 @@ class SalesReportController extends Controller
             $filterUnitId = null;
         }
 
-        $start = Carbon::today();
-        $end = Carbon::today()->endOfDay();
+        $dayFilter = $request->query('day') === 'previous' ? 'previous' : 'current';
+        $baseDate = Carbon::today();
+
+        if ($dayFilter === 'previous') {
+            $baseDate = $baseDate->subDay();
+        }
+
+        $start = $baseDate->copy()->startOfDay();
+        $end = $baseDate->copy()->endOfDay();
 
         $payments = $this->fetchPayments($start, $end, $filterUnitId);
         [$totals, $details, $chartData] = $this->summarizePayments($payments);
@@ -57,6 +66,7 @@ class SalesReportController extends Controller
             'filterUnits' => $availableUnits->values(),
             'selectedUnitId' => $filterUnitId,
             'selectedUnit' => $selectedUnit,
+            'selectedDay' => $dayFilter,
         ]);
     }
 
@@ -118,6 +128,18 @@ class SalesReportController extends Controller
 
         $cashiers = User::whereIn('id', $cashierIds)->get(['id', 'name'])->keyBy('id');
         $units = Unidade::whereIn('tb2_id', $unitIds)->get(['tb2_id', 'tb2_nome'])->keyBy('tb2_id');
+        $closureDate = $date->toDateString();
+        $closureQuery = CashierClosure::whereIn('user_id', $cashierIds)
+            ->whereDate('closed_date', $closureDate);
+
+        if ($filterUnitId) {
+            $closureQuery->where(function ($query) use ($filterUnitId) {
+                $query->whereNull('unit_id')
+                    ->orWhere('unit_id', $filterUnitId);
+            });
+        }
+
+        $closures = $closureQuery->get()->keyBy('user_id');
 
         $grouped = [];
 
@@ -130,10 +152,14 @@ class SalesReportController extends Controller
                 continue;
             }
 
-            if (!isset($grouped[$cashierId])) {
-                $grouped[$cashierId] = [
+            $groupKey = $cashierId . '-' . ($unitId ?? 'none');
+
+            if (!isset($grouped[$groupKey])) {
+                $grouped[$groupKey] = [
+                    'row_key' => $groupKey,
                     'cashier_id' => $cashierId,
                     'cashier_name' => $cashiers[$cashierId]->name ?? 'Caixa #' . $cashierId,
+                    'unit_id' => $unitId,
                     'unit_name' => $unitId ? ($units[$unitId]->tb2_nome ?? ('Unidade #' . $unitId)) : '---',
                     'totals' => [
                         'dinheiro' => 0.0,
@@ -147,15 +173,106 @@ class SalesReportController extends Controller
             }
 
             foreach ($this->breakdownPayment($payment) as $type => $amount) {
-                $grouped[$cashierId]['totals'][$type] += $amount;
-                $grouped[$cashierId]['grand_total'] += $amount;
+                $grouped[$groupKey]['totals'][$type] += $amount;
+                $grouped[$groupKey]['grand_total'] += $amount;
             }
         }
 
+        $dateKey = $date->toDateString();
+        $discardEntries = ProductDiscard::query()
+            ->with('product:tb1_id,tb1_nome,tb1_vlr_venda')
+            ->whereDate('created_at', $dateKey)
+            ->orderByDesc('created_at')
+            ->get();
+
+        $discardTotals = $discardEntries
+            ->groupBy('user_id')
+            ->map(function ($group) {
+                $quantity = $group->sum('quantity');
+                $value = $group->sum(function (ProductDiscard $discard) {
+                    $price = (float) ($discard->product->tb1_vlr_venda ?? 0);
+
+                    return (float) $discard->quantity * $price;
+                });
+
+                return [
+                    'quantity' => (float) $quantity,
+                    'value' => round((float) $value, 2),
+                ];
+            });
+
+        $discardDetails = $discardEntries
+            ->take(100)
+            ->map(function (ProductDiscard $discard) {
+                $price = (float) ($discard->product->tb1_vlr_venda ?? 0);
+                $value = (float) $discard->quantity * $price;
+
+                return [
+                    'id' => $discard->id,
+                    'user_id' => $discard->user_id,
+                    'quantity' => round((float) $discard->quantity, 3),
+                    'value' => round($value, 2),
+                    'product' => $discard->product
+                        ? [
+                            'id' => $discard->product->tb1_id,
+                            'name' => $discard->product->tb1_nome,
+                        ]
+                        : null,
+                    'created_at' => optional($discard->created_at)->toIso8601String(),
+                ];
+            });
+
         $records = collect($grouped)
-            ->map(function (array $record) {
+            ->map(function (array $record) use ($closures, $discardTotals) {
                 $record['totals'] = array_map(fn ($value) => round($value, 2), $record['totals']);
                 $record['grand_total'] = round($record['grand_total'], 2);
+                $record['row_key'] = $record['row_key'] ?? ($record['cashier_id'] . '-' . ($record['unit_id'] ?? 'none'));
+
+                $cashSystem = $record['totals']['dinheiro'] ?? 0.0;
+                $cardSystem = $record['totals']['maquina'] ?? 0.0;
+                $systemTotal = $cashSystem + $cardSystem;
+
+                $closure = $closures->get($record['cashier_id']);
+
+                if ($closure) {
+                    $cashClosure = (float) $closure->cash_amount;
+                    $cardClosure = (float) $closure->card_amount;
+                    $closureTotal = $cashClosure + $cardClosure;
+
+                    $record['closure'] = [
+                        'closed' => true,
+                        'cash_amount' => round($cashClosure, 2),
+                        'card_amount' => round($cardClosure, 2),
+                        'total_amount' => round($closureTotal, 2),
+                        'unit_id' => $closure->unit_id,
+                        'unit_name' => $closure->unit_name,
+                        'closed_at' => optional($closure->closed_at)->toIso8601String(),
+                        'differences' => [
+                            'cash' => round($cashSystem - $cashClosure, 2),
+                            'card' => round($cardSystem - $cardClosure, 2),
+                            'total' => round($systemTotal - $closureTotal, 2),
+                        ],
+                    ];
+                } else {
+                    $record['closure'] = [
+                        'closed' => false,
+                        'cash_amount' => 0.0,
+                        'card_amount' => 0.0,
+                        'total_amount' => 0.0,
+                        'unit_id' => null,
+                        'unit_name' => null,
+                        'closed_at' => null,
+                        'differences' => [
+                            'cash' => round($cashSystem, 2),
+                            'card' => round($cardSystem, 2),
+                            'total' => round($systemTotal, 2),
+                        ],
+                    ];
+                }
+
+                $discardMeta = $discardTotals[$record['cashier_id']] ?? ['value' => 0.0, 'quantity' => 0.0];
+                $record['discard_total'] = round((float) ($discardMeta['value'] ?? 0), 2);
+                $record['discard_quantity'] = round((float) ($discardMeta['quantity'] ?? 0), 3);
 
                 return $record;
             })
@@ -173,6 +290,7 @@ class SalesReportController extends Controller
             'filterUnits' => $availableUnits->values(),
             'selectedUnitId' => $filterUnitId,
             'selectedUnit' => $selectedUnit,
+            'discardDetails' => $discardDetails,
         ]);
     }
 
@@ -308,8 +426,18 @@ class SalesReportController extends Controller
             $filterUnitId = null;
         }
 
-        $start = Carbon::now()->startOfMonth();
-        $end = Carbon::now()->endOfMonth();
+        $monthParam = $request->query('month');
+        $yearParam = $request->query('year');
+        $referenceMonth = Carbon::now()->startOfMonth();
+
+        if ($monthParam) {
+            $referenceMonth = $this->parseDate($monthParam, 'Y-m', $referenceMonth);
+        } elseif ($yearParam && is_numeric($yearParam)) {
+            $referenceMonth = $referenceMonth->copy()->year((int) $yearParam);
+        }
+
+        $start = $referenceMonth->copy()->startOfMonth();
+        $end = $referenceMonth->copy()->endOfMonth();
 
         $payments = $this->fetchPayments($start, $end, $filterUnitId);
         $totalSales = (float) $payments->sum('valor_total');
@@ -334,10 +462,34 @@ class SalesReportController extends Controller
                 'name' => 'Todas as unidades',
             ];
 
+        $selectedYear = $start->year;
+        $currentYear = Carbon::now()->year;
+        $yearOptions = collect([$currentYear - 1, $currentYear])
+            ->map(fn (int $year) => [
+                'value' => (string) $year,
+                'label' => (string) $year,
+            ])
+            ->values();
+
+        $monthOptions = collect(range(1, 12))
+            ->map(function (int $month) use ($selectedYear) {
+                $carbon = Carbon::createFromDate($selectedYear, $month, 1);
+
+                return [
+                    'value' => $carbon->format('Y-m'),
+                    'label' => mb_strtoupper($carbon->translatedFormat('M')),
+                ];
+            })
+            ->values();
+
         return Inertia::render('Reports/ControlPanel', [
             'unit' => $selectedUnit,
             'filterUnits' => $availableUnits->values(),
             'selectedUnitId' => $filterUnitId,
+            'selectedYear' => (string) $selectedYear,
+            'selectedMonth' => $start->format('Y-m'),
+            'monthOptions' => $monthOptions,
+            'yearOptions' => $yearOptions,
             'period' => [
                 'start' => $start->toDateString(),
                 'end' => $end->toDateString(),

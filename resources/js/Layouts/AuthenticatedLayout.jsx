@@ -2,8 +2,15 @@ import ApplicationLogo from '@/Components/ApplicationLogo';
 import Dropdown from '@/Components/Dropdown';
 import NavLink from '@/Components/NavLink';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink';
-import { Link, usePage } from '@inertiajs/react';
+import { Link, usePage, router } from '@inertiajs/react';
 import { useState } from 'react';
+
+const MenuLabel = ({ icon, text }) => (
+    <span className="inline-flex items-center gap-2">
+        <i className={`${icon} text-base`} aria-hidden="true"></i>
+        <span>{text}</span>
+    </span>
+);
 
 export default function AuthenticatedLayout({ header, children }) {
     const pageProps = usePage().props;
@@ -11,6 +18,7 @@ export default function AuthenticatedLayout({ header, children }) {
     const activeUnitName = pageProps.auth.unit?.name ?? 'Dashboard';
     const effectiveRole = user ? Number(user.funcao) : null;
     const originalRole = user ? Number(user.funcao_original ?? user.funcao) : null;
+    const isCashier = user && effectiveRole === 3;
     const canSeeUsers = user && [0, 1].includes(effectiveRole);
     const canSeeUnits = canSeeUsers;
     const canSeeReports = canSeeUnits;
@@ -29,6 +37,14 @@ export default function AuthenticatedLayout({ header, children }) {
     const [showingNavigationDropdown, setShowingNavigationDropdown] =
         useState(false);
 
+    const handleLogout = () => {
+        router.post(route('logout'), { _token: pageProps?.csrf_token ?? '' }, {
+            onSuccess: () => {
+                window.location.reload();
+            },
+        });
+    };
+
     return (
         <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
             <nav className="border-b border-gray-100 bg-white dark:border-gray-700 dark:bg-gray-800">
@@ -46,7 +62,7 @@ export default function AuthenticatedLayout({ header, children }) {
                                     href={route('dashboard')}
                                     active={route().current('dashboard')}
                                 >
-                                    {activeUnitName}
+                                    <MenuLabel icon="bi bi-speedometer2" text={activeUnitName} />
                                 </NavLink>
 
                                 {canSeeUsers && (
@@ -54,7 +70,7 @@ export default function AuthenticatedLayout({ header, children }) {
                                         href={route('users.index')}
                                         active={route().current('users.index')}
                                     >
-                                        Usuários
+                                        <MenuLabel icon="bi bi-people-fill" text="Usuários" />
                                     </NavLink>
                                 )}
 
@@ -63,28 +79,36 @@ export default function AuthenticatedLayout({ header, children }) {
                                         href={route('units.index')}
                                         active={route().current('units.index')}
                                     >
-                                        Unidades
+                                        <MenuLabel icon="bi bi-building" text="Unidades" />
                                     </NavLink>
                                 )}
                                 <NavLink
                                     href={route('products.index')}
                                     active={route().current('products.*')}
                                 >
-                                    Produtos
+                                    <MenuLabel icon="bi bi-box-seam" text="Produtos" />
                                 </NavLink>
+                                {isCashier && (
+                                    <NavLink
+                                        href={route('cashier.close')}
+                                        active={route().current('cashier.close')}
+                                    >
+                                        <MenuLabel icon="bi bi-cash-stack" text="Fechar CX" />
+                                    </NavLink>
+                                )}
                                 {canSeeReports && (
                                     <>
                                         <NavLink
                                             href={route('reports.control')}
                                             active={route().current('reports.control')}
                                         >
-                                            Controle
+                                            <MenuLabel icon="bi bi-graph-up-arrow" text="Controle" />
                                         </NavLink>
                                         <NavLink
                                             href={route('reports.cash.closure')}
                                             active={route().current('reports.cash.closure')}
                                         >
-                                            Fechamento de CAIXA
+                                            <MenuLabel icon="bi bi-clipboard-data" text="Fechamento de CAIXA" />
                                         </NavLink>
                                     </>
                                 )}
@@ -123,42 +147,49 @@ export default function AuthenticatedLayout({ header, children }) {
 
                                     <Dropdown.Content>
                                         <Dropdown.Link href={route('profile.edit')}>
-                                            Perfil
+                                            <MenuLabel icon="bi bi-person-circle" text="Perfil" />
                                         </Dropdown.Link>
                                         {canSeeReports && (
                                             <>
                                                 <Dropdown.Link href={route('reports.sales.today')}>
-                                                    Vendas hoje
+                                                    <MenuLabel icon="bi bi-calendar-day" text="Vendas hoje" />
                                                 </Dropdown.Link>
                                                 <Dropdown.Link href={route('reports.sales.period')}>
-                                                    Vendas periodo
+                                                    <MenuLabel icon="bi bi-calendar-range" text="Vendas periodo" />
                                                 </Dropdown.Link>
                                                 <Dropdown.Link href={route('reports.sales.detailed')}>
-                                                    Detalhado
+                                                    <MenuLabel icon="bi bi-card-checklist" text="Detalhado" />
                                                 </Dropdown.Link>
                                                 <Dropdown.Link href={route('reports.cash.closure')}>
-                                                    Fechamento de CAIXA
+                                                    <MenuLabel icon="bi bi-clipboard-data" text="Fechamento de CAIXA" />
                                                 </Dropdown.Link>
                                             </>
                                         )}
                                         {canSwitchUnit && (
                                             <Dropdown.Link href={route('reports.switch-unit')}>
-                                                Trocar unidade
+                                                <MenuLabel icon="bi bi-arrow-left-right" text="Trocar unidade" />
                                             </Dropdown.Link>
                                         )}
                                         {canSwitchRole && (
                                             <Dropdown.Link href={route('reports.switch-role')}>
-                                                Trocar funcao
+                                                <MenuLabel icon="bi bi-people" text="Trocar funcao" />
                                             </Dropdown.Link>
                                         )}
                                         {canSeeReports && (
                                             <Dropdown.Link href={route('salary-advances.index')}>
-                                                Adiantamento
+                                                <MenuLabel icon="bi bi-wallet2" text="Adiantamento" />
                                             </Dropdown.Link>
                                         )}
-                                        <Dropdown.Link href={route('logout')} method="post" as="button">
-                                            Sair
+                                        <Dropdown.Link href={route('products.discard')}>
+                                            <MenuLabel icon="bi bi-recycle" text="Descarte" />
                                         </Dropdown.Link>
+                                        <button
+                                            type="button"
+                                            onClick={handleLogout}
+                                            className="w-full px-4 py-2 text-left text-sm font-semibold text-red-600 transition hover:text-red-700 focus:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/20"
+                                        >
+                                            <MenuLabel icon="bi bi-box-arrow-right" text="Sair" />
+                                        </button>
                                     </Dropdown.Content>
                                 </Dropdown>
                             </div>
@@ -218,7 +249,7 @@ export default function AuthenticatedLayout({ header, children }) {
                             href={route('dashboard')}
                             active={route().current('dashboard')}
                         >
-                            {activeUnitName}
+                            <MenuLabel icon="bi bi-speedometer2" text={activeUnitName} />
                         </ResponsiveNavLink>
 
                         {canSeeUsers && (
@@ -226,7 +257,7 @@ export default function AuthenticatedLayout({ header, children }) {
                                 href={route('users.index')}
                                 active={route().current('users.index')}
                             >
-                                {'Usu\u00E1rios'}
+                                <MenuLabel icon="bi bi-people-fill" text={"Usu\u00E1rios"} />
                             </ResponsiveNavLink>
                         )}
 
@@ -235,31 +266,45 @@ export default function AuthenticatedLayout({ header, children }) {
                                 href={route('units.index')}
                                 active={route().current('units.index')}
                             >
-                                Unidades
+                                <MenuLabel icon="bi bi-building" text="Unidades" />
                             </ResponsiveNavLink>
                         )}
                         <ResponsiveNavLink
                             href={route('products.index')}
                             active={route().current('products.*')}
                         >
-                            Produtos
+                            <MenuLabel icon="bi bi-box-seam" text="Produtos" />
                         </ResponsiveNavLink>
+                        {isCashier && (
+                            <ResponsiveNavLink
+                                href={route('cashier.close')}
+                                active={route().current('cashier.close')}
+                            >
+                                <MenuLabel icon="bi bi-cash-stack" text="Fechar CX" />
+                            </ResponsiveNavLink>
+                        )}
                         {canSeeReports && (
                             <>
                                 <ResponsiveNavLink
                                     href={route('reports.control')}
                                     active={route().current('reports.control')}
                                 >
-                                    Controle
+                                    <MenuLabel icon="bi bi-graph-up-arrow" text="Controle" />
                                 </ResponsiveNavLink>
                                 <ResponsiveNavLink
                                     href={route('reports.cash.closure')}
                                     active={route().current('reports.cash.closure')}
                                 >
-                                    Fechamento de CAIXA
+                                    <MenuLabel icon="bi bi-clipboard-data" text="Fechamento de CAIXA" />
                                 </ResponsiveNavLink>
                             </>
                         )}
+                        <ResponsiveNavLink
+                            href={route('products.discard')}
+                            active={route().current('products.discard')}
+                        >
+                            <MenuLabel icon="bi bi-recycle" text="Descarte" />
+                        </ResponsiveNavLink>
                     </div>
 
                     <div className="border-t border-gray-200 pb-1 pt-4 dark:border-gray-600">
@@ -331,13 +376,13 @@ export default function AuthenticatedLayout({ header, children }) {
                                     Adiantamento
                                 </ResponsiveNavLink>
                             )}
-                            <ResponsiveNavLink
-                                method="post"
-                                href={route('logout')}
-                                as="button"
+                            <button
+                                type="button"
+                                onClick={handleLogout}
+                                className="block w-full px-4 py-2 text-left text-sm font-semibold text-red-600 transition hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/20"
                             >
                                 Sair
-                            </ResponsiveNavLink>
+                            </button>
                         </div>
                     </div>
                 </div>
