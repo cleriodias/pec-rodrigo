@@ -1,7 +1,8 @@
 import InfoButton from "@/Components/Button/InfoButton";
 import WarningButton from "@/Components/Button/WarningButton";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import { Head, Link, useForm } from "@inertiajs/react";
+import { Head, Link, useForm, router, usePage } from "@inertiajs/react";
+import { useState } from "react";
 
 const roleOptions = [
     { value: 0, label: 'MASTER' },
@@ -22,6 +23,8 @@ const formatTime = (value) => {
 };
 
 export default function UserEdit({ auth, user, units = [] }) {
+    const pageProps = usePage().props;
+    const csrfToken = pageProps?.csrf_token ?? '';
 
     const initialUnits = user.units && user.units.length
         ? user.units.map((unit) => String(unit.tb2_id))
@@ -38,12 +41,30 @@ export default function UserEdit({ auth, user, units = [] }) {
         tb2_id: initialUnits,
     });
 
+    const [passwordResetMessage, setPasswordResetMessage] = useState(null);
+
     const handleSubmit = (e) => {
 
         e.preventDefault();
 
         put(route('users.update', {user: data.id}));
     }
+
+    const handlePasswordReset = () => {
+        if (!window.confirm('Gerar uma nova senha temporária para este usuário?')) {
+            return;
+        }
+
+        router.post(route('users.reset-password', { user: data.id }), { _token: csrfToken }, {
+            preserveScroll: true,
+            onSuccess: (page) => {
+                const flash = page.props?.flash;
+                if (flash?.success) {
+                    setPasswordResetMessage(flash.success);
+                }
+            },
+        });
+    };
 
     const selectedUnits = data.tb2_id ?? [];
 
@@ -64,9 +85,22 @@ export default function UserEdit({ auth, user, units = [] }) {
 
             <div className="py-4 max-w-7xl mx-auto sm:px-6 lg:px-8">
                 <div className="overflow-hidden bg-white shadow-lg sm:rounded-lg dark:bg-gray-800">
-                    <div className="flex justify-between items-center m-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3 m-4">
                         <h3 className="text-lg">Editar</h3>
-                        <div className="flex space-x-4">
+                        <div className="flex flex-wrap gap-3">
+                            {passwordResetMessage && (
+                                <span className="rounded-lg bg-green-50 px-4 py-2 text-sm font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-200">
+                                    {passwordResetMessage}
+                                </span>
+                            )}
+                            <button
+                                type="button"
+                                onClick={handlePasswordReset}
+                                className="inline-flex items-center gap-2 rounded-lg border border-amber-400 px-4 py-2 text-sm font-semibold text-amber-700 transition hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-400 dark:border-amber-500 dark:text-amber-200 dark:hover:bg-amber-500/20"
+                            >
+                                <i className="bi bi-key" aria-hidden="true"></i>
+                                Trocar senha
+                            </button>
                             <Link href={route('users.index')}>
                                 <InfoButton aria-label="Listar" title="Listar">
                                     <i className="bi bi-list text-lg" aria-hidden="true"></i>

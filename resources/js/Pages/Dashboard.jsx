@@ -1,5 +1,6 @@
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+﻿import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, usePage } from '@inertiajs/react';
+import axios from 'axios';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 const MIN_CHARACTERS = 3;
@@ -33,6 +34,13 @@ const paymentOptions = [
         classes: 'bg-gray-900 hover:bg-gray-800 focus:ring-gray-200 text-white',
     },
 ];
+
+const normalizeCartItem = (item) => ({
+    ...item,
+    vrEligible: Boolean(
+        item.vrEligible ?? item.vr_credit ?? item.tb1_vr_credit ?? false,
+    ),
+});
 
 const ITEMS_STORAGE_KEY = 'dashboard.selectedItems';
 const SAVED_CARTS_STORAGE_KEY = 'dashboard.savedCarts';
@@ -103,7 +111,7 @@ export default function Dashboard() {
             const parsed = JSON.parse(storedItems);
 
             if (Array.isArray(parsed) && parsed.length > 0) {
-                setItems(parsed);
+                setItems(parsed.map((item) => normalizeCartItem(item)));
             }
         } catch (storageError) {
             console.error('Failed to parse stored sale items', storageError);
@@ -154,6 +162,15 @@ export default function Dashboard() {
 
         return Math.max(0, totalAmount - numericCashValue);
     }, [items.length, numericCashValue, totalAmount]);
+
+    const hasVrRestrictions = useMemo(
+        () => items.some((item) => !item.vrEligible),
+        [items],
+    );
+    const canUseRefeicao = useMemo(
+        () => items.length > 0 && !hasVrRestrictions,
+        [items.length, hasVrRestrictions],
+    );
 
     useEffect(() => {
         inputRef.current?.focus();
@@ -217,7 +234,14 @@ export default function Dashboard() {
                     return;
                 }
 
-                setFavoriteProducts(Array.isArray(data) ? data : []);
+                setFavoriteProducts(
+                    Array.isArray(data)
+                        ? data.map((product) => ({
+                              ...product,
+                              tb1_vr_credit: Boolean(product.tb1_vr_credit),
+                          }))
+                        : [],
+                );
             })
             .catch(() => {
                 if (!isMounted) {
@@ -370,6 +394,12 @@ export default function Dashboard() {
         }
     }, [items.length]);
 
+    useEffect(() => {
+        if (!canUseRefeicao && selectedValeType === 'refeicao') {
+            setSelectedValeType('vale');
+        }
+    }, [canUseRefeicao, selectedValeType]);
+
     const addItemFromProduct = (product, { preserveInput = false } = {}) => {
         if (!product) {
             return;
@@ -397,6 +427,7 @@ export default function Dashboard() {
                     name: product.tb1_nome,
                     price: Number(product.tb1_vlr_venda ?? 0),
                     quantity: 1,
+                    vrEligible: Boolean(product.tb1_vr_credit),
                 },
             ];
         });
@@ -555,24 +586,11 @@ export default function Dashboard() {
             return;
         }
 
-        const metaToken =
-            document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
-        const csrfToken = metaToken || csrfTokenProp;
-
         setSaleLoading(true);
         setSaleError('');
-
-        fetch(route('sales.store'), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-                'X-CSRF-TOKEN': csrfToken,
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-            credentials: 'same-origin',
-            body: JSON.stringify({
-                _token: csrfToken,
+        axios
+            .post(route('sales.store'), {
+                _token: csrfTokenProp,
                 items: items.map((item) => ({
                     product_id: item.id,
                     quantity: item.quantity,
@@ -581,32 +599,9 @@ export default function Dashboard() {
                 vale_user_id: valeUserId,
                 vale_type: type === 'vale' ? valeType : null,
                 valor_pago: cashAmount,
-            }),
-        })
-            .then(async (response) => {
-                if (response.ok) {
-                    return response.json();
-                }
-
-                let message = 'Falha ao registrar a venda.';
-
-                try {
-                    const data = await response.json();
-                    if (data?.message) {
-                        message = data.message;
-                    } else if (data?.errors) {
-                        const firstError = Object.values(data.errors).flat()[0];
-                        if (firstError) {
-                            message = firstError;
-                        }
-                    }
-                } catch {
-                    // Ignora erros de parse para manter a mensagem padrao.
-                }
-
-                throw new Error(message);
             })
-            .then((data) => {
+            .then((response) => {
+                const data = response.data;
                 setReceiptData({
                     ...data.sale,
                     payment_label: paymentLabels[data.sale.tipo_pago] ?? data.sale.tipo_pago,
@@ -616,8 +611,24 @@ export default function Dashboard() {
                 setCashInputVisible(false);
                 setCashValue('');
             })
-            .catch((err) => {
-                setSaleError(err.message || 'Erro inesperado ao registrar a venda.');
+            .catch((error) => {
+                let message = 'Falha ao registrar a venda.';
+
+                if (error.response?.data) {
+                    const data = error.response.data;
+                    if (data.message) {
+                        message = data.message;
+                    } else if (data.errors) {
+                        const firstError = Object.values(data.errors).flat()[0];
+                        if (firstError) {
+                            message = firstError;
+                        }
+                    }
+                } else if (error.message) {
+                    message = error.message;
+                }
+
+                setSaleError(message);
             })
             .finally(() => {
                 setSaleLoading(false);
@@ -673,6 +684,11 @@ export default function Dashboard() {
     };
 
     const handleSelectValeUser = (user) => {
+        if (selectedValeType === 'refeicao' && !canUseRefeicao) {
+            setSaleError('Há itens que não podem ser pagos com VR Crédito.');
+            return;
+        }
+
         if (selectedValeType === 'refeicao') {
             const balance = Number(user.refeicao_balance ?? user.vr_cred ?? 0);
             if (totalAmount > balance) {
@@ -752,7 +768,7 @@ export default function Dashboard() {
                     ${
                         receiptData.vale_user_name
                             ? `<p>Vale: ${receiptData.vale_user_name}${
-                                  receiptData.vale_type === 'refeicao' ? ' (Refeição)' : ''
+                                  receiptData.vale_type === 'refeicao' ? ' (RefeiÃ§Ã£o)' : ''
                               }</p>`
                             : ''
                     }
@@ -835,7 +851,8 @@ export default function Dashboard() {
         }
 
         setSavedCarts((prev) => prev.filter((cart) => cart.id !== cartId));
-        setItems(targetCart.items);
+        const sanitizedItems = targetCart.items.map((item) => normalizeCartItem(item));
+        setItems(sanitizedItems);
         setSaleError('');
         setTexto('');
         setHideSuggestions(true);
@@ -844,7 +861,7 @@ export default function Dashboard() {
         if (typeof window !== 'undefined') {
             window.localStorage.setItem(
                 ITEMS_STORAGE_KEY,
-                JSON.stringify(targetCart.items),
+                JSON.stringify(sanitizedItems),
             );
         }
         requestAnimationFrame(() => {
@@ -1191,16 +1208,16 @@ export default function Dashboard() {
                                                     value="vale"
                                                     checked={selectedValeType === 'vale'}
                                                     onChange={() => setSelectedValeType('vale')}
-                                                    className="h-4 w-4 text-amber-600 focus:ring-amber-500"
-                                                />
-                                                Vale
-                                            </label>
-                                            <label
-                                                className={`flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition ${
+                                                className="h-4 w-4 text-amber-600 focus:ring-amber-500"
+                                            />
+                                            Vale
+                                        </label>
+                                        <label
+                                                className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition ${
                                                     selectedValeType === 'refeicao'
                                                         ? 'border-amber-500 bg-white text-amber-800 dark:bg-gray-900'
                                                         : 'border-gray-200 bg-white/70 text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200'
-                                                }`}
+                                                } ${!canUseRefeicao ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
                                             >
                                                 <input
                                                     type="radio"
@@ -1208,6 +1225,7 @@ export default function Dashboard() {
                                                     value="refeicao"
                                                     checked={selectedValeType === 'refeicao'}
                                                     onChange={() => setSelectedValeType('refeicao')}
+                                                    disabled={!canUseRefeicao}
                                                     className="h-4 w-4 text-amber-600 focus:ring-amber-500"
                                                 />
                                                 Refeição
@@ -1215,9 +1233,14 @@ export default function Dashboard() {
                                         </div>
                                         <p className="mt-2 text-xs text-amber-800 dark:text-amber-100">
                                             {selectedValeType === 'refeicao'
-                                                ? 'O saldo de Refeição do colaborador ser\u00e1 utilizado; saldo insuficiente impede a venda.'
-                                                : 'Utilize esta op\u00e7\u00e3o para lan\u00e7ar o valor no vale tradicional do colaborador.'}
+                                                ? 'O saldo de Refeição do colaborador será utilizado; saldo insuficiente impede a venda.'
+                                                : 'Utilize esta opção para lançar o valor no vale tradicional do colaborador.'}
                                         </p>
+                                        {!canUseRefeicao && (
+                                            <p className="mt-1 text-xs text-amber-700 dark:text-amber-200">
+                                                Remova itens não liberados para VR Crédito para habilitar a opção Refeição.
+                                            </p>
+                                        )}
                                         <div className="mt-4">
                                             <label className="text-sm text-gray-700 dark:text-gray-200">
                                                 Buscar usuarios

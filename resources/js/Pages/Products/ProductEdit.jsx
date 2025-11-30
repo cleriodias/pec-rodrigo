@@ -12,6 +12,7 @@ export default function ProductEdit({ auth, product, typeOptions = [], statusOpt
         tb1_codbar: product.tb1_codbar ?? "",
         tb1_tipo: product.tb1_tipo ?? typeOptions[0]?.value ?? 0,
         tb1_status: product.tb1_status ?? statusOptions[0]?.value ?? 1,
+        tb1_vr_credit: Boolean(product.tb1_vr_credit),
     });
 
     const handleSubmit = (event) => {
@@ -147,6 +148,22 @@ export default function ProductEdit({ auth, product, typeOptions = [], statusOpt
                                 </div>
                             </div>
 
+                            <div className="mb-6">
+                                <span className="text-sm font-medium text-gray-700">Disponível para VR Crédito</span>
+                                <label className="mt-2 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-200">
+                                    <input
+                                        type="checkbox"
+                                        checked={Boolean(data.tb1_vr_credit)}
+                                        onChange={(event) => setData("tb1_vr_credit", event.target.checked)}
+                                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                    />
+                                    Permitir que este produto seja pago com VR Crédito.
+                                </label>
+                                {errors.tb1_vr_credit && (
+                                    <span className="text-red-600">{errors.tb1_vr_credit}</span>
+                                )}
+                            </div>
+
                             <div className="flex justify-end">
                                 <WarningButton
                                     type="submit"
@@ -165,4 +182,3 @@ export default function ProductEdit({ auth, product, typeOptions = [], statusOpt
         </AuthenticatedLayout>
     );
 }
-

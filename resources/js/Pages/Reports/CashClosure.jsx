@@ -1,4 +1,5 @@
-﻿import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import Modal from '@/Components/Modal';
 import { Head, router } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -16,6 +17,28 @@ const formatCurrency = (value) =>
         currency: 'BRL',
     });
 
+const formatQuantity = (value, decimals = 2) =>
+    Number(value ?? 0).toLocaleString('pt-BR', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+    });
+
+const formatDateTime = (value) => {
+    if (!value) {
+        return '--';
+    }
+
+    return new Date(value).toLocaleString('pt-BR', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+    });
+};
+
+const differenceTone = (value) =>
+    Math.abs(value ?? 0) < 0.005
+        ? 'text-green-600 dark:text-green-400'
+        : 'text-red-600 dark:text-red-400';
+
 export default function CashClosure({
     records = [],
     dateValue = '',
@@ -23,10 +46,16 @@ export default function CashClosure({
     filterUnits = [],
     selectedUnitId = null,
     selectedUnit = { name: 'Todas as unidades' },
+    discardDetails = [],
 }) {
     const normalizedSelectedUnit = selectedUnitId ?? null;
     const [dateInput, setDateInput] = useState(dateInputValue ?? '');
     const [unitFilter, setUnitFilter] = useState(normalizedSelectedUnit);
+    const [discardModal, setDiscardModal] = useState({
+        open: false,
+        cashierName: '',
+        items: [],
+    });
 
     useEffect(() => {
         setDateInput(dateInputValue ?? '');
@@ -35,6 +64,20 @@ export default function CashClosure({
     useEffect(() => {
         setUnitFilter(normalizedSelectedUnit);
     }, [normalizedSelectedUnit]);
+
+    const discardMap = useMemo(() => {
+        const grouped = {};
+        discardDetails.forEach((entry) => {
+            const key = entry.user_id;
+            if (!grouped[key]) {
+                grouped[key] = [];
+            }
+
+            grouped[key].push(entry);
+        });
+
+        return grouped;
+    }, [discardDetails]);
 
     const totals = useMemo(() => {
         return paymentColumns.reduce(
@@ -91,6 +134,112 @@ export default function CashClosure({
         const normalized = optionId ?? null;
         setUnitFilter(normalized);
         applyFilters(dateInput, normalized);
+    };
+
+    const openDiscardModal = (record) => {
+        const items = discardMap[record.cashier_id] ?? [];
+        setDiscardModal({
+            open: true,
+            cashierName: record.cashier_name,
+            items,
+        });
+    };
+
+    const closeDiscardModal = () => {
+        setDiscardModal({
+            open: false,
+            cashierName: '',
+            items: [],
+        });
+    };
+
+    const discardModalTotals = useMemo(() => {
+        const quantity = discardModal.items.reduce((sum, item) => sum + (item.quantity ?? 0), 0);
+        const value = discardModal.items.reduce((sum, item) => sum + (item.value ?? 0), 0);
+
+        return {
+            quantity,
+            value,
+        };
+    }, [discardModal.items]);
+
+    const renderPaymentCell = (record, column) => {
+        const systemValue = record.totals?.[column.key] ?? 0;
+
+        if (!['dinheiro', 'maquina'].includes(column.key)) {
+            return (
+                <p className="text-right font-semibold text-gray-900 dark:text-white">
+                    {formatCurrency(systemValue)}
+                </p>
+            );
+        }
+
+        const closure = record.closure ?? null;
+        const closureValue =
+            column.key === 'dinheiro'
+                ? closure?.cash_amount ?? 0
+                : closure?.card_amount ?? 0;
+        const diffValue =
+            column.key === 'dinheiro'
+                ? closure?.differences?.cash ?? systemValue
+                : closure?.differences?.card ?? systemValue;
+        const diffClass = differenceTone(diffValue);
+
+        return (
+            <div className="space-y-1 text-right">
+                <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Sistema</p>
+                    <p className="font-semibold text-gray-900 dark:text-white">
+                        {formatCurrency(systemValue)}
+                    </p>
+                </div>
+                <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Fechamento</p>
+                    <p className="text-sm text-gray-700 dark:text-gray-200">
+                        {formatCurrency(closureValue)}
+                    </p>
+                </div>
+                <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Diferença</p>
+                    <p className={`text-sm font-semibold ${diffClass}`}>
+                        {formatCurrency(diffValue)}
+                    </p>
+                </div>
+            </div>
+        );
+    };
+
+    const renderConferenceCell = (record) => {
+        const closure = record.closure ?? null;
+        const cashSystem = record.totals?.dinheiro ?? 0;
+        const cardSystem = record.totals?.maquina ?? 0;
+        const systemTotal = cashSystem + cardSystem;
+        const closureTotal = closure?.total_amount ?? 0;
+        const diffTotal = closure?.differences?.total ?? systemTotal;
+        const diffClass = differenceTone(diffTotal);
+
+        return (
+            <div className="space-y-1 text-right">
+                <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Sistema</p>
+                    <p className="font-semibold text-gray-900 dark:text-white">
+                        {formatCurrency(systemTotal)}
+                    </p>
+                </div>
+                <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Fechamento</p>
+                    <p className="text-sm text-gray-700 dark:text-gray-200">
+                        {formatCurrency(closureTotal)}
+                    </p>
+                </div>
+                <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Diferença</p>
+                    <p className={`text-sm font-semibold ${diffClass}`}>
+                        {formatCurrency(diffTotal)}
+                    </p>
+                </div>
+            </div>
+        );
     };
 
     const filterCard = (
@@ -195,6 +344,7 @@ export default function CashClosure({
                             <tr>
                                 <th className="px-3 py-2 text-left font-medium">Caixa</th>
                                 <th className="px-3 py-2 text-left font-medium">Unidade</th>
+                                <th className="px-3 py-2 text-left font-medium">Fechamento</th>
                                 {paymentColumns.map((column) => (
                                     <th
                                         key={`header-${column.key}`}
@@ -204,30 +354,74 @@ export default function CashClosure({
                                     </th>
                                 ))}
                                 <th className="px-3 py-2 text-right font-medium">Total</th>
+                                <th className="px-3 py-2 text-right font-medium">Conferência</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                            {records.map((record) => (
-                                <tr key={record.cashier_id}>
-                                    <td className="px-3 py-2 text-gray-800 dark:text-gray-100">
-                                        {record.cashier_name}
-                                    </td>
-                                    <td className="px-3 py-2 text-gray-600 dark:text-gray-300">
-                                        {record.unit_name ?? '---'}
-                                    </td>
-                                    {paymentColumns.map((column) => (
-                                        <td
-                                            key={`${record.cashier_id}-${column.key}`}
-                                            className="px-3 py-2 text-right text-gray-700 dark:text-gray-200"
-                                        >
-                                            {formatCurrency(record.totals?.[column.key] ?? 0)}
+                            {records.map((record) => {
+                                const closure = record.closure ?? null;
+                                const closed = closure?.closed;
+                                const statusClass = closed
+                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200'
+                                    : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200';
+                                const rowKey =
+                                    record.row_key ??
+                                    `${record.cashier_id}-${record.unit_id ?? 'all'}`;
+
+                                return (
+                                    <tr key={rowKey}>
+                                        <td className="px-3 py-2 text-gray-800 dark:text-gray-100">
+                                            {record.cashier_name}
                                         </td>
-                                    ))}
-                                    <td className="px-3 py-2 text-right font-semibold text-gray-900 dark:text-white">
-                                        {formatCurrency(record.grand_total ?? 0)}
-                                    </td>
-                                </tr>
-                            ))}
+                                        <td className="px-3 py-2 text-gray-600 dark:text-gray-300">
+                                            {record.unit_name ?? '---'}
+                                        </td>
+                                        <td className="px-3 py-2 text-gray-700 dark:text-gray-200">
+                                            <button
+                                                type="button"
+                                                onClick={() => openDiscardModal(record)}
+                                                className={`mb-2 w-full rounded-full px-3 py-1 text-xs font-semibold transition ${
+                                                    record.discard_total > 0
+                                                        ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-200'
+                                                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'
+                                                }`}
+                                            >
+                                                <span className="flex items-center justify-between">
+                                                    <span>Descarte</span>
+                                                    <span>{formatCurrency(record.discard_total ?? 0)}</span>
+                                                </span>
+                                                <span className="mt-0.5 block text-[10px] font-normal text-gray-500 dark:text-gray-400">
+                                                    Qtd: {formatQuantity(record.discard_quantity ?? 0, 3)}
+                                                </span>
+                                            </button>
+                                            <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${statusClass}`}>
+                                                {closed ? 'Fechado' : 'Pendente'}
+                                            </span>
+                                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                {closed ? formatDateTime(closure?.closed_at) : 'Sem registro'}
+                                            </p>
+                                        </td>
+                                        {paymentColumns.map((column) => (
+                                            <td
+                                                key={`${record.cashier_id}-${column.key}`}
+                                                className={`px-3 py-2 text-right text-gray-700 dark:text-gray-200 ${
+                                                    ['dinheiro', 'maquina'].includes(column.key)
+                                                        ? 'align-top'
+                                                        : ''
+                                                }`}
+                                            >
+                                                {renderPaymentCell(record, column)}
+                                            </td>
+                                        ))}
+                                        <td className="px-3 py-2 text-right font-semibold text-gray-900 dark:text-white">
+                                            {formatCurrency(record.grand_total ?? 0)}
+                                        </td>
+                                        <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-200 align-top">
+                                            {renderConferenceCell(record)}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 )}
@@ -257,6 +451,64 @@ export default function CashClosure({
                     {tableSection}
                 </div>
             </div>
+            <Modal show={discardModal.open} onClose={closeDiscardModal} maxWidth="xl" tone="light">
+                <div className="bg-white p-6 text-gray-800">
+                    <div className="flex items-start justify-between gap-4">
+                        <div>
+                            <h3 className="text-lg font-semibold text-gray-900">
+                                Descartes do dia {discardModal.cashierName ? `- ${discardModal.cashierName}` : ''}
+                            </h3>
+                            <p className="text-sm text-gray-500">
+                                Totais aproximados com base no preco atual do produto.
+                            </p>
+                        </div>
+                        <div className="text-right text-sm">
+                            <p className="font-semibold text-gray-700">
+                                Valor: {formatCurrency(discardModalTotals.value)}
+                            </p>
+                            <p className="text-gray-500">
+                                Quantidade: {formatQuantity(discardModalTotals.quantity, 3)}
+                            </p>
+                        </div>
+                    </div>
+
+                    {!discardModal.items.length ? (
+                        <p className="mt-6 text-sm text-gray-500">Nenhum descarte registrado para este caixa.</p>
+                    ) : (
+                        <div className="mt-6 max-h-96 overflow-y-auto">
+                            <table className="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead className="bg-gray-50 text-gray-600">
+                                    <tr>
+                                        <th className="px-3 py-2 text-left font-medium">Produto</th>
+                                        <th className="px-3 py-2 text-left font-medium">Quantidade</th>
+                                        <th className="px-3 py-2 text-left font-medium">Valor estimado</th>
+                                        <th className="px-3 py-2 text-left font-medium">Data/Hora</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {discardModal.items.map((item) => (
+                                        <tr key={item.id}>
+                                            <td className="px-3 py-2 text-gray-800">
+                                                {item.product?.name ?? 'Produto removido'}
+                                            </td>
+                                            <td className="px-3 py-2 text-gray-700">
+                                                {formatQuantity(item.quantity, 3)}
+                                            </td>
+                                            <td className="px-3 py-2 text-gray-700">
+                                                {formatCurrency(item.value ?? 0)}
+                                            </td>
+                                            <td className="px-3 py-2 text-gray-600">
+                                                {formatDateTime(item.created_at)}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            </Modal>
+
         </AuthenticatedLayout>
     );
 }

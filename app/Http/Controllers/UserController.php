@@ -21,7 +21,16 @@ class UserController extends Controller
     {
         $this->middleware(function ($request, $next) {
             $user = $request->user();
-            if (! $user || ! in_array((int) $user->funcao, [0, 1], true)) {
+            if (! $user) {
+                abort(403);
+            }
+
+            $routeName = $request->route()?->getName();
+            if ((int) $user->funcao === 3 && $routeName === 'users.search') {
+                return $next($request);
+            }
+
+            if (! in_array((int) $user->funcao, [0, 1], true)) {
                 abort(403);
             }
 
@@ -311,6 +320,17 @@ class UserController extends Controller
         $user->delete();
 
         return Redirect::route('users.index')->with('success', 'Usuário apagado com sucesso!');
+    }
+
+    public function resetPassword(Request $request, User $user)
+    {
+        $newPassword = str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT);
+
+        $user->forceFill([
+            'password' => $newPassword,
+        ])->save();
+
+        return Redirect::back()->with('success', "Nova senha temporária: {$newPassword}");
     }
 
     private function groupSalesByPeriod(Collection $sales): array

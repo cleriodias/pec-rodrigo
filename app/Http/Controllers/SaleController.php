@@ -84,8 +84,16 @@ class SaleController extends Controller
         }
 
         $itemsPayload = [];
+        $requiresVrEligible = $finalPaymentType === 'refeicao';
+
         foreach ($groupedItems as $productId => $quantity) {
-            $product = Produto::select('tb1_id', 'tb1_nome', 'tb1_vlr_venda')->findOrFail($productId);
+            $product = Produto::select('tb1_id', 'tb1_nome', 'tb1_vlr_venda', 'tb1_vr_credit')->findOrFail($productId);
+
+            if ($requiresVrEligible && ! $product->tb1_vr_credit) {
+                throw ValidationException::withMessages([
+                    'items' => sprintf('O produto %s não está liberado para VR Crédito.', $product->tb1_nome),
+                ]);
+            }
             $unitPrice = (float) $product->tb1_vlr_venda;
             $total = round($unitPrice * $quantity, 2);
 

@@ -20,7 +20,21 @@ const formatDate = (value) => {
     });
 };
 
-export default function SalesToday({ meta, chartData, details, totals, dateLabel, filterUnits = [], selectedUnitId = null }) {
+const dayOptions = [
+    { id: 'current', label: 'Hoje' },
+    { id: 'previous', label: 'Ontem' },
+];
+
+export default function SalesToday({
+    meta,
+    chartData,
+    details,
+    totals,
+    dateLabel,
+    filterUnits = [],
+    selectedUnitId = null,
+    selectedDay = 'current',
+}) {
     const initialType = useMemo(() => {
         const withValue = chartData.find((item) => item.total > 0);
         return withValue?.type ?? 'dinheiro';
@@ -43,11 +57,35 @@ export default function SalesToday({ meta, chartData, details, totals, dateLabel
     }, [filterUnits]);
 
     const handleFilterChange = (unitId) => {
-        if ((unitId ?? null) === (selectedUnitId ?? null)) {
+        const normalized = unitId ?? null;
+        if (normalized === (selectedUnitId ?? null)) {
             return;
         }
 
-        const params = unitId ? { unit_id: unitId } : {};
+        const params = {};
+        if (normalized !== null) {
+            params.unit_id = normalized;
+        }
+        if (selectedDay && selectedDay !== 'current') {
+            params.day = selectedDay;
+        }
+
+        router.get(route('reports.sales.today'), params, { preserveScroll: true });
+    };
+
+    const handleDayChange = (day) => {
+        if (day === selectedDay) {
+            return;
+        }
+
+        const params = {};
+        if (selectedUnitId !== null && selectedUnitId !== undefined) {
+            params.unit_id = selectedUnitId;
+        }
+        if (day !== 'current') {
+            params.day = day;
+        }
+
         router.get(route('reports.sales.today'), params, { preserveScroll: true });
     };
 
@@ -120,29 +158,54 @@ export default function SalesToday({ meta, chartData, details, totals, dateLabel
             <div className="py-12">
                 <div className="mx-auto max-w-7xl space-y-8 px-4 sm:px-6 lg:px-8">
                     <div className="rounded-2xl bg-white p-6 shadow dark:bg-gray-800">
-                        <div className="flex flex-col gap-2">
-                            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-gray-400">Filtro</p>
-                            <p className="text-sm text-gray-600 dark:text-gray-300">Escolha a unidade para visualizar os dados do dia.</p>
-                        </div>
-                        <div className="mt-4 flex flex-wrap gap-2">
-                            {unitOptions.map((unit) => {
-                                const isActive = (unit.id ?? null) === (selectedUnitId ?? null);
+                        <div className="flex flex-col gap-6">
+                            <div className="flex flex-col gap-2">
+                                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-gray-400">Período</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {dayOptions.map((option) => {
+                                        const isActive = option.id === selectedDay;
 
-                                return (
-                                    <button
-                                        type="button"
-                                        key={`unit-filter-${unit.id ?? 'all'}`}
-                                        onClick={() => handleFilterChange(unit.id)}
-                                        className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                                            isActive
-                                                ? 'bg-indigo-600 text-white shadow'
-                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200'
-                                        }`}
-                                    >
-                                        {unit.name}
-                                    </button>
-                                );
-                            })}
+                                        return (
+                                            <button
+                                                type="button"
+                                                key={option.id}
+                                                onClick={() => handleDayChange(option.id)}
+                                                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                                                    isActive
+                                                        ? 'bg-indigo-600 text-white shadow'
+                                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200'
+                                                }`}
+                                            >
+                                                {option.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-2">
+                                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-gray-400">Unidade</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {unitOptions.map((unit) => {
+                                        const isActive = (unit.id ?? null) === (selectedUnitId ?? null);
+
+                                        return (
+                                            <button
+                                                type="button"
+                                                key={`unit-filter-${unit.id ?? 'all'}`}
+                                                onClick={() => handleFilterChange(unit.id)}
+                                                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                                                    isActive
+                                                        ? 'bg-indigo-600 text-white shadow'
+                                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200'
+                                                }`}
+                                            >
+                                                {unit.name}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
                         </div>
                     </div>
 

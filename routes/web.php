@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Controllers\CashierClosureController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ProductDiscardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RoleSwitchController;
 use App\Http\Controllers\SaleController;
@@ -39,6 +41,7 @@ Route::middleware('auth')->group(function () {
     route::put('/update-user/{user}', [UserController::class, 'update'])->name('users.update');
     route::delete('/destroy-user/{user}', [UserController::class, 'destroy'])->name('users.destroy');
     Route::get('/users/search', [UserController::class, 'search'])->name('users.search');
+    Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword'])->name('users.reset-password');
 
     Route::get('/units', [UnitController::class, 'index'])->name('units.index');
     Route::get('/units/create', [UnitController::class, 'create'])->name('units.create');
@@ -48,6 +51,8 @@ Route::middleware('auth')->group(function () {
     Route::put('/units/{unit}', [UnitController::class, 'update'])->name('units.update');
     Route::delete('/units/{unit}', [UnitController::class, 'destroy'])->name('units.destroy');
 
+    Route::get('/products/discard', [ProductDiscardController::class, 'index'])->name('products.discard');
+    Route::post('/products/discard', [ProductDiscardController::class, 'store'])->name('products.discard.store');
     Route::get('/products/search', [ProductController::class, 'search'])->name('products.search');
     Route::get('/products/favorites', [ProductController::class, 'favorites'])->name('products.favorites');
     Route::post('/products/{product}/favorite', [ProductController::class, 'toggleFavorite'])->name('products.favorite');
@@ -66,6 +71,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/salary-advances/create', [SalaryAdvanceController::class, 'create'])->name('salary-advances.create');
     Route::post('/salary-advances', [SalaryAdvanceController::class, 'store'])->name('salary-advances.store');
     Route::delete('/salary-advances/{salaryAdvance}', [SalaryAdvanceController::class, 'destroy'])->name('salary-advances.destroy');
+    Route::get('/cashier/close', [CashierClosureController::class, 'index'])->name('cashier.close');
+    Route::post('/cashier/close', [CashierClosureController::class, 'store'])->name('cashier.close.store');
 });
 
 require __DIR__.'/auth.php';

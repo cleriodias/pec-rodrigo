@@ -16,6 +16,20 @@
 
         <!-- Scripts -->
         @routes
+        <script>
+            if (typeof Ziggy !== 'undefined' && typeof window !== 'undefined') {
+                Ziggy.url = window.location.origin;
+                Ziggy.port = null;
+            }
+
+            if (typeof window !== 'undefined' && typeof window.route === 'function') {
+                const originalRoute = window.route;
+
+                window.route = function route(name, params, absolute = false) {
+                    return originalRoute(name, params, absolute);
+                };
+            }
+        </script>
         @viteReactRefresh
         @vite(['resources/js/app.jsx', "resources/js/Pages/{$page['component']}.jsx"])
         @inertiaHead

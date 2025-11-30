@@ -81,6 +81,7 @@ class ProductController extends Controller
     public function store(Request $request)
     {
         $data = $this->validateProduct($request);
+        $data['tb1_vr_credit'] = (bool) ($data['tb1_vr_credit'] ?? false);
 
         $product = Produto::create($data);
 
@@ -99,6 +100,7 @@ class ProductController extends Controller
     public function update(Request $request, Produto $product)
     {
         $data = $this->validateProduct($request, $product);
+        $data['tb1_vr_credit'] = (bool) ($data['tb1_vr_credit'] ?? false);
 
         $product->update($data);
 
@@ -141,6 +143,7 @@ class ProductController extends Controller
                 'tb1_vlr_venda',
                 'tb1_tipo',
                 'tb1_status',
+                'tb1_vr_credit',
             ]);
 
         return response()->json($favorites);
@@ -149,6 +152,7 @@ class ProductController extends Controller
     public function search(Request $request): JsonResponse
     {
         $term = trim((string) $request->input('q', ''));
+        $typeFilter = $request->input('type');
 
         $isNumeric = ctype_digit($term);
 
@@ -161,7 +165,7 @@ class ProductController extends Controller
         $numericTerm = $isNumeric ? (int) $term : null;
         $isLongNumeric = $isNumeric && mb_strlen($term) > 4;
 
-        $products = Produto::query()
+        $productsQuery = Produto::query()
             ->where(function ($query) use ($isNumeric, $isLongNumeric, $likeTerm, $numericTerm) {
                 if ($isNumeric) {
                     if ($isLongNumeric) {
@@ -174,7 +178,14 @@ class ProductController extends Controller
                 }
 
                 $query->where('tb1_nome', 'like', $likeTerm);
-            })
+            });
+
+        if ($typeFilter !== null && $typeFilter !== '') {
+            $typeValue = (int) $typeFilter;
+            $productsQuery->where('tb1_tipo', $typeValue);
+        }
+
+        $products = $productsQuery
             ->orderByDesc('tb1_status')
             ->orderBy('tb1_nome')
             ->limit(10)
@@ -186,6 +197,7 @@ class ProductController extends Controller
                 'tb1_vlr_venda',
                 'tb1_tipo',
                 'tb1_status',
+                'tb1_vr_credit',
             ]);
 
         return response()->json($products);
@@ -214,6 +226,10 @@ class ProductController extends Controller
                     'integer',
                     Rule::in(array_keys(self::STATUS_LABELS)),
                 ],
+                'tb1_vr_credit' => [
+                    'nullable',
+                    'boolean',
+                ],
             ],
             [
                 'tb1_nome.required' => 'Informe o nome do produto.',
@@ -234,6 +250,7 @@ class ProductController extends Controller
                 'tb1_status.required' => 'Selecione o status do produto.',
                 'tb1_status.integer' => 'Status inválido.',
                 'tb1_status.in' => 'Status não reconhecido.',
+                'tb1_vr_credit.boolean' => 'Valor inválido para VR Crédito.',
             ]
         );
     }
