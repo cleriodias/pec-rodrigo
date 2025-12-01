@@ -14,6 +14,20 @@ use Illuminate\Validation\ValidationException;
 
 class SaleController extends Controller
 {
+    public function openComandas(): JsonResponse
+    {
+        $open = Venda::query()
+            ->selectRaw('COUNT(DISTINCT id_comanda) as total_comandas, COALESCE(SUM(valor_total), 0) as total_amount')
+            ->whereNotNull('id_comanda')
+            ->where('status', 0)
+            ->first();
+
+        return response()->json([
+            'total_comandas' => (int) ($open->total_comandas ?? 0),
+            'total_amount' => (float) ($open->total_amount ?? 0),
+        ]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $user = $request->user();
