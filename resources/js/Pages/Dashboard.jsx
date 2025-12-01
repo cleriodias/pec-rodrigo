@@ -96,6 +96,8 @@ export default function Dashboard() {
     const [savedCarts, setSavedCarts] = useState([]);
     const [favoriteProducts, setFavoriteProducts] = useState([]);
     const [showChangeCard, setShowChangeCard] = useState(false);
+    const [openComandasAmount, setOpenComandasAmount] = useState(0);
+    const [openComandasCount, setOpenComandasCount] = useState(0);
 
     useEffect(() => {
         if (typeof window === 'undefined') {
@@ -256,6 +258,31 @@ export default function Dashboard() {
                 }
 
                 setFavoriteProducts([]);
+            });
+
+        return () => {
+            isMounted = false;
+        };
+    }, []);
+
+    useEffect(() => {
+        let isMounted = true;
+
+        axios
+            .get(route('sales.open-comandas'))
+            .then((response) => {
+                if (!isMounted) {
+                    return;
+                }
+                const data = response.data ?? {};
+                setOpenComandasAmount(Number(data.total_amount ?? 0));
+                setOpenComandasCount(Number(data.total_comandas ?? 0));
+            })
+            .catch(() => {
+                if (isMounted) {
+                    setOpenComandasAmount(0);
+                    setOpenComandasCount(0);
+                }
             });
 
         return () => {
@@ -956,9 +983,10 @@ export default function Dashboard() {
                     <div className="flex items-center justify-between rounded-2xl border border-red-200 bg-red-50 px-4 py-3 shadow-sm dark:border-red-500/30 dark:bg-red-900/20">
                         <div>
                             <p className="text-xs font-semibold uppercase text-red-700 dark:text-red-200">Comandas</p>
-                            <p className="text-2xl font-bold text-red-600 dark:text-red-100">
-                                {openCommandasCount}
+                            <p className="text-xl font-bold text-red-600 dark:text-red-100">
+                                {formatCurrency(openComandasAmount)}
                             </p>
+                            <p className="text-[11px] font-semibold text-red-500 dark:text-red-200">{openComandasCount} em aberto</p>
                         </div>
                         <i className="bi bi-egg-fried text-xl text-red-500 dark:text-red-200" aria-hidden="true"></i>
                     </div>
