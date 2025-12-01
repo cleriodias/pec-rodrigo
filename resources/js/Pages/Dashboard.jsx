@@ -95,6 +95,7 @@ export default function Dashboard() {
     const cashInputRef = useRef(null);
     const [savedCarts, setSavedCarts] = useState([]);
     const [favoriteProducts, setFavoriteProducts] = useState([]);
+    const [showChangeCard, setShowChangeCard] = useState(false);
 
     useEffect(() => {
         if (typeof window === 'undefined') {
@@ -162,6 +163,12 @@ export default function Dashboard() {
 
         return Math.max(0, totalAmount - numericCashValue);
     }, [items.length, numericCashValue, totalAmount]);
+    const totalItems = useMemo(
+        () => items.reduce((sum, item) => sum + (item.quantity ?? 0), 0),
+        [items],
+    );
+    const openCommandasCount = 0;
+    const isComandaMode = false;
 
     const hasVrRestrictions = useMemo(
         () => items.some((item) => !item.vrEligible),
@@ -391,6 +398,7 @@ export default function Dashboard() {
         if (items.length === 0) {
             setCashInputVisible(false);
             setCashValue('');
+            setShowChangeCard(false);
         }
     }, [items.length]);
 
@@ -661,6 +669,7 @@ export default function Dashboard() {
             setSaleError('');
             if (!cashInputVisible) {
                 setCashInputVisible(true);
+                setShowChangeCard(true);
                 requestAnimationFrame(() => {
                     cashInputRef.current?.focus();
                 });
@@ -679,6 +688,7 @@ export default function Dashboard() {
 
         resetValePicker();
         setCashInputVisible(false);
+        setShowChangeCard(false);
         setCashValue('');
         finalizeSale(type);
     };
@@ -897,30 +907,61 @@ export default function Dashboard() {
                     </div>
                 )}
             </div>
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-6">
                 <div className="flex-1">
-                    <input
-                        id="campo-dashboard"
-                        type="text"
-                        ref={inputRef}
-                        value={texto}
-                        onChange={handleInputChange}
-                        onKeyDown={handleKeyDown}
-                        placeholder="Digite nome, codigo ou ID"
-                        className="block w-full rounded-2xl border-2 border-indigo-300 bg-white px-5 py-4 text-lg text-gray-900 shadow focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-200 dark:bg-gray-700 dark:text-gray-100"
-                        disabled={addingItem || saleLoading}
-                    />
-                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-300">
-                        Digite pelo menos {MIN_CHARACTERS} caracteres ou pressione Enter com o ID do produto. Cada Enter incrementa a quantidade do item atual.
-                    </p>
+                    <div className="flex flex-col gap-1">
+                        <input
+                            id="campo-dashboard"
+                            type="text"
+                            ref={inputRef}
+                            value={texto}
+                            onChange={handleInputChange}
+                            onKeyDown={handleKeyDown}
+                            placeholder="Digite nome, codigo ou ID"
+                            className="block w-full rounded-2xl border-2 border-indigo-300 bg-white px-4 py-3 text-lg text-gray-900 shadow focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-200 disabled:opacity-60 dark:bg-gray-700 dark:text-gray-100"
+                            disabled={addingItem || saleLoading}
+                        />
+                        <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-300">
+                            <span>Digite pelo menos {MIN_CHARACTERS} caracteres ou pressione Enter com o ID do produto.</span>
+                            <span className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400">
+                                <i className="bi bi-list-check" aria-hidden="true"></i>
+                                {totalItems} item(s)
+                            </span>
+                        </div>
+                    </div>
                 </div>
-                <div className="w-full max-w-xs rounded-2xl border border-indigo-100 bg-indigo-50 px-5 py-4 text-center shadow-inner dark:border-indigo-400/50 dark:bg-indigo-900/30">
-                    <p className="text-sm font-medium text-indigo-800 dark:text-indigo-200">
-                        Total em itens
-                    </p>
-                    <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-200">
-                        {formatCurrency(totalAmount)}
-                    </p>
+                <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-end lg:w-auto lg:gap-3">
+                    <div className="relative flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 shadow-sm dark:border-emerald-500/30 dark:bg-emerald-900/20">
+                        <div>
+                            <p className="text-xs font-semibold uppercase text-emerald-700 dark:text-emerald-200">Total</p>
+                            <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-100">
+                                {formatCurrency(totalAmount)}
+                            </p>
+                        </div>
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-semibold text-emerald-700 shadow-sm dark:bg-emerald-800/50 dark:text-emerald-100">
+                            {totalItems}
+                        </span>
+                    </div>
+                    {showChangeCard && (
+                        <div className="flex items-center justify-between rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 shadow-sm dark:border-blue-500/30 dark:bg-blue-900/20">
+                            <div>
+                                <p className="text-xs font-semibold uppercase text-blue-700 dark:text-blue-200">Troco</p>
+                                <p className="text-2xl font-bold text-blue-700 dark:text-blue-100">
+                                    {formatCurrency(cashChange)}
+                                </p>
+                            </div>
+                            <i className="bi bi-wallet2 text-xl text-blue-500 dark:text-blue-200" aria-hidden="true"></i>
+                        </div>
+                    )}
+                    <div className="flex items-center justify-between rounded-2xl border border-red-200 bg-red-50 px-4 py-3 shadow-sm dark:border-red-500/30 dark:bg-red-900/20">
+                        <div>
+                            <p className="text-xs font-semibold uppercase text-red-700 dark:text-red-200">Comandas</p>
+                            <p className="text-2xl font-bold text-red-600 dark:text-red-100">
+                                {openCommandasCount}
+                            </p>
+                        </div>
+                        <i className="bi bi-egg-fried text-xl text-red-500 dark:text-red-200" aria-hidden="true"></i>
+                    </div>
                 </div>
             </div>
         </div>
