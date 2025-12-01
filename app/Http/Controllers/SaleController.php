@@ -22,10 +22,56 @@ class SaleController extends Controller
             ->where('status', 0)
             ->first();
 
+        $comandas = Venda::query()
+            ->selectRaw('id_comanda, COALESCE(SUM(valor_total), 0) as total_amount')
+            ->whereNotNull('id_comanda')
+            ->where('status', 0)
+            ->groupBy('id_comanda')
+            ->orderBy('id_comanda')
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'codigo' => (int) $row->id_comanda,
+                    'total' => (float) $row->total_amount,
+                ];
+            });
+
         return response()->json([
             'total_comandas' => (int) ($open->total_comandas ?? 0),
             'total_amount' => (float) ($open->total_amount ?? 0),
+            'comandas' => $comandas,
         ]);
+    }
+
+    public function comandaItems(int $codigo): JsonResponse
+    {
+        $items = Venda::query()
+            ->where('id_comanda', $codigo)
+            ->where('status', 0)
+            ->get(['tb1_id', 'produto_nome', 'valor_unitario', 'quantidade']);
+
+        if ($items->isEmpty()) {
+            return response()->json(['items' => []]);
+        }
+
+        $normalized = $items
+            ->groupBy('tb1_id')
+            ->map(function ($group) {
+                $first = $group->first();
+                $quantity = $group->sum('quantidade');
+                $price = (float) $first->valor_unitario;
+
+                return [
+                    'id' => $first->tb1_id,
+                    'name' => $first->produto_nome,
+                    'price' => $price,
+                    'quantity' => $quantity,
+                ];
+            })
+            ->values()
+            ->all();
+
+        return response()->json(['items' => $normalized]);
     }
 
     public function store(Request $request): JsonResponse
@@ -40,9 +86,9 @@ class SaleController extends Controller
         }
 
         $validated = $request->validate([
-            'items' => ['required', 'array', 'min:1'],
-            'items.*.product_id' => ['required', 'integer', 'exists:tb1_produto,tb1_id'],
-            'items.*.quantity' => ['required', 'integer', 'min:1', 'max:1000'],
+            'items' => ['array'],
+            'items.*.product_id' => ['required_with:items', 'integer', 'exists:tb1_produto,tb1_id'],
+            'items.*.quantity' => ['required_with:items', 'integer', 'min:1', 'max:1000'],
             'tipo_pago' => [
                 'required',
                 'string',
@@ -51,6 +97,7 @@ class SaleController extends Controller
             'vale_user_id' => ['nullable', 'integer', 'exists:users,id'],
             'valor_pago' => ['nullable', 'numeric', 'min:0'],
             'vale_type' => ['nullable', 'string', Rule::in(['vale', 'refeicao'])],
+            'comanda_codigo' => ['nullable', 'integer', 'between:3000,3100'],
         ]);
 
         $selectedValeType = $validated['vale_type'] ?? 'vale';
@@ -78,7 +125,7 @@ class SaleController extends Controller
         }
 
         $groupedItems = [];
-        foreach ($validated['items'] as $item) {
+        foreach (($validated['items'] ?? []) as $item) {
             $productId = (int) $item['product_id'];
             $quantity = (int) $item['quantity'];
             $groupedItems[$productId] = ($groupedItems[$productId] ?? 0) + $quantity;
@@ -99,25 +146,83 @@ class SaleController extends Controller
 
         $itemsPayload = [];
         $requiresVrEligible = $finalPaymentType === 'refeicao';
+        $comandaCodigo = $validated['comanda_codigo'] ?? null;
 
-        foreach ($groupedItems as $productId => $quantity) {
-            $product = Produto::select('tb1_id', 'tb1_nome', 'tb1_vlr_venda', 'tb1_vr_credit')->findOrFail($productId);
+        if ($comandaCodigo) {
+            $comandaItems = Venda::query()
+                ->where('id_comanda', $comandaCodigo)
+                ->where('status', 0)
+                ->get([
+                    'tb1_id',
+                    'produto_nome',
+                    'valor_unitario',
+                    'quantidade',
+                ]);
 
-            if ($requiresVrEligible && ! $product->tb1_vr_credit) {
+            if ($comandaItems->isEmpty()) {
                 throw ValidationException::withMessages([
-                    'items' => sprintf('O produto %s não está liberado para VR Crédito.', $product->tb1_nome),
+                    'comanda_codigo' => 'Comanda informada nao possui itens em aberto.',
                 ]);
             }
-            $unitPrice = (float) $product->tb1_vlr_venda;
-            $total = round($unitPrice * $quantity, 2);
 
-            $itemsPayload[] = [
-                'product_id' => $product->tb1_id,
-                'product_name' => $product->tb1_nome,
-                'unit_price' => $unitPrice,
-                'quantity' => $quantity,
-                'subtotal' => $total,
-            ];
+            $itemsPayload = $comandaItems
+                ->groupBy('tb1_id')
+                ->map(function ($group) {
+                    $first = $group->first();
+                    $quantity = $group->sum('quantidade');
+                    $unitPrice = (float) $first->valor_unitario;
+
+                    return [
+                        'product_id' => $first->tb1_id,
+                        'product_name' => $first->produto_nome,
+                        'unit_price' => $unitPrice,
+                        'quantity' => $quantity,
+                        'subtotal' => $quantity * $unitPrice,
+                    ];
+                })
+                ->values()
+                ->all();
+
+            if ($requiresVrEligible) {
+                $eligibility = Produto::query()
+                    ->whereIn('tb1_id', array_column($itemsPayload, 'product_id'))
+                    ->pluck('tb1_vr_credit', 'tb1_id');
+
+                foreach ($itemsPayload as $payload) {
+                    $isEligible = (bool) ($eligibility[$payload['product_id']] ?? false);
+                    if (! $isEligible) {
+                        throw ValidationException::withMessages([
+                            'comanda_codigo' => sprintf('O produto %s nao esta liberado para VR Credito.', $payload['product_name']),
+                        ]);
+                    }
+                }
+            }
+        } else {
+            if (empty($groupedItems)) {
+                throw ValidationException::withMessages([
+                    'items' => 'Informe ao menos um item ou selecione uma comanda.',
+                ]);
+            }
+
+            foreach ($groupedItems as $productId => $quantity) {
+                $product = Produto::select('tb1_id', 'tb1_nome', 'tb1_vlr_venda', 'tb1_vr_credit')->findOrFail($productId);
+
+                if ($requiresVrEligible && ! $product->tb1_vr_credit) {
+                    throw ValidationException::withMessages([
+                        'items' => sprintf('O produto %s nAo estA? liberado para VR CrA(c)dito.', $product->tb1_nome),
+                    ]);
+                }
+                $unitPrice = (float) $product->tb1_vlr_venda;
+                $total = round($unitPrice * $quantity, 2);
+
+                $itemsPayload[] = [
+                    'product_id' => $product->tb1_id,
+                    'product_name' => $product->tb1_nome,
+                    'unit_price' => $unitPrice,
+                    'quantity' => $quantity,
+                    'subtotal' => $total,
+                ];
+            }
         }
 
         $totalValue = collect($itemsPayload)->sum('subtotal');
@@ -176,21 +281,37 @@ class SaleController extends Controller
             'dois_pgto' => $cardComplement,
         ]);
 
-        foreach ($itemsPayload as $item) {
-            Venda::create([
-                'tb4_id' => $payment->tb4_id,
-                'tb1_id' => $item['product_id'],
-                'produto_nome' => $item['product_name'],
-                'valor_unitario' => $item['unit_price'],
-                'quantidade' => $item['quantity'],
-                'valor_total' => $item['subtotal'],
-                'data_hora' => $dateTime,
-                'id_user_caixa' => $user->id,
-                'id_user_vale' => $valeUserId,
-                'id_unidade' => $unit['id'] ?? $user->tb2_id,
-                'tipo_pago' => $finalPaymentType,
-                'status_pago' => $isPaid,
-            ]);
+        if ($comandaCodigo) {
+            Venda::query()
+                ->where('id_comanda', $comandaCodigo)
+                ->where('status', 0)
+                ->update([
+                    'tb4_id' => $payment->tb4_id,
+                    'id_user_caixa' => $user->id,
+                    'id_user_vale' => $valeUserId,
+                    'tipo_pago' => $finalPaymentType,
+                    'status_pago' => $isPaid,
+                    'status' => 1,
+                    'data_hora' => $dateTime,
+                ]);
+        } else {
+            foreach ($itemsPayload as $item) {
+                Venda::create([
+                    'tb4_id' => $payment->tb4_id,
+                    'tb1_id' => $item['product_id'],
+                    'produto_nome' => $item['product_name'],
+                    'valor_unitario' => $item['unit_price'],
+                    'quantidade' => $item['quantity'],
+                    'valor_total' => $item['subtotal'],
+                    'data_hora' => $dateTime,
+                    'id_user_caixa' => $user->id,
+                    'id_user_vale' => $valeUserId,
+                    'id_unidade' => $unit['id'] ?? $user->tb2_id,
+                    'tipo_pago' => $finalPaymentType,
+                    'status_pago' => $isPaid,
+                    'status' => 1,
+                ]);
+            }
         }
 
         return response()->json([
