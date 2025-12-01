@@ -98,6 +98,10 @@ export default function Dashboard() {
     const [showChangeCard, setShowChangeCard] = useState(false);
     const [openComandasAmount, setOpenComandasAmount] = useState(0);
     const [openComandasCount, setOpenComandasCount] = useState(0);
+    const [openComandasList, setOpenComandasList] = useState([]);
+    const [showComandasButtons, setShowComandasButtons] = useState(false);
+    const [comandaLoading, setComandaLoading] = useState(false);
+    const [selectedComandaCode, setSelectedComandaCode] = useState(null);
 
     useEffect(() => {
         if (typeof window === 'undefined') {
@@ -277,11 +281,13 @@ export default function Dashboard() {
                 const data = response.data ?? {};
                 setOpenComandasAmount(Number(data.total_amount ?? 0));
                 setOpenComandasCount(Number(data.total_comandas ?? 0));
+                setOpenComandasList(Array.isArray(data.comandas) ? data.comandas : []);
             })
             .catch(() => {
                 if (isMounted) {
                     setOpenComandasAmount(0);
                     setOpenComandasCount(0);
+                    setOpenComandasList([]);
                 }
             });
 
@@ -623,18 +629,25 @@ export default function Dashboard() {
 
         setSaleLoading(true);
         setSaleError('');
+        const payload = {
+            _token: csrfTokenProp,
+            tipo_pago: type,
+            vale_user_id: valeUserId,
+            vale_type: type === 'vale' ? valeType : null,
+            valor_pago: cashAmount,
+        };
+
+        if (selectedComandaCode !== null) {
+            payload.comanda_codigo = selectedComandaCode;
+        } else {
+            payload.items = items.map((item) => ({
+                product_id: item.id,
+                quantity: item.quantity,
+            }));
+        }
+
         axios
-            .post(route('sales.store'), {
-                _token: csrfTokenProp,
-                items: items.map((item) => ({
-                    product_id: item.id,
-                    quantity: item.quantity,
-                })),
-                tipo_pago: type,
-                vale_user_id: valeUserId,
-                vale_type: type === 'vale' ? valeType : null,
-                valor_pago: cashAmount,
-            })
+            .post(route('sales.store'), payload)
             .then((response) => {
                 const data = response.data;
                 setReceiptData({
@@ -645,6 +658,10 @@ export default function Dashboard() {
                 resetValePicker();
                 setCashInputVisible(false);
                 setCashValue('');
+                if (selectedComandaCode !== null) {
+                    setSelectedComandaCode(null);
+                    setItems([]);
+                }
             })
             .catch((error) => {
                 let message = 'Falha ao registrar a venda.';
@@ -718,6 +735,34 @@ export default function Dashboard() {
         setShowChangeCard(false);
         setCashValue('');
         finalizeSale(type);
+    };
+
+    const handleLoadComandaItems = (codigo) => {
+        setComandaLoading(true);
+        axios
+            .get(route('sales.comandas.items', { codigo }))
+            .then((response) => {
+                const data = response.data ?? {};
+                const mapped = Array.isArray(data.items)
+                    ? data.items.map((item) => ({
+                          id: item.id,
+                          name: item.name,
+                          price: Number(item.price ?? 0),
+                          quantity: Number(item.quantity ?? 0),
+                          vrEligible: true,
+                      }))
+                    : [];
+                setItems(mapped);
+                setSelectedComandaCode(codigo);
+                setSaleError('');
+                setShowComandasButtons(false);
+            })
+            .catch(() => {
+                setSaleError('Nao foi possivel carregar os itens da comanda.');
+            })
+            .finally(() => {
+                setComandaLoading(false);
+            });
     };
 
     const handleSelectValeUser = (user) => {
@@ -984,7 +1029,14 @@ export default function Dashboard() {
                             </p>
                             <p className="text-[11px] font-semibold text-red-500 dark:text-red-200">{openComandasCount} em aberto</p>
                         </div>
-                        <i className="bi bi-egg-fried text-xl text-red-500 dark:text-red-200" aria-hidden="true"></i>
+                        <button
+                            type="button"
+                            onClick={() => setShowComandasButtons((prev) => !prev)}
+                            className="rounded-full border border-red-200 bg-white px-2 py-1 text-xs font-semibold text-red-600 transition hover:border-red-400 dark:border-red-500/40 dark:bg-red-800/40 dark:text-red-100"
+                            title="Ver comandas"
+                        >
+                            <i className="bi bi-egg-fried text-base" aria-hidden="true"></i>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1186,6 +1238,32 @@ export default function Dashboard() {
                                             </button>
                                         ))}
                                     </div>
+
+                                    {showComandasButtons && (
+                                        <div className="mt-3 flex flex-wrap gap-2">
+                                            {openComandasList.length === 0 ? (
+                                                <span className="text-xs text-gray-500 dark:text-gray-300">
+                                                    Nenhuma comanda em aberto.
+                                                </span>
+                                            ) : (
+                                                openComandasList.map((comanda) => (
+                                                    <button
+                                                        type="button"
+                                                        key={`comanda-${comanda.codigo}`}
+                                                        onClick={() => handleLoadComandaItems(comanda.codigo)}
+                                                        className="inline-flex items-center rounded-full border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-700 shadow-sm transition hover:border-indigo-400 hover:text-indigo-600 dark:border-gray-600 dark:text-gray-100"
+                                                    >
+                                                        {comanda.codigo}
+                                                    </button>
+                                                ))
+                                            )}
+                                            {comandaLoading && (
+                                                <span className="text-xs text-gray-500 dark:text-gray-300">
+                                                    Carregando itens da comanda...
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
 
                                     {savedCarts.length > 0 && (
                                         <div className="mt-6 border-t border-gray-100 pt-4 dark:border-gray-700">
