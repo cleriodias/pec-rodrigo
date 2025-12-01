@@ -958,16 +958,12 @@ export default function Dashboard() {
                     </div>
                 </div>
                 <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-end lg:w-auto lg:gap-3">
-                    <div className="relative flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 shadow-sm dark:border-emerald-500/30 dark:bg-emerald-900/20">
-                        <div>
-                            <p className="text-xs font-semibold uppercase text-emerald-700 dark:text-emerald-200">Total</p>
-                            <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-100">
-                                {formatCurrency(totalAmount)}
-                            </p>
-                        </div>
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-semibold text-emerald-700 shadow-sm dark:bg-emerald-800/50 dark:text-emerald-100">
-                            {totalItems}
-                        </span>
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-left shadow-sm dark:border-emerald-500/30 dark:bg-emerald-900/20">
+                        <p className="text-xs font-semibold uppercase text-emerald-700 dark:text-emerald-200">Total</p>
+                        <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-100">
+                            {formatCurrency(totalAmount)}
+                        </p>
+                        <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-200">{totalItems} item(s)</p>
                     </div>
                     {showChangeCard && (
                         <div className="flex items-center justify-between rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 shadow-sm dark:border-blue-500/30 dark:bg-blue-900/20">
