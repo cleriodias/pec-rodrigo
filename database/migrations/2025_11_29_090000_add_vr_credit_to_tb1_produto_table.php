@@ -13,7 +13,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('tb1_produto', function (Blueprint $table) {
-            $table->boolean('tb1_vr_credit')->default(false)->after('tb1_favorito');
+            if (!Schema::hasColumn('tb1_produto', 'tb1_vr_credit')) {
+                $table->boolean('tb1_vr_credit')->default(false)->after('tb1_favorito');
+            }
         });
 
         DB::table('tb1_produto')
@@ -31,7 +33,9 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('tb1_produto', function (Blueprint $table) {
-            $table->dropColumn('tb1_vr_credit');
+            if (Schema::hasColumn('tb1_produto', 'tb1_vr_credit')) {
+                $table->dropColumn('tb1_vr_credit');
+            }
         });
     }
 };
