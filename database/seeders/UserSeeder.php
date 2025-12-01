@@ -3,8 +3,8 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class UserSeeder extends Seeder
 {
@@ -13,23 +13,35 @@ class UserSeeder extends Seeder
      */
     public function run(): void
     {
-        User::firstOrCreate(
-            ['email' => 'cesar@celke.com.br'],
-            ['name' => 'Cesar', 'email' => 'cesar@celke.com.br', 'password' => '123456A#']
-        );
+        $users = [
+            [
+                'name' => 'Clerio',
+                'email' => 'cleriodias@gmail.com',
+                'password' => Hash::make('08001010'),
+                'funcao' => 0,
+                'tb2_id' => 1,
+            ],
+            [
+                'name' => 'Rodrigo',
+                'email' => 'trucadoturbinado@gmail.com',
+                'password' => Hash::make('08001010'),
+                'funcao' => 0,
+                'tb2_id' => 1,
+            ],
+            [
+                'name' => 'Selma',
+                'email' => 'paoecaf83@gmail.com',
+                'password' => Hash::make('025879'),
+                'funcao' => 3,
+                'tb2_id' => 1,
+            ],
+        ];
 
-        User::firstOrCreate(
-            ['email' => 'kelly@celke.com.br'],
-            ['name' => 'Kelly', 'email' => 'kelly@celke.com.br', 'password' => '123456A#']
-        );
-
-        User::firstOrCreate(
-            ['email' => 'jessica@celke.com.br'],
-            ['name' => 'Jessica', 'email' => 'jessica@celke.com.br', 'password' => '123456A#']
-        );
-        User::firstOrCreate(
-            ['email' => 'gabrielly@celke.com.br'],
-            ['name' => 'Gabrielly', 'email' => 'gabrielly@celke.com.br', 'password' => '123456A#']
-        );
+        foreach ($users as $payload) {
+            User::updateOrCreate(
+                ['email' => $payload['email']],
+                $payload
+            );
+        }
     }
 }
