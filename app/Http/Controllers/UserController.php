@@ -38,14 +38,34 @@ class UserController extends Controller
         });
     }
 
-    public function index(): Response
+    public function index(Request $request): Response
     {
+        $filters = $request->only(['unit', 'funcao']);
+
         $users = User::with('units:tb2_id,tb2_nome')
+            ->when($request->filled('funcao'), function ($query) use ($request) {
+                $funcao = (int) $request->input('funcao');
+                $query->where('funcao', $funcao);
+            })
+            ->when($request->filled('unit'), function ($query) use ($request) {
+                $unitId = (int) $request->input('unit');
+                $query->where(function ($sub) use ($unitId) {
+                    $sub->where('tb2_id', $unitId)
+                        ->orWhereHas('units', function ($q) use ($unitId) {
+                            $q->where('tb2_unidades.tb2_id', $unitId);
+                        });
+                });
+            })
             ->orderByDesc('id')
-            ->paginate(10);
+            ->paginate(10)
+            ->withQueryString();
+
+        $units = Unidade::orderBy('tb2_nome')->get(['tb2_id', 'tb2_nome']);
 
         return Inertia::render('Users/UserIndex', [
             'users' => $users,
+            'units' => $units,
+            'filters' => $filters,
         ]);
     }
 
