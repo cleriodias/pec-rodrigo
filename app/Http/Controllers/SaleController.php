@@ -45,33 +45,9 @@ class SaleController extends Controller
 
     public function comandaItems(int $codigo): JsonResponse
     {
-        $items = Venda::query()
-            ->where('id_comanda', $codigo)
-            ->where('status', 0)
-            ->get(['tb1_id', 'produto_nome', 'valor_unitario', 'quantidade']);
+        $items = $this->getComandaItems($codigo);
 
-        if ($items->isEmpty()) {
-            return response()->json(['items' => []]);
-        }
-
-        $normalized = $items
-            ->groupBy('tb1_id')
-            ->map(function ($group) {
-                $first = $group->first();
-                $quantity = $group->sum('quantidade');
-                $price = (float) $first->valor_unitario;
-
-                return [
-                    'id' => $first->tb1_id,
-                    'name' => $first->produto_nome,
-                    'price' => $price,
-                    'quantity' => $quantity,
-                ];
-            })
-            ->values()
-            ->all();
-
-        return response()->json(['items' => $normalized]);
+        return response()->json(['items' => $items]);
     }
 
     public function store(Request $request): JsonResponse
@@ -335,5 +311,128 @@ class SaleController extends Controller
                 ],
             ],
         ]);
+    }
+
+    public function addComandaItem(Request $request, int $codigo): JsonResponse
+    {
+        $user = $request->user();
+        $unit = $request->session()->get('active_unit');
+        $unitId = is_array($unit)
+            ? ($unit['id'] ?? $unit['tb2_id'] ?? null)
+            : (is_object($unit) ? ($unit->id ?? $unit->tb2_id ?? null) : null);
+        $unitId = $unitId ?? ($user?->tb2_id);
+
+        $validated = $request->validate([
+            'product_id' => ['required', 'integer', 'exists:tb1_produto,tb1_id'],
+            'quantity' => ['nullable', 'integer', 'min:1', 'max:1000'],
+        ]);
+
+        if ($codigo < 3000 || $codigo > 3100) {
+            return response()->json(['message' => 'Codigo de comanda invalido (3000-3100).'], 422);
+        }
+
+        $product = Produto::select('tb1_id', 'tb1_nome', 'tb1_vlr_venda')->findOrFail($validated['product_id']);
+        $quantity = (int) ($validated['quantity'] ?? 1);
+        $price = (float) $product->tb1_vlr_venda;
+        $total = round($price * $quantity, 2);
+
+        // Upsert para manter um registro por produto/comanda em aberto.
+        $existing = Venda::query()
+            ->where('id_comanda', $codigo)
+            ->where('tb1_id', $product->tb1_id)
+            ->where('status', 0)
+            ->first();
+
+        if ($existing) {
+            $newQuantity = $existing->quantidade + $quantity;
+            $existing->update([
+                'quantidade' => $newQuantity,
+                'valor_total' => round($price * $newQuantity, 2),
+                'data_hora' => Carbon::now(),
+            ]);
+        } else {
+            Venda::create([
+                'tb1_id' => $product->tb1_id,
+                'id_comanda' => $codigo,
+                'produto_nome' => $product->tb1_nome,
+                'valor_unitario' => $price,
+                'quantidade' => $quantity,
+                'valor_total' => $total,
+                'data_hora' => Carbon::now(),
+                'id_user_caixa' => $user?->id, // campo obrigatório na tabela; ajustado no pagamento
+                'id_user_vale' => null,
+                'id_lanc' => $user?->id,
+                'id_unidade' => $unitId,
+                'tipo_pago' => 'faturar',
+                'status_pago' => false,
+                'status' => 0,
+            ]);
+        }
+
+        $items = $this->getComandaItems($codigo);
+
+        return response()->json([
+            'items' => $items,
+        ]);
+    }
+
+    public function updateComandaItem(Request $request, int $codigo, int $productId): JsonResponse
+    {
+        $validated = $request->validate([
+            'quantity' => ['required', 'integer', 'min:0', 'max:1000'],
+        ]);
+
+        $record = Venda::query()
+            ->where('id_comanda', $codigo)
+            ->where('tb1_id', $productId)
+            ->where('status', 0)
+            ->first();
+
+        if (! $record) {
+            return response()->json(['message' => 'Item nao encontrado na comanda.'], 404);
+        }
+
+        if ($validated['quantity'] === 0) {
+            $record->delete();
+        } else {
+            $record->update([
+                'quantidade' => $validated['quantity'],
+                'valor_total' => round($record->valor_unitario * $validated['quantity'], 2),
+                'data_hora' => Carbon::now(),
+            ]);
+        }
+
+        $items = $this->getComandaItems($codigo);
+
+        return response()->json(['items' => $items]);
+    }
+
+    private function getComandaItems(int $codigo): array
+    {
+        $items = Venda::query()
+            ->where('id_comanda', $codigo)
+            ->where('status', 0)
+            ->get(['tb1_id', 'produto_nome', 'valor_unitario', 'quantidade']);
+
+        if ($items->isEmpty()) {
+            return [];
+        }
+
+        return $items
+            ->groupBy('tb1_id')
+            ->map(function ($group) {
+                $first = $group->first();
+                $quantity = $group->sum('quantidade');
+                $price = (float) $first->valor_unitario;
+
+                return [
+                    'id' => $first->tb1_id,
+                    'name' => $first->produto_nome,
+                    'price' => $price,
+                    'quantity' => $quantity,
+                ];
+            })
+            ->values()
+            ->all();
     }
 }

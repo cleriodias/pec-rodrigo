@@ -17,6 +17,7 @@ class Venda extends Model
     protected $fillable = [
         'tb4_id',
         'tb1_id',
+        'id_comanda',
         'produto_nome',
         'valor_unitario',
         'quantidade',
@@ -24,9 +25,11 @@ class Venda extends Model
         'data_hora',
         'id_user_caixa',
         'id_user_vale',
+        'id_lanc',
         'id_unidade',
         'tipo_pago',
         'status_pago',
+        'status',
     ];
 
     protected $casts = [
@@ -35,6 +38,7 @@ class Venda extends Model
         'quantidade' => 'integer',
         'data_hora' => 'datetime',
         'status_pago' => 'boolean',
+        'status' => 'integer',
     ];
 
     public function pagamento(): BelongsTo

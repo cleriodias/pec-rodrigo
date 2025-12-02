@@ -188,7 +188,7 @@ export default function UserShow({
                         <div className="flex items-center justify-between px-6 py-5">
                             <div>
                                 <h3 className="text-lg font-semibold text-gray-900">Visualizar</h3>
-                                <p className="text-sm text-gray-500">Informa??es gerais do usu?rio</p>
+                                <p className="text-sm text-gray-500">Informações gerais do usuário</p>
                             </div>
                             <Link href={route('users.index')}>
                                 <InfoButton aria-label="Listar" title="Listar" className="rounded-2xl px-3 py-3">

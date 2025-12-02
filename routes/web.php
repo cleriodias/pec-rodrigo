@@ -85,6 +85,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/sales/open-comandas', [SaleController::class, 'openComandas'])->name('sales.open-comandas');
     Route::get('/sales/comandas/{codigo}/items', [SaleController::class, 'comandaItems'])->name('sales.comandas.items');
     Route::post('/sales', [SaleController::class, 'store'])->name('sales.store');
+    Route::post('/sales/comandas/{codigo}/items', [SaleController::class, 'addComandaItem'])->name('sales.comandas.add-item');
+    Route::put('/sales/comandas/{codigo}/items/{productId}', [SaleController::class, 'updateComandaItem'])->name('sales.comandas.update-item');
     Route::get('/reports/sales-today', [SalesReportController::class, 'today'])->name('reports.sales.today');
     Route::get('/reports/sales-period', [SalesReportController::class, 'period'])->name('reports.sales.period');
     Route::get('/reports/sales-detailed', [SalesReportController::class, 'detailed'])->name('reports.sales.detailed');
@@ -102,6 +104,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/cashier/close', [CashierClosureController::class, 'store'])->name('cashier.close.store');
 
     Route::get('/lanchonete/terminal', [LanchoneteTerminalController::class, 'index'])->name('lanchonete.terminal');
+/*  */    Route::post('/lanchonete/terminal/access', [LanchoneteTerminalController::class, 'validateAccess'])->name('lanchonete.terminal.access');
 });
 
 require __DIR__.'/auth.php';
