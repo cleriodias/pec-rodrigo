@@ -32,6 +32,30 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::get('/settings', function () {
+        $user = auth()->user();
+        if (! $user || (int) $user->funcao !== 0) {
+            abort(403);
+        }
+
+        return Inertia::render('Settings/Config');
+    })->name('settings.config');
+    Route::get('/settings/profile-access', function () {
+        $user = auth()->user();
+        if (! $user || (int) $user->funcao !== 0) {
+            abort(403);
+        }
+
+        return Inertia::render('Settings/ProfileAccess');
+    })->name('settings.profile-access');
+    Route::get('/settings/menu-order', function () {
+        $user = auth()->user();
+        if (! $user || (int) $user->funcao !== 0) {
+            abort(403);
+        }
+
+        return Inertia::render('Settings/MenuOrder');
+    })->name('settings.menu-order');
 
     Route::get('/users', [UserController::class, 'index'])->name('users.index');
     Route::get('/show-user/{user}', [UserController::class, 'show'])->name('users.show');

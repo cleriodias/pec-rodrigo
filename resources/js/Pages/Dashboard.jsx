@@ -1,7 +1,7 @@
 ﻿import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, usePage } from '@inertiajs/react';
 import axios from 'axios';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const MIN_CHARACTERS = 3;
 const numericRegex = /^\d+$/;
@@ -269,7 +269,7 @@ export default function Dashboard() {
         };
     }, []);
 
-    useEffect(() => {
+    const fetchOpenComandas = useCallback(() => {
         let isMounted = true;
 
         axios
@@ -295,6 +295,11 @@ export default function Dashboard() {
             isMounted = false;
         };
     }, []);
+
+    useEffect(() => {
+        const cleanup = fetchOpenComandas();
+        return cleanup;
+    }, [fetchOpenComandas]);
 
     useEffect(() => {
         const term = texto.trim();
@@ -661,6 +666,7 @@ export default function Dashboard() {
                 if (selectedComandaCode !== null) {
                     setSelectedComandaCode(null);
                     setItems([]);
+                    fetchOpenComandas();
                 }
             })
             .catch((error) => {
@@ -756,6 +762,7 @@ export default function Dashboard() {
                 setSelectedComandaCode(codigo);
                 setSaleError('');
                 setShowComandasButtons(false);
+                fetchOpenComandas();
             })
             .catch(() => {
                 setSaleError('Nao foi possivel carregar os itens da comanda.');

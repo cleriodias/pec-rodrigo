@@ -3,7 +3,7 @@ import Dropdown from '@/Components/Dropdown';
 import NavLink from '@/Components/NavLink';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink';
 import { Link, usePage, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 const MenuLabel = ({ icon, text }) => (
     <span className="inline-flex items-center gap-2">
@@ -24,6 +24,7 @@ export default function AuthenticatedLayout({ header, children }) {
     const canSeeReports = canSeeUnits;
     const canSwitchUnit = user && originalRole === 0;
     const canSwitchRole = user && originalRole === 0;
+    const isMaster = user && effectiveRole === 0;
     const roleLabels = {
         0: 'MASTER',
         1: 'GERENTE',
@@ -36,6 +37,91 @@ export default function AuthenticatedLayout({ header, children }) {
 
     const [showingNavigationDropdown, setShowingNavigationDropdown] =
         useState(false);
+    const [menuAccessConfig, setMenuAccessConfig] = useState(null);
+    const [menuOrderConfig, setMenuOrderConfig] = useState(null);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+        try {
+            const raw = window.localStorage.getItem('menuAccessConfig');
+            if (!raw) {
+                return;
+            }
+            const parsed = JSON.parse(raw);
+            setMenuAccessConfig(parsed);
+        } catch (err) {
+            console.error('Failed to load menuAccessConfig', err);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+        try {
+            const raw = window.localStorage.getItem('menuOrderConfig');
+            if (!raw) {
+                return;
+            }
+            const parsed = JSON.parse(raw);
+            setMenuOrderConfig(parsed);
+        } catch (err) {
+            console.error('Failed to load menuOrderConfig', err);
+        }
+    }, []);
+
+    const hasMenuAccess = useMemo(() => {
+        const defaultAllow = new Set([
+            'dashboard',
+            'users',
+            'units',
+            'products',
+            'cashier_close',
+            'reports_control',
+            'reports_cash',
+            'reports_sales_today',
+            'reports_sales_period',
+            'reports_sales_detailed',
+            'reports_lanchonete',
+            'discard',
+            'switch_unit',
+            'switch_role',
+            'salary_advances',
+            'settings',
+            'lanchonete_terminal',
+        ]);
+
+            return (key) => {
+                if (!menuAccessConfig || effectiveRole === null) {
+                    return defaultAllow.has(key);
+                }
+                const allowed = menuAccessConfig[effectiveRole];
+                if (!allowed) {
+                    return defaultAllow.has(key);
+                }
+                return Array.isArray(allowed) ? allowed.includes(key) : defaultAllow.has(key);
+            };
+        }, [menuAccessConfig, effectiveRole]);
+
+    const orderMap = useMemo(() => {
+        if (!menuOrderConfig || !Array.isArray(menuOrderConfig)) {
+            return {};
+        }
+        return menuOrderConfig.reduce((acc, key, index) => {
+            acc[key] = index;
+            return acc;
+        }, {});
+    }, [menuOrderConfig]);
+
+    const sortMenu = (items) =>
+        items
+            .map((item, idx) => ({
+                ...item,
+                order: orderMap[item.key] ?? 1000 + idx,
+            }))
+            .sort((a, b) => a.order - b.order);
 
     const handleLogout = () => {
         router.post(route('logout'), { _token: pageProps?.csrf_token ?? '' }, {
@@ -58,60 +144,96 @@ export default function AuthenticatedLayout({ header, children }) {
                             </div>
 
                             <div className="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
-                                <NavLink
-                                    href={route('dashboard')}
-                                    active={route().current('dashboard')}
-                                >
-                                    <MenuLabel icon="bi bi-speedometer2" text={activeUnitName} />
-                                </NavLink>
-
-                                {canSeeUsers && (
-                                    <NavLink
-                                        href={route('users.index')}
-                                        active={route().current('users.index')}
-                                    >
-                                        <MenuLabel icon="bi bi-people-fill" text="Usuários" />
-                                    </NavLink>
-                                )}
-
-                                {canSeeUnits && (
-                                    <NavLink
-                                        href={route('units.index')}
-                                        active={route().current('units.index')}
-                                    >
-                                        <MenuLabel icon="bi bi-building" text="Unidades" />
-                                    </NavLink>
-                                )}
-                                <NavLink
-                                    href={route('products.index')}
-                                    active={route().current('products.*')}
-                                >
-                                    <MenuLabel icon="bi bi-box-seam" text="Produtos" />
-                                </NavLink>
-                                {isCashier && (
-                                    <NavLink
-                                        href={route('cashier.close')}
-                                        active={route().current('cashier.close')}
-                                    >
-                                        <MenuLabel icon="bi bi-cash-stack" text="Fechar CX" />
-                                    </NavLink>
-                                )}
-                                {canSeeReports && (
-                                    <>
-                                        <NavLink
-                                            href={route('reports.control')}
-                                            active={route().current('reports.control')}
-                                        >
-                                            <MenuLabel icon="bi bi-graph-up-arrow" text="Controle" />
-                                        </NavLink>
-                                        <NavLink
-                                            href={route('reports.cash.closure')}
-                                            active={route().current('reports.cash.closure')}
-                                        >
-                                            <MenuLabel icon="bi bi-clipboard-data" text="Fechamento de CAIXA" />
-                                        </NavLink>
-                                    </>
-                                )}
+                                {sortMenu(
+                                    [
+                                        {
+                                            key: 'dashboard',
+                                            visible: true,
+                                            node: (
+                                                <NavLink
+                                                    href={route('dashboard')}
+                                                    active={route().current('dashboard')}
+                                                >
+                                                    <MenuLabel icon="bi bi-speedometer2" text={activeUnitName} />
+                                                </NavLink>
+                                            ),
+                                        },
+                                        {
+                                            key: 'users',
+                                            visible: canSeeUsers && hasMenuAccess('users'),
+                                            node: (
+                                                <NavLink
+                                                    href={route('users.index')}
+                                                    active={route().current('users.index')}
+                                                >
+                                                    <MenuLabel icon="bi bi-people-fill" text="Usuários" />
+                                                </NavLink>
+                                            ),
+                                        },
+                                        {
+                                            key: 'units',
+                                            visible: canSeeUnits && hasMenuAccess('units'),
+                                            node: (
+                                                <NavLink
+                                                    href={route('units.index')}
+                                                    active={route().current('units.index')}
+                                                >
+                                                    <MenuLabel icon="bi bi-building" text="Unidades" />
+                                                </NavLink>
+                                            ),
+                                        },
+                                        {
+                                            key: 'products',
+                                            visible: hasMenuAccess('products'),
+                                            node: (
+                                                <NavLink
+                                                    href={route('products.index')}
+                                                    active={route().current('products.*')}
+                                                >
+                                                    <MenuLabel icon="bi bi-box-seam" text="Produtos" />
+                                                </NavLink>
+                                            ),
+                                        },
+                                        {
+                                            key: 'cashier_close',
+                                            visible: isCashier && hasMenuAccess('cashier_close'),
+                                            node: (
+                                                <NavLink
+                                                    href={route('cashier.close')}
+                                                    active={route().current('cashier.close')}
+                                                >
+                                                    <MenuLabel icon="bi bi-cash-stack" text="Fechar CX" />
+                                                </NavLink>
+                                            ),
+                                        },
+                                        {
+                                            key: 'reports_control',
+                                            visible: canSeeReports && hasMenuAccess('reports_control'),
+                                            node: (
+                                                <NavLink
+                                                    href={route('reports.control')}
+                                                    active={route().current('reports.control')}
+                                                >
+                                                    <MenuLabel icon="bi bi-graph-up-arrow" text="Controle" />
+                                                </NavLink>
+                                            ),
+                                        },
+                                        {
+                                            key: 'reports_cash',
+                                            visible: canSeeReports && hasMenuAccess('reports_cash'),
+                                            node: (
+                                                <NavLink
+                                                    href={route('reports.cash.closure')}
+                                                    active={route().current('reports.cash.closure')}
+                                                >
+                                                    <MenuLabel icon="bi bi-clipboard-data" text="Fechamento de CAIXA" />
+                                                </NavLink>
+                                            ),
+                                        },
+                                    ].filter((item) => item.visible)
+                                ).map((item) => (
+                                    <span key={item.key}>{item.node}</span>
+                                ))}
                             </div>
                         </div>
 
@@ -146,7 +268,7 @@ export default function AuthenticatedLayout({ header, children }) {
                                     </Dropdown.Trigger>
 
                                     <Dropdown.Content>
-                                        <Dropdown.Link href={route('profile.edit')}>
+                                        <Dropdown.Link href={route('settings.config')}>
                                             <MenuLabel icon="bi bi-person-circle" text="Perfil" />
                                         </Dropdown.Link>
                                         {canSeeReports && (
@@ -161,8 +283,13 @@ export default function AuthenticatedLayout({ header, children }) {
                                                     <MenuLabel icon="bi bi-card-checklist" text="Detalhado" />
                                                 </Dropdown.Link>
                                                 <Dropdown.Link href={route('reports.cash.closure')}>
-                                                    <MenuLabel icon="bi bi-clipboard-data" text="Fechamento de CAIXA" />
+                                                    <MenuLabel icon="bi bi-clipboard-data" text="Fech. de CX" />
                                                 </Dropdown.Link>
+                                                {isMaster && (
+                                                    <Dropdown.Link href={route('settings.config')}>
+                                                        <MenuLabel icon="bi bi-gear" text="Configuração" />
+                                                    </Dropdown.Link>
+                                                )}
                                             </>
                                         )}
                                         {canSwitchUnit && (
@@ -321,7 +448,7 @@ export default function AuthenticatedLayout({ header, children }) {
                         </div>
 
                         <div className="mt-3 space-y-1">
-                            <ResponsiveNavLink href={route('profile.edit')}>
+                            <ResponsiveNavLink href={route('settings.config')}>
                                 Perfil
                             </ResponsiveNavLink>
                             {canSeeReports && (
