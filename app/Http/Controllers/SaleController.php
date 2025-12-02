@@ -325,6 +325,7 @@ class SaleController extends Controller
         $validated = $request->validate([
             'product_id' => ['required', 'integer', 'exists:tb1_produto,tb1_id'],
             'quantity' => ['nullable', 'integer', 'min:1', 'max:1000'],
+            'access_user_id' => ['required', 'integer', 'exists:users,id'],
         ]);
 
         if ($codigo < 3000 || $codigo > 3100) {
@@ -349,6 +350,8 @@ class SaleController extends Controller
                 'quantidade' => $newQuantity,
                 'valor_total' => round($price * $newQuantity, 2),
                 'data_hora' => Carbon::now(),
+                'id_lanc' => $validated['access_user_id'],
+                'id_user_caixa' => null,
             ]);
         } else {
             Venda::create([
@@ -359,9 +362,9 @@ class SaleController extends Controller
                 'quantidade' => $quantity,
                 'valor_total' => $total,
                 'data_hora' => Carbon::now(),
-                'id_user_caixa' => $user?->id, // campo obrigatório na tabela; ajustado no pagamento
+                'id_user_caixa' => null,
                 'id_user_vale' => null,
-                'id_lanc' => $user?->id,
+                'id_lanc' => $validated['access_user_id'],
                 'id_unidade' => $unitId,
                 'tipo_pago' => 'faturar',
                 'status_pago' => false,
@@ -380,6 +383,7 @@ class SaleController extends Controller
     {
         $validated = $request->validate([
             'quantity' => ['required', 'integer', 'min:0', 'max:1000'],
+            'access_user_id' => ['nullable', 'integer', 'exists:users,id'],
         ]);
 
         $record = Venda::query()
@@ -399,6 +403,8 @@ class SaleController extends Controller
                 'quantidade' => $validated['quantity'],
                 'valor_total' => round($record->valor_unitario * $validated['quantity'], 2),
                 'data_hora' => Carbon::now(),
+                'id_lanc' => $validated['access_user_id'] ?? $record->id_lanc,
+                'id_user_caixa' => null,
             ]);
         }
 
@@ -412,15 +418,20 @@ class SaleController extends Controller
         $items = Venda::query()
             ->where('id_comanda', $codigo)
             ->where('status', 0)
-            ->get(['tb1_id', 'produto_nome', 'valor_unitario', 'quantidade']);
+            ->get(['tb1_id', 'produto_nome', 'valor_unitario', 'quantidade', 'id_lanc']);
 
         if ($items->isEmpty()) {
             return [];
         }
 
+        $lancIds = $items->pluck('id_lanc')->filter()->unique()->values();
+        $lancUsers = $lancIds->isNotEmpty()
+            ? User::whereIn('id', $lancIds)->pluck('name', 'id')
+            : collect();
+
         return $items
             ->groupBy('tb1_id')
-            ->map(function ($group) {
+            ->map(function ($group) use ($lancUsers) {
                 $first = $group->first();
                 $quantity = $group->sum('quantidade');
                 $price = (float) $first->valor_unitario;
@@ -430,6 +441,8 @@ class SaleController extends Controller
                     'name' => $first->produto_nome,
                     'price' => $price,
                     'quantity' => $quantity,
+                    'lanc_user_id' => $first->id_lanc,
+                    'lanc_user_name' => $first->id_lanc ? ($lancUsers[$first->id_lanc] ?? null) : null,
                 ];
             })
             ->values()

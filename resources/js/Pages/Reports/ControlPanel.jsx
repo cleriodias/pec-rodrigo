@@ -8,16 +8,32 @@ const formatCurrency = (value) =>
     });
 
 const MetricCard = ({ title, value, description, accent }) => (
-    <div className="rounded-2xl border border-gray-100 bg-white/90 p-5 shadow-sm backdrop-blur dark:border-gray-700 dark:bg-gray-900/70">
-        <p className="text-sm font-medium text-gray-500 dark:text-gray-300">{title}</p>
+    <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+        <p className="text-sm font-medium text-gray-500">{title}</p>
         <p className="mt-2 text-3xl font-bold" style={{ color: accent ?? '#111827' }}>
             {formatCurrency(value)}
         </p>
-        {description && (
-            <p className="mt-2 text-sm text-gray-500 dark:text-gray-300">{description}</p>
-        )}
+        {description && <p className="mt-2 text-sm text-gray-500">{description}</p>}
     </div>
 );
+
+const Pill = ({ active, children, onClick, tone = 'default', size = 'md' }) => {
+    const toneClasses = {
+        default: active ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700',
+        dark: active ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700',
+    };
+    const sizeClasses = size === 'sm' ? 'px-3 py-1 text-xs' : 'px-4 py-2 text-sm';
+
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className={`rounded-full font-semibold shadow-sm transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${toneClasses[tone] ?? toneClasses.default} ${sizeClasses}`}
+        >
+            {children}
+        </button>
+    );
+};
 
 export default function ControlPanel({
     unit,
@@ -42,23 +58,16 @@ export default function ControlPanel({
 
     const headerContent = (
         <div>
-            <h2 className="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">
-                Controle financeiro
-            </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-300">
+            <h2 className="text-xl font-semibold leading-tight text-gray-800">Controle financeiro</h2>
+            <p className="text-sm text-gray-500">
                 Consolidado mensal da unidade{' '}
-                <span className="font-semibold text-gray-700 dark:text-gray-100">
-                    {unit?.name ?? '---'}
-                </span>{' '}
+                <span className="font-semibold text-gray-700">{unit?.name ?? '---'}</span>{' '}
                 ({period?.label ?? ''})
             </p>
         </div>
     );
 
-    const unitsOptions = [
-        { id: null, name: 'Todas as unidades' },
-        ...filterUnits,
-    ].filter(
+    const unitsOptions = [{ id: null, name: 'Todas as unidades' }, ...filterUnits].filter(
         (option, index, self) => index === self.findIndex((item) => item.id === option.id),
     );
 
@@ -66,57 +75,33 @@ export default function ControlPanel({
     const currentYearValue = selectedYear ?? (currentMonthValue?.slice(0, 4) ?? '');
 
     const handleFilter = (unitId) => {
-        const params = {
-            unit_id: unitId ?? '',
-        };
-
+        const params = { unit_id: unitId ?? '' };
         if (currentMonthValue) {
             params.month = currentMonthValue;
         }
-
-        router.get(
-            route('reports.control'),
-            params,
-            {
-                preserveState: true,
-                preserveScroll: true,
-                replace: true,
-            },
-        );
+        router.get(route('reports.control'), params, {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+        });
     };
 
     const handleMonthChange = (value) => {
-        if ((value ?? '') === currentMonthValue) {
-            return;
-        }
-
-        const params = {
-            unit_id: selectedUnitId ?? '',
-        };
-
+        if ((value ?? '') === currentMonthValue) return;
+        const params = { unit_id: selectedUnitId ?? '' };
         if (value) {
             params.month = value;
         }
-
-        router.get(
-            route('reports.control'),
-            params,
-            {
-                preserveState: true,
-                preserveScroll: true,
-                replace: true,
-            },
-        );
+        router.get(route('reports.control'), params, {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+        });
     };
 
     const handleYearChange = (year) => {
-        if (!year || year === currentYearValue) {
-            return;
-        }
-
-        const targetMonth = currentMonthValue
-            ? currentMonthValue.slice(5, 7)
-            : '01';
+        if (!year || year === currentYearValue) return;
+        const targetMonth = currentMonthValue ? currentMonthValue.slice(5, 7) : '01';
         handleMonthChange(`${year}-${targetMonth}`);
     };
 
@@ -126,101 +111,74 @@ export default function ControlPanel({
 
             <div className="py-12">
                 <div className="mx-auto max-w-7xl space-y-8 px-4 sm:px-6 lg:px-8">
-                    <section className="rounded-3xl bg-white p-6 shadow ring-1 ring-gray-100 dark:bg-gray-800 dark:ring-gray-700">
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <section className="rounded-3xl bg-white p-6 shadow ring-1 ring-gray-100">
+                        <div className="space-y-3">
                             <div>
-                                <p className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
+                                <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">
                                     Filtro
                                 </p>
-                                <p className="text-sm text-gray-500 dark:text-gray-300">
-                                    Escolha a unidade para visualizar os dados mensais.
-                                </p>
+                                <p className="text-sm text-gray-500">Escolha as opcoes de filtro.</p>
                             </div>
+
                             <div className="flex flex-wrap gap-2">
                                 {unitsOptions.map((option) => {
                                     const isActive =
                                         (option.id === null && selectedUnitId === null) ||
                                         option.id === selectedUnitId;
-
                                     return (
-                                        <button
+                                        <Pill
                                             key={option.id ?? 'all'}
-                                            type="button"
+                                            active={isActive}
                                             onClick={() => handleFilter(option.id)}
-                                            className={`rounded-full px-4 py-2 text-sm font-semibold shadow transition focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
-                                                isActive
-                                                    ? 'bg-indigo-600 text-white'
-                                                    : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-200'
-                                            }`}
                                         >
                                             {option.name}
-                                        </button>
+                                        </Pill>
                                     );
                                 })}
                             </div>
-                        </div>
 
-                        <div className="mt-6 border-t border-gray-100 pt-6 dark:border-gray-700">
-                            <p className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
-                                Mês de referência
-                            </p>
-                            <p className="text-sm text-gray-500 dark:text-gray-300">
-                                Escolha outro mês para comparar variações.
-                            </p>
-                            <div className="mt-3 flex flex-wrap gap-2">
-                                {(yearOptions.length ? yearOptions : [{ value: currentYearValue, label: currentYearValue }]).map((option) => {
-                                    const isActive = option.value === currentYearValue;
-
-                                    return (
-                                        <button
+                            <div className="flex flex-wrap gap-2">
+                                {(yearOptions.length
+                                    ? yearOptions
+                                    : [{ value: currentYearValue, label: currentYearValue }])
+                                    .filter((y) => y.value)
+                                    .map((option) => (
+                                        <Pill
                                             key={`year-${option.value}`}
-                                            type="button"
+                                            active={option.value === currentYearValue}
+                                            tone="dark"
+                                            size="sm"
                                             onClick={() => handleYearChange(option.value)}
-                                            className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wider shadow transition focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
-                                                isActive
-                                                    ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
-                                                    : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-200'
-                                            }`}
                                         >
                                             {option.label}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                            <div className="mt-3 flex flex-wrap gap-2">
-                                {(monthOptions.length ? monthOptions : [{ value: currentMonthValue, label: period?.label ?? 'Atual' }]).map((option) => {
-                                    const isActive = option.value === currentMonthValue;
-
-                                    return (
-                                        <button
+                                        </Pill>
+                                    ))}
+                                {(monthOptions.length
+                                    ? monthOptions
+                                    : [{ value: currentMonthValue, label: period?.label ?? 'Atual' }]).map(
+                                    (option) => (
+                                        <Pill
                                             key={`month-${option.value}`}
-                                            type="button"
+                                            active={option.value === currentMonthValue}
+                                            size="sm"
                                             onClick={() => handleMonthChange(option.value)}
-                                            className={`rounded-full px-4 py-2 text-sm font-semibold shadow transition focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
-                                                isActive
-                                                    ? 'bg-indigo-600 text-white'
-                                                    : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-200'
-                                            }`}
                                         >
                                             {option.label}
-                                        </button>
-                                    );
-                                })}
+                                        </Pill>
+                                    ),
+                                )}
                             </div>
                         </div>
                     </section>
 
-                    <section className="space-y-6 rounded-3xl bg-gradient-to-br from-indigo-50 via-white to-white p-8 shadow-xl ring-1 ring-indigo-100 dark:from-slate-900 dark:via-gray-900 dark:to-gray-900 dark:ring-gray-800">
+                    <section className="space-y-6 rounded-3xl bg-gradient-to-br from-indigo-50 via-white to-white p-8 shadow-xl ring-1 ring-indigo-100">
                         <div>
-                            <p className="text-sm font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">
+                            <p className="text-sm font-semibold uppercase tracking-wide text-indigo-600">
                                 Vendas
                             </p>
-                            <h3 className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
-                                Resultado operacional
-                            </h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-300">
-                                Considera todas as vendas do mês corrente, destacando o impacto dos vales e
-                                refeições.
+                            <h3 className="mt-1 text-2xl font-bold text-gray-900">Resultado operacional</h3>
+                            <p className="text-sm text-gray-600">
+                                Considera todas as vendas do mes corrente, destacando o impacto dos vales e refeicao.
                             </p>
                         </div>
 
@@ -228,39 +186,37 @@ export default function ControlPanel({
                             <MetricCard
                                 title="Faturamento bruto"
                                 value={safeMetrics.total_sales}
-                                description="Todas as vendas registradas no período"
+                                description="Todas as vendas registradas no periodo"
                                 accent="#4338ca"
                             />
                             <MetricCard
                                 title="Total em vales"
                                 value={safeMetrics.total_vale}
-                                description="Vendas lançadas como vale tradicional"
+                                description="Vendas lancadas como vale tradicional"
                                 accent="#f97316"
                             />
                             <MetricCard
-                                title="Total em refeição"
+                                title="Total em refeicao"
                                 value={safeMetrics.total_refeicao}
-                                description="Consumos abatidos do saldo de refeição"
+                                description="Consumos abatidos do saldo de refeicao"
                                 accent="#d97706"
                             />
                             <MetricCard
-                                title="Faturamento líquido"
+                                title="Faturamento liquido"
                                 value={safeMetrics.net_sales}
-                                description="Bruto menos vales e refeição"
+                                description="Bruto menos vales e refeicao"
                                 accent="#16a34a"
                             />
                         </div>
                     </section>
 
-                    <section className="space-y-6 rounded-3xl bg-white p-8 shadow-xl ring-1 ring-gray-100 dark:bg-gray-800 dark:ring-gray-700">
+                    <section className="space-y-6 rounded-3xl bg-white p-8 shadow-xl ring-1 ring-gray-100">
                         <div>
-                            <p className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
+                            <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">
                                 Pessoas
                             </p>
-                            <h3 className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
-                                Folha e benefícios
-                            </h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-300">
+                            <h3 className="mt-1 text-2xl font-bold text-gray-900">Folha e beneficios</h3>
+                            <p className="text-sm text-gray-600">
                                 Valores sempre consideram todos os colaboradores (todas as unidades).
                             </p>
                         </div>
@@ -269,19 +225,19 @@ export default function ControlPanel({
                             <MetricCard
                                 title="Adiantamentos concedidos"
                                 value={safeMetrics.total_advances}
-                                description="Somatório de adiantamentos no mês"
+                                description="Somatorio de adiantamentos no mes"
                                 accent="#0ea5e9"
                             />
                             <MetricCard
                                 title="Folha bruta"
                                 value={safeMetrics.total_payroll}
-                                description="Soma dos salários dos colaboradores da unidade"
+                                description="Soma dos salarios dos colaboradores da unidade"
                                 accent="#334155"
                             />
                             <MetricCard
-                                title="Folha líquida"
+                                title="Folha liquida"
                                 value={safeMetrics.net_payroll}
-                                description="Folha bruta - vales - refeição - adiantamentos"
+                                description="Folha bruta - vales - refeicao - adiantamentos"
                                 accent="#22c55e"
                             />
                         </div>

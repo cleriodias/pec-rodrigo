@@ -158,7 +158,11 @@ export default function Terminal() {
                     'Content-Type': 'application/json',
                     'X-CSRF-Token': csrfToken,
                 },
-                body: JSON.stringify({ product_id: id, quantity: 1 }),
+                body: JSON.stringify({
+                    product_id: id,
+                    quantity: 1,
+                    access_user_id: accessUser?.id ?? auth?.user?.id,
+                }),
             });
 
             if (!resp.ok) {
@@ -255,7 +259,7 @@ export default function Terminal() {
                         'Content-Type': 'application/json',
                         'X-CSRF-Token': csrfToken,
                     },
-                    body: JSON.stringify({ quantity }),
+                    body: JSON.stringify({ quantity, access_user_id: accessUser?.id ?? auth?.user?.id }),
                 },
             );
             if (!resp.ok) {
@@ -464,7 +468,9 @@ export default function Terminal() {
 
                         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                             <div className="flex items-center justify-between">
-                                <h3 className="text-base font-semibold text-gray-800">Itens adicionados</h3>
+                                <h3 className="text-base font-semibold text-gray-800">
+                                    Itens adicionados {comanda ? `- Comanda ${comanda}` : ''}
+                                </h3>
                                 <button
                                     type="button"
                                     onClick={handleFinalize}
@@ -486,6 +492,11 @@ export default function Terminal() {
                                                 <p className="text-gray-500">
                                                     R$ {Number(item.price).toFixed(2)}
                                                 </p>
+                                                {item.lanc_user_name && (
+                                                    <p className="text-xs font-semibold text-gray-600">
+                                                        {item.lanc_user_name}
+                                                    </p>
+                                                )}
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <button

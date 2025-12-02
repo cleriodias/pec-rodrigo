@@ -767,6 +767,7 @@ export default function Dashboard() {
                           price: Number(item.price ?? 0),
                           quantity: Number(item.quantity ?? 0),
                           vrEligible: true,
+                          lancUserName: item.lanc_user_name,
                       }))
                     : [];
                 setItems(mapped);
@@ -1128,10 +1129,22 @@ export default function Dashboard() {
 
                                 <div className="rounded-2xl border border-gray-200 p-4 shadow-sm dark:border-gray-700">
                                     <div className="flex flex-wrap items-center justify-between gap-3">
-                                        <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
-                                            Itens adicionados
-                                        </h3>
                                         <div className="flex items-center gap-3">
+                                            <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
+                                                Itens adicionados
+                                            </h3>
+                                            {selectedComandaCode && (
+                                                <span className="rounded-full border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-700">
+                                                    Comanda: {selectedComandaCode}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            {selectedComandaCode && (
+                                                <span className="rounded-full border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-700">
+                                                    Comanda: {selectedComandaCode}
+                                                </span>
+                                            )}
                                             <button
                                                 type="button"
                                                 onClick={handleSaveCart}
@@ -1182,6 +1195,11 @@ export default function Dashboard() {
                                                                 <p className="text-xs text-gray-500 dark:text-gray-400">
                                                                     ID {item.id}
                                                                 </p>
+                                                                {item.lancUserName && (
+                                                                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+                                                                        {item.lancUserName}
+                                                                    </p>
+                                                                )}
                                                             </td>
                                                             <td className="px-3 py-2 text-center text-gray-800 dark:text-gray-100">
                                                                 <div className="flex items-center justify-center gap-2">
