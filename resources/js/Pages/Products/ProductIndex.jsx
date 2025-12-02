@@ -115,7 +115,7 @@ export default function ProductIndex({ auth, products, typeLabels, statusLabels,
                                 type="text"
                                 value={searchTerm}
                                 onChange={(event) => setSearchTerm(event.target.value)}
-                                placeholder="Digite ID, c?digo de barras ou nome"
+                                placeholder="Digite ID, código de barras ou nome"
                                 className="w-full rounded-xl border border-gray-300 px-3 py-2 text-gray-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
                             />
                             <p className="text-xs text-gray-500 dark:text-gray-400">

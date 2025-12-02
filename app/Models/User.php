@@ -30,6 +30,7 @@ class User extends Authenticatable
         'salario',
         'vr_cred',
         'tb2_id',
+        'cod_acesso',
     ];
 
     /**
@@ -59,6 +60,7 @@ class User extends Authenticatable
             'salario' => 'float',
             'vr_cred' => 'float',
             'tb2_id' => 'integer',
+            'cod_acesso' => 'string',
         ];
     }
 

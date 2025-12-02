@@ -4,6 +4,7 @@ use App\Http\Controllers\CashierClosureController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductDiscardController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\LanchoneteTerminalController;
 use App\Http\Controllers\RoleSwitchController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\SalesReportController;
@@ -99,6 +100,8 @@ Route::middleware('auth')->group(function () {
     Route::delete('/salary-advances/{salaryAdvance}', [SalaryAdvanceController::class, 'destroy'])->name('salary-advances.destroy');
     Route::get('/cashier/close', [CashierClosureController::class, 'index'])->name('cashier.close');
     Route::post('/cashier/close', [CashierClosureController::class, 'store'])->name('cashier.close.store');
+
+    Route::get('/lanchonete/terminal', [LanchoneteTerminalController::class, 'index'])->name('lanchonete.terminal');
 });
 
 require __DIR__.'/auth.php';
