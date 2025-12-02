@@ -1,5 +1,5 @@
 ﻿import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, usePage } from '@inertiajs/react';
+import { Head, usePage, router } from '@inertiajs/react';
 import axios from 'axios';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -66,6 +66,7 @@ const formatDateTime = (value) => {
 export default function Dashboard() {
     const pageProps = usePage().props;
     const { auth } = pageProps;
+    const effectiveRole = Number(auth?.user?.funcao ?? -1);
     const csrfTokenProp = pageProps?.csrf_token ?? '';
     const activeUnitName = auth?.unit?.name ?? '';
 
@@ -186,8 +187,18 @@ export default function Dashboard() {
     );
 
     useEffect(() => {
+        if (
+            effectiveRole === 4 &&
+            typeof route === 'function' &&
+            route().has &&
+            route().has('lanchonete.terminal') &&
+            !route().current('lanchonete.terminal')
+        ) {
+            router.visit(route('lanchonete.terminal'));
+            return;
+        }
         inputRef.current?.focus();
-    }, []);
+    }, [effectiveRole]);
     useEffect(() => {
         if (typeof window === 'undefined') {
             return;
