@@ -1,29 +1,24 @@
-﻿import DangerButton from '@/Components/DangerButton';
+import DangerButton from '@/Components/DangerButton';
 import InputError from '@/Components/InputError';
 import InputLabel from '@/Components/InputLabel';
 import Modal from '@/Components/Modal';
 import SecondaryButton from '@/Components/SecondaryButton';
 import TextInput from '@/Components/TextInput';
-import { useForm } from '@inertiajs/react';
+import { useForm, usePage } from '@inertiajs/react';
 import { useRef, useState } from 'react';
 
 export default function DeleteUserForm({ className = '' }) {
+    const { canDeleteAccount } = usePage().props;
     const [confirmingUserDeletion, setConfirmingUserDeletion] = useState(false);
     const passwordInput = useRef();
 
-    const {
-        data,
-        setData,
-        delete: destroy,
-        processing,
-        reset,
-        errors,
-        clearErrors,
-    } = useForm({
-        password: '',
-    });
+    const { data, setData, delete: destroy, processing, reset, errors, clearErrors } =
+        useForm({
+            password: '',
+        });
 
     const confirmUserDeletion = () => {
+        if (!canDeleteAccount) return;
         setConfirmingUserDeletion(true);
     };
 
@@ -40,41 +35,38 @@ export default function DeleteUserForm({ className = '' }) {
 
     const closeModal = () => {
         setConfirmingUserDeletion(false);
-
         clearErrors();
         reset();
     };
 
     return (
         <section className={`space-y-6 ${className}`}>
-            <header className="border-b border-gray-800 pb-4">
-                <h2 className="text-xl font-semibold text-white">Delete Account</h2>
-
-                <p className="mt-1 text-sm text-gray-400">
-                    Once your account is deleted, all of its resources and data will be permanently removed.
+            <header className="border-b border-gray-200 pb-4">
+                <h2 className="text-xl font-semibold text-gray-800">Excluir conta</h2>
+                <p className="mt-1 text-sm text-gray-600">
+                    Ao excluir a conta, todos os dados serao removidos de forma permanente.
                 </p>
             </header>
 
-            <DangerButton onClick={confirmUserDeletion}>
-                Delete Account
+            {!canDeleteAccount && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                    Exclusao desabilitada enquanto houver lancamentos vinculados (vale, adiantamento, refeicao, descarte).
+                </div>
+            )}
+
+            <DangerButton onClick={confirmUserDeletion} disabled={!canDeleteAccount}>
+                Excluir conta
             </DangerButton>
 
             <Modal show={confirmingUserDeletion} onClose={closeModal}>
-                <form onSubmit={deleteUser} className="space-y-4 bg-gray-950 p-6 text-gray-100">
-                    <h2 className="text-lg font-semibold text-white">
-                        Are you sure you want to delete your account?
-                    </h2>
-
-                    <p className="text-sm text-gray-400">
-                        Please enter your password to confirm you would like to permanently delete your account.
+                <form onSubmit={deleteUser} className="p-6">
+                    <h2 className="text-lg font-semibold text-gray-900">Tem certeza disso?</h2>
+                    <p className="mt-1 text-sm text-gray-600">
+                        Esta acao nao pode ser desfeita. Confirme sua senha para continuar.
                     </p>
 
-                    <div>
-                        <InputLabel
-                            htmlFor="password"
-                            value="Password"
-                            className="sr-only"
-                        />
+                    <div className="mt-6">
+                        <InputLabel htmlFor="password" value="Senha" className="sr-only" />
 
                         <TextInput
                             id="password"
@@ -82,28 +74,17 @@ export default function DeleteUserForm({ className = '' }) {
                             name="password"
                             ref={passwordInput}
                             value={data.password}
-                            onChange={(e) =>
-                                setData('password', e.target.value)
-                            }
-                            className="mt-2 block w-full rounded-lg border border-gray-800 bg-gray-900 text-gray-100 focus:border-red-500 focus:ring-red-500"
-                            isFocused
-                            placeholder="Password"
+                            onChange={(e) => setData('password', e.target.value)}
+                            className="mt-1 block w-full rounded-lg border border-gray-300 bg-white text-gray-900 focus:border-red-500 focus:ring-red-500"
+                            autoFocus
                         />
 
-                        <InputError
-                            message={errors.password}
-                            className="mt-2"
-                        />
+                        <InputError message={errors.password} className="mt-2" />
                     </div>
 
-                    <div className="flex justify-end gap-3 pt-2">
-                        <SecondaryButton onClick={closeModal}>
-                            Cancel
-                        </SecondaryButton>
-
-                        <DangerButton className="px-4" disabled={processing}>
-                            Delete Account
-                        </DangerButton>
+                    <div className="mt-6 flex justify-end gap-3">
+                        <SecondaryButton onClick={closeModal}>Cancelar</SecondaryButton>
+                        <DangerButton disabled={processing}>Confirmar exclusao</DangerButton>
                     </div>
                 </form>
             </Modal>

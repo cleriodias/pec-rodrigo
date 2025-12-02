@@ -20,9 +20,12 @@ class ProfileController extends Controller
      */
     public function edit(Request $request): Response
     {
+        $user = $request->user()->loadMissing('units');
+
         return Inertia::render('Profile/Edit', [
             'mustVerifyEmail' => $request->user() instanceof MustVerifyEmail,
             'status' => session('status'),
+            'canDeleteAccount' => !$this->userHasTransactions($user),
         ]);
     }
 
@@ -62,7 +65,7 @@ class ProfileController extends Controller
 
         if ($this->userHasTransactions($user)) {
             return Redirect::route('profile.edit')->withErrors([
-                'password' => 'Não é possível excluir usuários que possuem lançamentos vinculados.',
+                'password' => 'Nao e possivel excluir usuarios que possuem lancamentos vinculados.',
             ]);
         }
 

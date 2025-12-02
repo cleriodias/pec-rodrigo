@@ -12,6 +12,11 @@ export default function Config({ auth }) {
             icon: 'bi-gear',
             href: route('settings.profile-access'),
         },
+        {
+            label: 'Organizar Menu',
+            icon: 'bi-list-ol',
+            href: route('settings.menu-order'),
+        },
     ];
 
     return (

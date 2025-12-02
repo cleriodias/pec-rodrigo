@@ -2,7 +2,7 @@ import ApplicationLogo from '@/Components/ApplicationLogo';
 import Dropdown from '@/Components/Dropdown';
 import NavLink from '@/Components/NavLink';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink';
-import { Link, usePage, router } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
 
 const MenuLabel = ({ icon, text }) => (
@@ -12,28 +12,34 @@ const MenuLabel = ({ icon, text }) => (
     </span>
 );
 
+const ACCESS_STORAGE_KEY = 'menuAccessConfig';
+const ORDER_STORAGE_KEY = 'menuOrderConfig';
+
 export default function AuthenticatedLayout({ header, children }) {
     const pageProps = usePage().props;
     const user = pageProps.auth.user;
     const activeUnitName = pageProps.auth.unit?.name ?? 'Dashboard';
     const effectiveRole = user ? Number(user.funcao) : null;
     const originalRole = user ? Number(user.funcao_original ?? user.funcao) : null;
-    const isCashier = user && effectiveRole === 3;
-    const canSeeUsers = user && [0, 1].includes(effectiveRole);
-    const canSeeUnits = canSeeUsers;
-    const canSeeReports = canSeeUnits;
-    const canSwitchUnit = user && originalRole === 0;
-    const canSwitchRole = user && originalRole === 0;
-    const isMaster = user && effectiveRole === 0;
     const roleLabels = {
         0: 'MASTER',
         1: 'GERENTE',
         2: 'SUB-GERENTE',
         3: 'CAIXA',
         4: 'LANCHONETE',
-        5: 'FUNCIONARIO',
+        5: 'FUNCIONÁRIO',
         6: 'CLIENTE',
     };
+    const isCashier = user && effectiveRole === 3;
+    const isLanchonete = user && effectiveRole === 4;
+    const isMaster = user && effectiveRole === 0;
+    const canSeeUsers = user && [0, 1].includes(effectiveRole);
+    const canSeeUnits = canSeeUsers;
+    const canSeeReports = canSeeUnits;
+    const canSwitchUnit = user && originalRole === 0;
+    const canSwitchRole = user && originalRole === 0;
+    const hasLanchoneteRoute =
+        typeof route === 'function' && route().has && route().has('lanchonete.terminal');
 
     const [showingNavigationDropdown, setShowingNavigationDropdown] =
         useState(false);
@@ -45,28 +51,18 @@ export default function AuthenticatedLayout({ header, children }) {
             return;
         }
         try {
-            const raw = window.localStorage.getItem('menuAccessConfig');
-            if (!raw) {
-                return;
+            const raw = window.localStorage.getItem(ACCESS_STORAGE_KEY);
+            if (raw) {
+                setMenuAccessConfig(JSON.parse(raw));
             }
-            const parsed = JSON.parse(raw);
-            setMenuAccessConfig(parsed);
         } catch (err) {
             console.error('Failed to load menuAccessConfig', err);
         }
-    }, []);
-
-    useEffect(() => {
-        if (typeof window === 'undefined') {
-            return;
-        }
         try {
-            const raw = window.localStorage.getItem('menuOrderConfig');
-            if (!raw) {
-                return;
+            const rawOrder = window.localStorage.getItem(ORDER_STORAGE_KEY);
+            if (rawOrder) {
+                setMenuOrderConfig(JSON.parse(rawOrder));
             }
-            const parsed = JSON.parse(raw);
-            setMenuOrderConfig(parsed);
         } catch (err) {
             console.error('Failed to load menuOrderConfig', err);
         }
@@ -93,24 +89,24 @@ export default function AuthenticatedLayout({ header, children }) {
             'lanchonete_terminal',
         ]);
 
-            return (key) => {
-                if (!menuAccessConfig || effectiveRole === null) {
-                    return defaultAllow.has(key);
-                }
-                const allowed = menuAccessConfig[effectiveRole];
-                if (!allowed) {
-                    return defaultAllow.has(key);
-                }
-                return Array.isArray(allowed) ? allowed.includes(key) : defaultAllow.has(key);
-            };
-        }, [menuAccessConfig, effectiveRole]);
+        return (key) => {
+            if (!menuAccessConfig || effectiveRole === null) {
+                return defaultAllow.has(key);
+            }
+            const allowed = menuAccessConfig[effectiveRole];
+            if (!allowed) {
+                return defaultAllow.has(key);
+            }
+            return Array.isArray(allowed) ? allowed.includes(key) : defaultAllow.has(key);
+        };
+    }, [menuAccessConfig, effectiveRole]);
 
     const orderMap = useMemo(() => {
         if (!menuOrderConfig || !Array.isArray(menuOrderConfig)) {
             return {};
         }
-        return menuOrderConfig.reduce((acc, key, index) => {
-            acc[key] = index;
+        return menuOrderConfig.reduce((acc, key, idx) => {
+            acc[key] = idx;
             return acc;
         }, {});
     }, [menuOrderConfig]);
@@ -123,12 +119,188 @@ export default function AuthenticatedLayout({ header, children }) {
             }))
             .sort((a, b) => a.order - b.order);
 
-    const handleLogout = () => {
-        router.post(route('logout'), { _token: pageProps?.csrf_token ?? '' }, {
-            onSuccess: () => {
-                window.location.reload();
+    const mainMenuItems = sortMenu(
+        [
+            {
+                key: 'dashboard',
+                visible: true,
+                node: (
+                    <NavLink
+                        href={route('dashboard')}
+                        active={route().current('dashboard')}
+                    >
+                        <MenuLabel icon="bi bi-speedometer2" text={activeUnitName} />
+                    </NavLink>
+                ),
             },
-        });
+            {
+                key: 'products',
+                visible: hasMenuAccess('products'),
+                node: (
+                    <NavLink
+                        href={route('products.index')}
+                        active={route().current('products.*')}
+                    >
+                        <MenuLabel icon="bi bi-box-seam" text="Produtos" />
+                    </NavLink>
+                ),
+            },
+            {
+                key: 'cashier_close',
+                visible: isCashier && hasMenuAccess('cashier_close'),
+                node: (
+                    <NavLink
+                        href={route('cashier.close')}
+                        active={route().current('cashier.close')}
+                    >
+                        <MenuLabel icon="bi bi-cash-stack" text="Fechar CX" />
+                    </NavLink>
+                ),
+            },
+            {
+                key: 'reports_control',
+                visible: canSeeReports && hasMenuAccess('reports_control'),
+                node: (
+                    <NavLink
+                        href={route('reports.control')}
+                        active={route().current('reports.control')}
+                    >
+                        <MenuLabel icon="bi bi-graph-up-arrow" text="Controle" />
+                    </NavLink>
+                ),
+            },
+            {
+                key: 'reports_cash',
+                visible: canSeeReports && hasMenuAccess('reports_cash'),
+                node: (
+                    <NavLink
+                        href={route('reports.cash.closure')}
+                        active={route().current('reports.cash.closure')}
+                    >
+                        <MenuLabel icon="bi bi-clipboard-data" text="Fech. de CAIXA" />
+                    </NavLink>
+                ),
+            },
+            {
+                key: 'lanchonete_terminal',
+                visible: isLanchonete && hasMenuAccess('lanchonete_terminal') && hasLanchoneteRoute,
+                node: (
+                    <NavLink
+                        href={hasLanchoneteRoute ? route('lanchonete.terminal') : '#'}
+                        active={hasLanchoneteRoute ? route().current('lanchonete.terminal') : false}
+                    >
+                        <MenuLabel icon="bi bi-egg-fried" text="Lanchonete" />
+                    </NavLink>
+                ),
+            },
+        ].filter((item) => item.visible)
+    );
+
+    const dropdownMenuItems = sortMenu(
+        [
+            {
+                key: 'reports_sales_today',
+                visible: canSeeReports && hasMenuAccess('reports_sales_today'),
+                node: (
+                    <Dropdown.Link href={route('reports.sales.today')}>
+                        <MenuLabel icon="bi bi-calendar-day" text="Vendas hoje" />
+                    </Dropdown.Link>
+                ),
+            },
+            {
+                key: 'reports_sales_period',
+                visible: canSeeReports && hasMenuAccess('reports_sales_period'),
+                node: (
+                    <Dropdown.Link href={route('reports.sales.period')}>
+                        <MenuLabel icon="bi bi-calendar-range" text="Vendas periodo" />
+                    </Dropdown.Link>
+                ),
+            },
+            {
+                key: 'reports_sales_detailed',
+                visible: canSeeReports && hasMenuAccess('reports_sales_detailed'),
+                node: (
+                    <Dropdown.Link href={route('reports.sales.detailed')}>
+                        <MenuLabel icon="bi bi-card-checklist" text="Detalhado" />
+                    </Dropdown.Link>
+                ),
+            },
+            {
+                key: 'users',
+                visible: canSeeUsers && hasMenuAccess('users'),
+                node: (
+                    <Dropdown.Link href={route('users.index')}>
+                        <MenuLabel icon="bi bi-people-fill" text="Usuários" />
+                    </Dropdown.Link>
+                ),
+            },
+            {
+                key: 'units',
+                visible: canSeeUnits && hasMenuAccess('units'),
+                node: (
+                    <Dropdown.Link href={route('units.index')}>
+                        <MenuLabel icon="bi bi-building" text="Unidades" />
+                    </Dropdown.Link>
+                ),
+            },
+            {
+                key: 'settings',
+                visible: isMaster && hasMenuAccess('settings'),
+                node: (
+                    <Dropdown.Link href={route('settings.config')}>
+                        <MenuLabel icon="bi bi-gear" text="Configuração" />
+                    </Dropdown.Link>
+                ),
+            },
+            {
+                key: 'switch_unit',
+                visible: canSwitchUnit && hasMenuAccess('switch_unit'),
+                node: (
+                    <Dropdown.Link href={route('reports.switch-unit')}>
+                        <MenuLabel icon="bi bi-arrow-left-right" text="Trocar unidade" />
+                    </Dropdown.Link>
+                ),
+            },
+            {
+                key: 'switch_role',
+                visible: canSwitchRole && hasMenuAccess('switch_role'),
+                node: (
+                    <Dropdown.Link href={route('reports.switch-role')}>
+                        <MenuLabel icon="bi bi-people" text="Trocar funcao" />
+                    </Dropdown.Link>
+                ),
+            },
+            {
+                key: 'salary_advances',
+                visible: canSeeReports && hasMenuAccess('salary_advances'),
+                node: (
+                    <Dropdown.Link href={route('salary-advances.index')}>
+                        <MenuLabel icon="bi bi-wallet2" text="Adiantamento" />
+                    </Dropdown.Link>
+                ),
+            },
+            {
+                key: 'discard',
+                visible: hasMenuAccess('discard'),
+                node: (
+                    <Dropdown.Link href={route('products.discard')}>
+                        <MenuLabel icon="bi bi-recycle" text="Descarte" />
+                    </Dropdown.Link>
+                ),
+            },
+        ].filter((item) => item.visible)
+    );
+
+    const handleLogout = () => {
+        router.post(
+            route('logout'),
+            { _token: pageProps?.csrf_token ?? '' },
+            {
+                onSuccess: () => {
+                    window.location.reload();
+                },
+            },
+        );
     };
 
     return (
@@ -143,95 +315,8 @@ export default function AuthenticatedLayout({ header, children }) {
                                 </Link>
                             </div>
 
-                            <div className="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
-                                {sortMenu(
-                                    [
-                                        {
-                                            key: 'dashboard',
-                                            visible: true,
-                                            node: (
-                                                <NavLink
-                                                    href={route('dashboard')}
-                                                    active={route().current('dashboard')}
-                                                >
-                                                    <MenuLabel icon="bi bi-speedometer2" text={activeUnitName} />
-                                                </NavLink>
-                                            ),
-                                        },
-                                        {
-                                            key: 'users',
-                                            visible: canSeeUsers && hasMenuAccess('users'),
-                                            node: (
-                                                <NavLink
-                                                    href={route('users.index')}
-                                                    active={route().current('users.index')}
-                                                >
-                                                    <MenuLabel icon="bi bi-people-fill" text="Usuários" />
-                                                </NavLink>
-                                            ),
-                                        },
-                                        {
-                                            key: 'units',
-                                            visible: canSeeUnits && hasMenuAccess('units'),
-                                            node: (
-                                                <NavLink
-                                                    href={route('units.index')}
-                                                    active={route().current('units.index')}
-                                                >
-                                                    <MenuLabel icon="bi bi-building" text="Unidades" />
-                                                </NavLink>
-                                            ),
-                                        },
-                                        {
-                                            key: 'products',
-                                            visible: hasMenuAccess('products'),
-                                            node: (
-                                                <NavLink
-                                                    href={route('products.index')}
-                                                    active={route().current('products.*')}
-                                                >
-                                                    <MenuLabel icon="bi bi-box-seam" text="Produtos" />
-                                                </NavLink>
-                                            ),
-                                        },
-                                        {
-                                            key: 'cashier_close',
-                                            visible: isCashier && hasMenuAccess('cashier_close'),
-                                            node: (
-                                                <NavLink
-                                                    href={route('cashier.close')}
-                                                    active={route().current('cashier.close')}
-                                                >
-                                                    <MenuLabel icon="bi bi-cash-stack" text="Fechar CX" />
-                                                </NavLink>
-                                            ),
-                                        },
-                                        {
-                                            key: 'reports_control',
-                                            visible: canSeeReports && hasMenuAccess('reports_control'),
-                                            node: (
-                                                <NavLink
-                                                    href={route('reports.control')}
-                                                    active={route().current('reports.control')}
-                                                >
-                                                    <MenuLabel icon="bi bi-graph-up-arrow" text="Controle" />
-                                                </NavLink>
-                                            ),
-                                        },
-                                        {
-                                            key: 'reports_cash',
-                                            visible: canSeeReports && hasMenuAccess('reports_cash'),
-                                            node: (
-                                                <NavLink
-                                                    href={route('reports.cash.closure')}
-                                                    active={route().current('reports.cash.closure')}
-                                                >
-                                                    <MenuLabel icon="bi bi-clipboard-data" text="Fechamento de CAIXA" />
-                                                </NavLink>
-                                            ),
-                                        },
-                                    ].filter((item) => item.visible)
-                                ).map((item) => (
+                            <div className="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex items-center">
+                                {mainMenuItems.map((item) => (
                                     <span key={item.key}>{item.node}</span>
                                 ))}
                             </div>
@@ -244,10 +329,10 @@ export default function AuthenticatedLayout({ header, children }) {
                                         <span className="inline-flex rounded-md">
                                             <button
                                                 type="button"
-                                                className="inline-flex items-center rounded-md border border-transparent bg-white px-3 py-2 text-sm font-medium leading-4 text-gray-500 transition duration-150 ease-in-out hover:text-gray-700 focus:outline-none dark:bg-gray-800 dark:text-gray-400 dark:hover:text-gray-300"
+                                                className="inline-flex items-center gap-2 rounded-md border border-transparent bg-white px-3 py-2 text-sm font-medium leading-4 text-gray-500 transition duration-150 ease-in-out hover:text-gray-700 focus:outline-none dark:bg-gray-800 dark:text-gray-400 dark:hover:text-gray-300"
                                             >
-                                                {user.name}
-                                                <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600 dark:bg-gray-700 dark:text-gray-200">
+                                                <span>{user.name}</span>
+                                                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600 dark:bg-gray-700 dark:text-gray-200">
                                                     {roleLabels[effectiveRole] ?? '---'}
                                                 </span>
 
@@ -268,48 +353,12 @@ export default function AuthenticatedLayout({ header, children }) {
                                     </Dropdown.Trigger>
 
                                     <Dropdown.Content>
-                                        <Dropdown.Link href={route('settings.config')}>
+                                        <Dropdown.Link href={route('profile.edit')}>
                                             <MenuLabel icon="bi bi-person-circle" text="Perfil" />
                                         </Dropdown.Link>
-                                        {canSeeReports && (
-                                            <>
-                                                <Dropdown.Link href={route('reports.sales.today')}>
-                                                    <MenuLabel icon="bi bi-calendar-day" text="Vendas hoje" />
-                                                </Dropdown.Link>
-                                                <Dropdown.Link href={route('reports.sales.period')}>
-                                                    <MenuLabel icon="bi bi-calendar-range" text="Vendas periodo" />
-                                                </Dropdown.Link>
-                                                <Dropdown.Link href={route('reports.sales.detailed')}>
-                                                    <MenuLabel icon="bi bi-card-checklist" text="Detalhado" />
-                                                </Dropdown.Link>
-                                                <Dropdown.Link href={route('reports.cash.closure')}>
-                                                    <MenuLabel icon="bi bi-clipboard-data" text="Fech. de CX" />
-                                                </Dropdown.Link>
-                                                {isMaster && (
-                                                    <Dropdown.Link href={route('settings.config')}>
-                                                        <MenuLabel icon="bi bi-gear" text="Configuração" />
-                                                    </Dropdown.Link>
-                                                )}
-                                            </>
-                                        )}
-                                        {canSwitchUnit && (
-                                            <Dropdown.Link href={route('reports.switch-unit')}>
-                                                <MenuLabel icon="bi bi-arrow-left-right" text="Trocar unidade" />
-                                            </Dropdown.Link>
-                                        )}
-                                        {canSwitchRole && (
-                                            <Dropdown.Link href={route('reports.switch-role')}>
-                                                <MenuLabel icon="bi bi-people" text="Trocar funcao" />
-                                            </Dropdown.Link>
-                                        )}
-                                        {canSeeReports && (
-                                            <Dropdown.Link href={route('salary-advances.index')}>
-                                                <MenuLabel icon="bi bi-wallet2" text="Adiantamento" />
-                                            </Dropdown.Link>
-                                        )}
-                                        <Dropdown.Link href={route('products.discard')}>
-                                            <MenuLabel icon="bi bi-recycle" text="Descarte" />
-                                        </Dropdown.Link>
+                                        {dropdownMenuItems.map((item) => (
+                                            <span key={item.key}>{item.node}</span>
+                                        ))}
                                         <button
                                             type="button"
                                             onClick={handleLogout}
@@ -339,9 +388,7 @@ export default function AuthenticatedLayout({ header, children }) {
                                 >
                                     <path
                                         className={
-                                            !showingNavigationDropdown
-                                                ? 'inline-flex'
-                                                : 'hidden'
+                                            showingNavigationDropdown ? 'hidden' : 'inline-flex'
                                         }
                                         strokeLinecap="round"
                                         strokeLinejoin="round"
@@ -350,9 +397,7 @@ export default function AuthenticatedLayout({ header, children }) {
                                     />
                                     <path
                                         className={
-                                            showingNavigationDropdown
-                                                ? 'inline-flex'
-                                                : 'hidden'
+                                            showingNavigationDropdown ? 'inline-flex' : 'hidden'
                                         }
                                         strokeLinecap="round"
                                         strokeLinejoin="round"
@@ -372,144 +417,43 @@ export default function AuthenticatedLayout({ header, children }) {
                     }
                 >
                     <div className="space-y-1 pb-3 pt-2">
-                        <ResponsiveNavLink
-                            href={route('dashboard')}
-                            active={route().current('dashboard')}
-                        >
-                            <MenuLabel icon="bi bi-speedometer2" text={activeUnitName} />
-                        </ResponsiveNavLink>
-
-                        {canSeeUsers && (
-                            <ResponsiveNavLink
-                                href={route('users.index')}
-                                active={route().current('users.index')}
-                            >
-                                <MenuLabel icon="bi bi-people-fill" text={"Usu\u00E1rios"} />
-                            </ResponsiveNavLink>
-                        )}
-
-                        {canSeeUnits && (
-                            <ResponsiveNavLink
-                                href={route('units.index')}
-                                active={route().current('units.index')}
-                            >
-                                <MenuLabel icon="bi bi-building" text="Unidades" />
-                            </ResponsiveNavLink>
-                        )}
-                        <ResponsiveNavLink
-                            href={route('products.index')}
-                            active={route().current('products.*')}
-                        >
-                            <MenuLabel icon="bi bi-box-seam" text="Produtos" />
-                        </ResponsiveNavLink>
-                        {isCashier && (
-                            <ResponsiveNavLink
-                                href={route('cashier.close')}
-                                active={route().current('cashier.close')}
-                            >
-                                <MenuLabel icon="bi bi-cash-stack" text="Fechar CX" />
-                            </ResponsiveNavLink>
-                        )}
-                        {canSeeReports && (
-                            <>
-                                <ResponsiveNavLink
-                                    href={route('reports.control')}
-                                    active={route().current('reports.control')}
-                                >
-                                    <MenuLabel icon="bi bi-graph-up-arrow" text="Controle" />
-                                </ResponsiveNavLink>
-                                <ResponsiveNavLink
-                                    href={route('reports.cash.closure')}
-                                    active={route().current('reports.cash.closure')}
-                                >
-                                    <MenuLabel icon="bi bi-clipboard-data" text="Fechamento de CAIXA" />
-                                </ResponsiveNavLink>
-                            </>
-                        )}
-                        <ResponsiveNavLink
-                            href={route('products.discard')}
-                            active={route().current('products.discard')}
-                        >
-                            <MenuLabel icon="bi bi-recycle" text="Descarte" />
-                        </ResponsiveNavLink>
+                        {mainMenuItems.map((item) => (
+                            <div key={item.key}>{item.node}</div>
+                        ))}
                     </div>
 
                     <div className="border-t border-gray-200 pb-1 pt-4 dark:border-gray-600">
                         <div className="px-4">
                             <div className="text-base font-medium text-gray-800 dark:text-gray-200">
                                 {user.name}
-                                <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600 dark:bg-gray-700 dark:text-gray-200">
-                                    {roleLabels[effectiveRole] ?? '---'}
-                                </span>
                             </div>
                             <div className="text-sm font-medium text-gray-500">
                                 {user.email}
+                                <span className="ms-2 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600 dark:bg-gray-700 dark:text-gray-200">
+                                    {roleLabels[effectiveRole] ?? '---'}
+                                </span>
                             </div>
                         </div>
 
                         <div className="mt-3 space-y-1">
-                            <ResponsiveNavLink href={route('settings.config')}>
-                                Perfil
-                            </ResponsiveNavLink>
-                            {canSeeReports && (
-                                <>
-                                    <ResponsiveNavLink
-                                        href={route('reports.sales.today')}
-                                        active={route().current('reports.sales.today')}
-                                    >
-                                        Vendas hoje
-                                    </ResponsiveNavLink>
-                                    <ResponsiveNavLink
-                                        href={route('reports.sales.period')}
-                                        active={route().current('reports.sales.period')}
-                                    >
-                                        Vendas periodo
-                                    </ResponsiveNavLink>
-                                    <ResponsiveNavLink
-                                        href={route('reports.sales.detailed')}
-                                        active={route().current('reports.sales.detailed')}
-                                    >
-                                        Detalhado
-                                    </ResponsiveNavLink>
-                                    <ResponsiveNavLink
-                                        href={route('reports.cash.closure')}
-                                        active={route().current('reports.cash.closure')}
-                                    >
-                                        Fechamento de CAIXA
-                                    </ResponsiveNavLink>
-                                </>
-                            )}
-                            {canSwitchUnit && (
+                            <div>
                                 <ResponsiveNavLink
-                                    href={route('reports.switch-unit')}
-                                    active={route().current('reports.switch-unit')}
+                                    href={route('profile.edit')}
+                                    active={route().current('profile.edit')}
                                 >
-                                    Trocar unidade
+                                    Perfil
                                 </ResponsiveNavLink>
-                            )}
-                            {canSwitchRole && (
+                                {dropdownMenuItems.map((item) => (
+                                    <div key={item.key}>{item.node}</div>
+                                ))}
                                 <ResponsiveNavLink
-                                    href={route('reports.switch-role')}
-                                    active={route().current('reports.switch-role')}
+                                    as="button"
+                                    method="post"
+                                    href={route('logout')}
                                 >
-                                    Trocar funcao
+                                    Sair
                                 </ResponsiveNavLink>
-                            )}
-                            {canSeeReports && (
-                                <ResponsiveNavLink
-                                    href={route('salary-advances.index')}
-                                    active={route().current('salary-advances.*')}
-                                >
-                                    Adiantamento
-                                </ResponsiveNavLink>
-                            )}
-                            <button
-                                type="button"
-                                onClick={handleLogout}
-                                className="block w-full px-4 py-2 text-left text-sm font-semibold text-red-600 transition hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/20"
-                            >
-                                Sair
-                            </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -517,7 +461,7 @@ export default function AuthenticatedLayout({ header, children }) {
 
             {header && (
                 <header className="bg-white shadow dark:bg-gray-800">
-                    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+                    <div className="mx-auto max-w-7xl py-6 px-4 sm:px-6 lg:px-8">
                         {header}
                     </div>
                 </header>
