@@ -26,15 +26,19 @@ class UserController extends Controller
             }
 
             $routeName = $request->route()?->getName();
-            if ((int) $user->funcao === 3 && $routeName === 'users.search') {
+            $funcao = (int) $user->funcao;
+            $funcaoOriginal = $user->funcao_original;
+            $isMasterOriginal = (int) ($funcaoOriginal ?? $user->funcao) === 0;
+
+            if ($funcao === 3 && $routeName === 'users.search') {
                 return $next($request);
             }
 
-            if (! in_array((int) $user->funcao, [0, 1], true)) {
-                abort(403);
+            if ($isMasterOriginal || in_array($funcao, [0, 1], true)) {
+                return $next($request);
             }
 
-            return $next($request);
+            abort(403);
         });
     }
 

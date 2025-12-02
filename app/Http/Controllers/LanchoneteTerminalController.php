@@ -6,6 +6,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use App\Models\User;
 
 class LanchoneteTerminalController extends Controller
 {
@@ -23,5 +24,29 @@ class LanchoneteTerminalController extends Controller
         }
 
         return Inertia::render('Lanchonete/Terminal');
+    }
+
+    public function validateAccess(Request $request)
+    {
+        $validated = $request->validate([
+            'cod_acesso' => ['required', 'alpha_num', 'min:4', 'max:10'],
+        ]);
+
+        $user = User::query()
+            ->where('cod_acesso', strtoupper($validated['cod_acesso']))
+            ->whereIn('funcao', [0, 4])
+            ->first();
+
+        if (! $user) {
+            return response()->json(['message' => 'Codigo de acesso invalido.'], 404);
+        }
+
+        return response()->json([
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'funcao' => $user->funcao,
+            'cod_acesso' => $user->cod_acesso,
+        ]);
     }
 }

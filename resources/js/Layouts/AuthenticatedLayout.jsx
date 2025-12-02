@@ -21,6 +21,7 @@ export default function AuthenticatedLayout({ header, children }) {
     const activeUnitName = pageProps.auth.unit?.name ?? 'Dashboard';
     const effectiveRole = user ? Number(user.funcao) : null;
     const originalRole = user ? Number(user.funcao_original ?? user.funcao) : null;
+    const isMasterOriginal = originalRole === 0;
     const roleLabels = {
         0: 'MASTER',
         1: 'GERENTE',
@@ -33,11 +34,11 @@ export default function AuthenticatedLayout({ header, children }) {
     const isCashier = user && effectiveRole === 3;
     const isLanchonete = user && effectiveRole === 4;
     const isMaster = user && effectiveRole === 0;
-    const canSeeUsers = user && [0, 1].includes(effectiveRole);
+    const canSeeUsers = user && ([0, 1].includes(effectiveRole) || isMasterOriginal);
     const canSeeUnits = canSeeUsers;
     const canSeeReports = canSeeUnits;
-    const canSwitchUnit = user && originalRole === 0;
-    const canSwitchRole = user && originalRole === 0;
+    const canSwitchUnit = user && isMasterOriginal;
+    const canSwitchRole = user && isMasterOriginal;
     const hasLanchoneteRoute =
         typeof route === 'function' && route().has && route().has('lanchonete.terminal');
 
@@ -90,6 +91,9 @@ export default function AuthenticatedLayout({ header, children }) {
         ]);
 
         return (key) => {
+            if (isMasterOriginal) {
+                return true;
+            }
             if (!menuAccessConfig || effectiveRole === null) {
                 return defaultAllow.has(key);
             }
