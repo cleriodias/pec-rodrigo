@@ -20,12 +20,20 @@ class CashierClosureController extends Controller
 
         $today = Carbon::today();
         $activeUnit = $request->session()->get('active_unit');
+        $unitId = $activeUnit['id'] ?? $user->tb2_id;
+
         $todayClosure = CashierClosure::where('user_id', $user->id)
             ->whereDate('closed_date', $today)
+            ->where(function ($query) use ($unitId) {
+                $query->whereNull('unit_id')->orWhere('unit_id', $unitId);
+            })
             ->latest('closed_at')
             ->first();
 
         $lastClosure = CashierClosure::where('user_id', $user->id)
+            ->where(function ($query) use ($unitId) {
+                $query->whereNull('unit_id')->orWhere('unit_id', $unitId);
+            })
             ->latest('closed_at')
             ->first();
 
@@ -63,13 +71,16 @@ class CashierClosureController extends Controller
 
         $alreadyClosed = CashierClosure::where('user_id', $user->id)
             ->whereDate('closed_date', $today)
+            ->where(function ($query) use ($unitId) {
+                $query->whereNull('unit_id')->orWhere('unit_id', $unitId);
+            })
             ->exists();
 
         if ($alreadyClosed) {
             return redirect()
                 ->route('cashier.close')
                 ->withErrors([
-                    'cash_amount' => 'O caixa já foi fechado hoje.',
+                    'cash_amount' => 'O caixa ja foi fechado hoje para esta unidade.',
                 ]);
         }
 
@@ -89,12 +100,12 @@ class CashierClosureController extends Controller
 
         return redirect()
             ->route('login')
-            ->with('status', 'Fechamento concluído. Você poderá acessar novamente amanhã.');
+            ->with('status', 'Fechamento concluido. Voce podera acessar novamente amanha.');
     }
 
     private function ensureCashier(?User $user): void
     {
-        if (! $user || (int) $user->funcao !== 3) {
+        if (!$user || (int) $user->funcao !== 3) {
             abort(403);
         }
     }
