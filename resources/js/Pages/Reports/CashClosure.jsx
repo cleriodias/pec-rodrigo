@@ -34,10 +34,12 @@ const formatDateTime = (value) => {
     });
 };
 
-const differenceTone = (value) =>
-    Math.abs(value ?? 0) < 0.005
-        ? 'text-green-600 dark:text-green-400'
-        : 'text-red-600 dark:text-red-400';
+const differenceTone = (value) => {
+    if (Math.abs(value ?? 0) < 0.005) {
+        return 'text-gray-900 dark:text-gray-100';
+    }
+    return (value ?? 0) > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400';
+};
 
 export default function CashClosure({
     records = [],
@@ -243,38 +245,20 @@ export default function CashClosure({
     };
 
     const filterCard = (
-        <div className="rounded-2xl bg-white p-6 shadow dark:bg-gray-800">
-            <div className="flex flex-col gap-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-gray-400">
-                    Filtro
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-300">
-                    Escolha a data e a unidade para visualizar o fechamento.
-                </p>
-            </div>
-            <div className="mt-4 flex flex-col gap-4">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                    <div className="flex-1">
-                        <label
-                            htmlFor="closure-date"
-                            className="text-sm font-medium text-gray-700 dark:text-gray-200"
-                        >
-                            Data de refer\u00eancia
-                        </label>
+        <div className="rounded-2xl bg-white p-6 shadow">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex-1">
+                    <div className="mt-3">
                         <input
                             id="closure-date"
                             type="date"
                             value={dateInput}
                             onChange={(event) => handleDateChange(event.target.value)}
-                            className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-gray-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                            className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-3 text-gray-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                         />
                     </div>
                 </div>
-
-                <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-gray-400">
-                        Unidade
-                    </p>
+                <div className="flex-1 lg:pl-8">
                     <div className="mt-3 flex flex-wrap gap-2">
                         {unitOptions.map((unit) => {
                             const optionId = unit.id ?? null;
@@ -288,7 +272,7 @@ export default function CashClosure({
                                     className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                                         isActive
                                             ? 'bg-indigo-600 text-white shadow'
-                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200'
+                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                     }`}
                                 >
                                     {unit.name}
