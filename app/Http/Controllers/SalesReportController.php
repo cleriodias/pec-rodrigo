@@ -132,6 +132,13 @@ class SalesReportController extends Controller
         $closureQuery = CashierClosure::whereIn('user_id', $cashierIds)
             ->whereDate('closed_date', $closureDate);
 
+        if ($unitIds->isNotEmpty()) {
+            $closureQuery->where(function ($query) use ($unitIds) {
+                $query->whereIn('unit_id', $unitIds)
+                    ->orWhereNull('unit_id');
+            });
+        }
+
         if ($filterUnitId) {
             $closureQuery->where(function ($query) use ($filterUnitId) {
                 $query->whereNull('unit_id')
@@ -139,7 +146,12 @@ class SalesReportController extends Controller
             });
         }
 
-        $closures = $closureQuery->get()->keyBy('user_id');
+        $closures = $closureQuery
+            ->get()
+            ->mapWithKeys(function ($closure) {
+                $unitKey = $closure->unit_id ?? 'none';
+                return [$closure->user_id . '-' . $unitKey => $closure];
+            });
 
         $grouped = [];
 
@@ -232,7 +244,8 @@ class SalesReportController extends Controller
                 $cardSystem = $record['totals']['maquina'] ?? 0.0;
                 $systemTotal = $cashSystem + $cardSystem;
 
-                $closure = $closures->get($record['cashier_id']);
+                $closureKey = $record['cashier_id'] . '-' . ($record['unit_id'] ?? 'none');
+                $closure = $closures->get($closureKey);
 
                 if ($closure) {
                     $cashClosure = (float) $closure->cash_amount;
@@ -366,6 +379,8 @@ class SalesReportController extends Controller
                 'quantidade',
                 'valor_total',
                 'data_hora',
+                'id_comanda',
+                'id_lanc',
             ]);
         }])
             ->whereBetween('created_at', [$start, $end])
@@ -382,7 +397,20 @@ class SalesReportController extends Controller
                 'dois_pgto',
                 'created_at',
             ])
-            ->map(function (VendaPagamento $payment) {
+            ->values();
+
+        $lancIds = $payments
+            ->flatMap(fn (VendaPagamento $payment) => $payment->vendas->pluck('id_lanc'))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $lancUsers = $lancIds->isNotEmpty()
+            ? User::whereIn('id', $lancIds)->pluck('name', 'id')
+            : collect();
+
+        $payments = $payments
+            ->map(function (VendaPagamento $payment) use ($lancUsers) {
                 return [
                     'tb4_id' => $payment->tb4_id,
                     'valor_total' => (float) $payment->valor_total,
@@ -392,14 +420,18 @@ class SalesReportController extends Controller
                     'dois_pgto' => $payment->dois_pgto,
                     'created_at' => $payment->created_at->toIso8601String(),
                     'items' => $payment->vendas
-                        ->map(fn ($item) => [
-                            'tb3_id' => $item->tb3_id,
-                            'produto_nome' => $item->produto_nome,
-                            'quantidade' => $item->quantidade,
-                            'valor_unitario' => $item->valor_unitario,
-                            'valor_total' => $item->valor_total,
-                            'data_hora' => optional($item->data_hora)->toIso8601String(),
-                        ])
+                        ->map(function ($item) use ($lancUsers) {
+                            return [
+                                'tb3_id' => $item->tb3_id,
+                                'produto_nome' => $item->produto_nome,
+                                'quantidade' => $item->quantidade,
+                                'valor_unitario' => $item->valor_unitario,
+                                'valor_total' => $item->valor_total,
+                                'data_hora' => optional($item->data_hora)->toIso8601String(),
+                                'id_comanda' => $item->id_comanda,
+                                'lanc_user_name' => $item->id_lanc ? ($lancUsers[$item->id_lanc] ?? null) : null,
+                            ];
+                        })
                         ->values(),
                 ];
             })

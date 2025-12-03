@@ -167,6 +167,11 @@ export default function SalesDetailed({ payments, dateValue }) {
                                 <p className="text-sm text-gray-500 dark:text-gray-300">
                                     {formatDateTime(selectedPayment.created_at)}
                                 </p>
+                                {selectedPayment.items?.[0]?.id_comanda && (
+                                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+                                        Comanda: {selectedPayment.items[0].id_comanda}
+                                    </p>
+                                )}
                             </div>
                             <button
                                 type="button"
@@ -216,6 +221,11 @@ export default function SalesDetailed({ payments, dateValue }) {
                                             <p className="text-xs text-gray-500 dark:text-gray-300">
                                                 {formatCurrency(item.valor_unitario)} cada
                                             </p>
+                                            {item.lanc_user_name && (
+                                                <p className="text-xs font-semibold text-gray-600 dark:text-gray-200">
+                                                    {item.lanc_user_name}
+                                                </p>
+                                            )}
                                         </div>
                                         <p className="font-semibold text-gray-900 dark:text-gray-100">
                                             {formatCurrency(item.valor_total)}
