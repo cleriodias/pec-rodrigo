@@ -40,26 +40,33 @@ class AuthenticatedSessionController extends Controller
 
         $unitId = (int) $request->input('unit_id');
         $user = $request->user();
-        if ((int) $user->funcao === 3) {
+        $funcaoOriginal = $user->funcao_original ?? $user->funcao;
+
+        if ((int) $funcaoOriginal === 3) {
             $closedToday = CashierClosure::where('user_id', $user->id)
                 ->whereDate('closed_date', Carbon::today())
+                ->where(function ($query) use ($unitId) {
+                    $query->whereNull('unit_id')
+                        ->orWhere('unit_id', $unitId);
+                })
                 ->exists();
 
             if ($closedToday) {
                 Auth::logout();
 
                 throw ValidationException::withMessages([
-                    'email' => 'Seu caixa já foi fechado hoje. Novo acesso disponível apenas amanhã.',
+                    'email' => 'Seu caixa ja foi fechado hoje para esta unidade. Novo acesso apenas amanha.',
                 ]);
             }
         }
+
         $hasAccess = $user->units()->where('tb2_unidades.tb2_id', $unitId)->exists() || (int) $user->tb2_id === $unitId;
 
         if (! $hasAccess) {
             Auth::logout();
 
             throw ValidationException::withMessages([
-                'unit_id' => 'Você não tem acesso a esta unidade.',
+                'unit_id' => 'Voce nao tem acesso a esta unidade.',
             ]);
         }
 

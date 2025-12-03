@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\SalaryAdvance;
 use App\Models\User;
+use App\Models\Unidade;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
@@ -17,12 +19,53 @@ class SalaryAdvanceController extends Controller
     {
         $this->ensureManager($request->user());
 
-        $advances = SalaryAdvance::with('user:id,name')
+        $monthParam = $request->query('month');
+        $unitParam = $request->query('unit_id');
+        $filters = [
+            'month' => $monthParam,
+            'unit_id' => $unitParam ? (int) $unitParam : null,
+        ];
+
+        $advancesQuery = SalaryAdvance::with('user:id,name,tb2_id')
+            ->when($filters['month'], function ($query) use ($filters) {
+                try {
+                    [$year, $month] = explode('-', $filters['month']);
+                    $query->whereYear('advance_date', (int) $year)
+                        ->whereMonth('advance_date', (int) $month);
+                } catch (\Throwable $e) {
+                    // ignore invalid format
+                }
+            })
+            ->when($filters['unit_id'], function ($query) use ($filters) {
+                $unitId = (int) $filters['unit_id'];
+                $query->where(function ($sub) use ($unitId) {
+                    $sub->whereHas('user', function ($userQuery) use ($unitId) {
+                        $userQuery->where('tb2_id', $unitId);
+                    })->orWhereHas('user.units', function ($unitQuery) use ($unitId) {
+                        $unitQuery->where('tb2_unidades.tb2_id', $unitId);
+                    });
+                });
+            });
+
+        // se nenhum filtro de mes foi enviado, usar mes corrente
+        if (empty($filters['month'])) {
+            $currentMonth = Carbon::now()->format('Y-m');
+            $filters['month'] = $currentMonth;
+            $advancesQuery->whereYear('advance_date', Carbon::now()->year)
+                ->whereMonth('advance_date', Carbon::now()->month);
+        }
+
+        $advances = $advancesQuery
             ->latest()
-            ->paginate(10);
+            ->paginate(10)
+            ->withQueryString();
+
+        $units = Unidade::orderBy('tb2_nome')->get(['tb2_id', 'tb2_nome']);
 
         return Inertia::render('Finance/SalaryAdvanceIndex', [
             'advances' => $advances,
+            'filters' => $filters,
+            'units' => $units,
         ]);
     }
 

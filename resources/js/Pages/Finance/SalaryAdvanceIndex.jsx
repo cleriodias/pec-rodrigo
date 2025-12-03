@@ -18,7 +18,7 @@ const formatDate = (value) => {
     return date.toLocaleDateString('pt-BR');
 };
 
-export default function SalaryAdvanceIndex({ advances }) {
+export default function SalaryAdvanceIndex({ advances, filters = {}, units = [] }) {
     const handleDelete = (advanceId) => {
         if (!advanceId) {
             return;
@@ -52,13 +52,57 @@ export default function SalaryAdvanceIndex({ advances }) {
             <div className="py-12">
                 <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                     <div className="rounded-2xl bg-white p-6 shadow dark:bg-gray-800">
-                        <div className="mb-4 flex justify-end">
-                            <a
-                                href={route('salary-advances.create')}
-                                className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-indigo-700"
-                            >
-                                Novo adiantamento
-                            </a>
+                        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                            <div className="flex flex-wrap gap-3">
+                                <div>
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                        Mês/Ano&nbsp;
+                                    </label>
+                                    <input
+                                        type="month"
+                                        value={filters.month ?? ''}
+                                        onChange={(e) =>
+                                            router.get(
+                                                route('salary-advances.index'),
+                                                { ...filters, month: e.target.value || null },
+                                                { preserveState: true, preserveScroll: true, replace: true },
+                                            )
+                                        }
+                                        className="mt-1 w-52 rounded-xl border border-gray-300 px-3 py-2 text-gray-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                        Unidade&nbsp;
+                                    </label>
+                                    <select
+                                        value={filters.unit_id ?? ''}
+                                        onChange={(e) =>
+                                            router.get(
+                                                route('salary-advances.index'),
+                                                { ...filters, unit_id: e.target.value || null },
+                                                { preserveState: true, preserveScroll: true, replace: true },
+                                            )
+                                        }
+                                        className="mt-1 w-48 rounded-xl border border-gray-300 px-3 py-2 text-gray-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                                    >
+                                        <option value="">Todas</option>
+                                        {units.map((unit) => (
+                                            <option key={unit.tb2_id} value={unit.tb2_id}>
+                                                {unit.tb2_nome}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="flex justify-end">
+                                <a
+                                    href={route('salary-advances.create')}
+                                    className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-indigo-700"
+                                >
+                                    Novo adiantamento
+                                </a>
+                            </div>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-700">
