@@ -23,9 +23,7 @@ class UnitSwitchController extends Controller
             ])
             ->values();
 
-        return Inertia::render('Reports/SwitchUnit', [
-            'units' => $units,
-        ]);
+        return Inertia::render('Reports/SwitchUnit', ['units' => $units,]);
     }
 
     public function update(Request $request): RedirectResponse
@@ -50,6 +48,7 @@ class UnitSwitchController extends Controller
         ]);
 
         return redirect()->route('dashboard')->with('success', 'Unidade alterada com sucesso!');
+
     }
 
     private function allowedUnits($user)

@@ -17,7 +17,7 @@ class UserSeeder extends Seeder
             [
                 'name' => 'Clerio',
                 'email' => 'cleriodias@gmail.com',
-                'password' => Hash::make('0258'),
+                'password' => Hash::make('0800'),
                 'funcao' => 0,
                 'funcao_original' => 0,
                 'hr_ini' => '00:00:00',
