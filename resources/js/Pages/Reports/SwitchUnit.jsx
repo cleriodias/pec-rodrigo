@@ -23,8 +23,7 @@ export default function SwitchUnit({ units }) {
                 Trocar unidade
             </h2>
             <p className="text-sm text-gray-500 dark:text-gray-300">
-                Escolha uma unidade para mudar o contexto atual. Disponível apenas para usuários
-                Master.
+                Disponível apenas para usuários Master.
             </p>
         </div>
     );
