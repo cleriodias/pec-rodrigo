@@ -106,7 +106,7 @@ export default function Login({ status, canResetPassword, units = [] }) {
                         Escolha a unidade
                     </p>
                     {units.length ? (
-                        <div className="mt-3 grid gap-3 sm:grid-cols-4">
+                        <div className="mt-3 grid gap-3 sm:grid-cols-3">
                             {units.map((unit) => (
                                 <button
                                     type="button"
