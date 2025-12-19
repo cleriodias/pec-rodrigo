@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Http\Controllers;
+
 use App\Models\CashierClosure;
 use App\Models\User;
 use Carbon\Carbon;
