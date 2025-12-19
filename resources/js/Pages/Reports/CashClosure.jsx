@@ -315,7 +315,7 @@ export default function CashClosure({
     const tableSection = (
         <div className="rounded-2xl bg-white p-6 shadow dark:bg-gray-800">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                Totais por caixa ({selectedUnit?.name ?? 'Todas as unidades'}) — {dateValue || '---'}
+                Totais por caixa ({selectedUnit?.name ?? 'Todas as unidades'}) - Data do fechamento: {dateValue || '---'}
             </h3>
             <div className="mt-4 overflow-x-auto">
                 {records.length === 0 ? (

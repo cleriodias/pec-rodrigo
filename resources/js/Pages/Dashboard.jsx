@@ -655,6 +655,10 @@ export default function Dashboard() {
 
         if (selectedComandaCode !== null) {
             payload.comanda_codigo = selectedComandaCode;
+            payload.items = items.map((item) => ({
+                product_id: item.id,
+                quantity: item.quantity,
+            }));
         } else {
             payload.items = items.map((item) => ({
                 product_id: item.id,

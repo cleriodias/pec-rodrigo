@@ -123,6 +123,7 @@ class SaleController extends Controller
         $itemsPayload = [];
         $requiresVrEligible = $finalPaymentType === 'refeicao';
         $comandaCodigo = $validated['comanda_codigo'] ?? null;
+        $extraItems = [];
 
         if ($comandaCodigo) {
             $comandaItems = Venda::query()
@@ -141,7 +142,7 @@ class SaleController extends Controller
                 ]);
             }
 
-            $itemsPayload = $comandaItems
+            $comandaPayload = $comandaItems
                 ->groupBy('tb1_id')
                 ->map(function ($group) {
                     $first = $group->first();
@@ -156,8 +157,70 @@ class SaleController extends Controller
                         'subtotal' => $quantity * $unitPrice,
                     ];
                 })
-                ->values()
-                ->all();
+                ->keyBy('product_id');
+
+            $finalItemsMap = $comandaPayload->map(fn ($item) => $item)->all();
+
+            if (! empty($groupedItems)) {
+                $products = Produto::query()
+                    ->whereIn('tb1_id', array_keys($groupedItems))
+                    ->get(['tb1_id', 'tb1_nome', 'tb1_vlr_venda', 'tb1_vr_credit'])
+                    ->keyBy('tb1_id');
+
+                foreach ($groupedItems as $productId => $requestedQuantity) {
+                    $requestedQuantity = (int) $requestedQuantity;
+                    $existingItem = $comandaPayload->get($productId);
+                    $existingQuantity = $existingItem ? (int) $existingItem['quantity'] : 0;
+
+                    if ($requestedQuantity < $existingQuantity) {
+                        throw ValidationException::withMessages([
+                            'items' => 'Nao e possivel reduzir itens da comanda no fechamento.',
+                        ]);
+                    }
+
+                    if ($existingItem) {
+                        if ($requestedQuantity > $existingQuantity) {
+                            $extraQuantity = $requestedQuantity - $existingQuantity;
+                            $unitPrice = (float) $existingItem['unit_price'];
+                            $extraItems[] = [
+                                'product_id' => $existingItem['product_id'],
+                                'product_name' => $existingItem['product_name'],
+                                'unit_price' => $unitPrice,
+                                'quantity' => $extraQuantity,
+                                'subtotal' => round($unitPrice * $extraQuantity, 2),
+                            ];
+
+                            $finalItemsMap[$productId]['quantity'] = $requestedQuantity;
+                            $finalItemsMap[$productId]['subtotal'] = round($unitPrice * $requestedQuantity, 2);
+                        }
+                    } else {
+                        $product = $products->get($productId);
+
+                        if (! $product) {
+                            continue;
+                        }
+
+                        $unitPrice = (float) $product->tb1_vlr_venda;
+                        $total = round($unitPrice * $requestedQuantity, 2);
+                        $finalItemsMap[$productId] = [
+                            'product_id' => $product->tb1_id,
+                            'product_name' => $product->tb1_nome,
+                            'unit_price' => $unitPrice,
+                            'quantity' => $requestedQuantity,
+                            'subtotal' => $total,
+                        ];
+                        $extraItems[] = [
+                            'product_id' => $product->tb1_id,
+                            'product_name' => $product->tb1_nome,
+                            'unit_price' => $unitPrice,
+                            'quantity' => $requestedQuantity,
+                            'subtotal' => $total,
+                        ];
+                    }
+                }
+            }
+
+            $itemsPayload = array_values($finalItemsMap);
 
             if ($requiresVrEligible) {
                 $eligibility = Produto::query()
@@ -270,6 +333,26 @@ class SaleController extends Controller
                     'status' => 1,
                     'data_hora' => $dateTime,
                 ]);
+
+            foreach ($extraItems as $item) {
+                Venda::create([
+                    'tb4_id' => $payment->tb4_id,
+                    'tb1_id' => $item['product_id'],
+                    'id_comanda' => $comandaCodigo,
+                    'produto_nome' => $item['product_name'],
+                    'valor_unitario' => $item['unit_price'],
+                    'quantidade' => $item['quantity'],
+                    'valor_total' => $item['subtotal'],
+                    'data_hora' => $dateTime,
+                    'id_user_caixa' => $user->id,
+                    'id_user_vale' => $valeUserId,
+                    'id_lanc' => $user->id,
+                    'id_unidade' => $unit['id'] ?? $user->tb2_id,
+                    'tipo_pago' => $finalPaymentType,
+                    'status_pago' => $isPaid,
+                    'status' => 1,
+                ]);
+            }
         } else {
             foreach ($itemsPayload as $item) {
                 Venda::create([
