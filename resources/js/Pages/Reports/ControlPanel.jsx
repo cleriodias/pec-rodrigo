@@ -50,6 +50,7 @@ export default function ControlPanel({
         total_sales: metrics?.total_sales ?? 0,
         total_vale: metrics?.total_vale ?? 0,
         total_refeicao: metrics?.total_refeicao ?? 0,
+        supplier_expenses: metrics?.supplier_expenses ?? 0,
         net_sales: metrics?.net_sales ?? 0,
         total_advances: metrics?.total_advances ?? 0,
         total_payroll: metrics?.total_payroll ?? 0,
@@ -202,9 +203,15 @@ export default function ControlPanel({
                                 accent="#d97706"
                             />
                             <MetricCard
+                                title="Gastos fornecedor"
+                                value={safeMetrics.supplier_expenses}
+                                description="Total gasto com fornecedores no periodo"
+                                accent="#ef4444"
+                            />
+                            <MetricCard
                                 title="Faturamento liquido"
                                 value={safeMetrics.net_sales}
-                                description="Bruto menos vales e refeicao"
+                                description="Bruto menos vales, refeicao e gastos fornecedor"
                                 accent="#16a34a"
                             />
                         </div>

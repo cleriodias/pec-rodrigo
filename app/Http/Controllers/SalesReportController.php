@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CashierClosure;
+use App\Models\Expense;
 use App\Models\ProductDiscard;
 use App\Models\SalaryAdvance;
 use App\Models\Venda;
@@ -480,7 +481,14 @@ class SalesReportController extends Controller
         $valeTotals = $this->valeBreakdown($start, $end, $filterUnitId);
         $standardVale = $valeTotals['vale'];
         $mealVale = $valeTotals['refeicao'];
-        $netSales = max(0, $totalSales - $standardVale - $mealVale);
+        $supplierExpensesQuery = Expense::whereBetween('expense_date', [$start->toDateString(), $end->toDateString()]);
+        if ($filterUnitId !== null) {
+            $supplierExpensesQuery->where('unit_id', $filterUnitId);
+        } else {
+            $supplierExpensesQuery->whereNotNull('unit_id');
+        }
+        $supplierExpenses = (float) $supplierExpensesQuery->sum('amount');
+        $netSales = max(0, $totalSales - $standardVale - $mealVale - $supplierExpenses);
 
         $totalPayrollGlobal = (float) User::sum('salario');
         $totalAdvancesGlobal = (float) SalaryAdvance::whereBetween('advance_date', [$start->toDateString(), $end->toDateString()])
@@ -531,6 +539,7 @@ class SalesReportController extends Controller
                 'total_sales' => round($totalSales, 2),
                 'total_vale' => round($standardVale, 2),
                 'total_refeicao' => round($mealVale, 2),
+                'supplier_expenses' => round($supplierExpenses, 2),
                 'net_sales' => round($netSales, 2),
                 'total_advances' => round($totalAdvancesGlobal, 2),
                 'total_payroll' => round($totalPayrollGlobal, 2),

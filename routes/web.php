@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CashierClosureController;
+use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductDiscardController;
 use App\Http\Controllers\ProfileController;
@@ -9,6 +10,7 @@ use App\Http\Controllers\RoleSwitchController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\SalesReportController;
 use App\Http\Controllers\SalaryAdvanceController;
+use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\UnitController;
 use App\Http\Controllers\UnitSwitchController;
 use App\Http\Controllers\UserController;
@@ -58,6 +60,10 @@ Route::middleware('auth')->group(function () {
 
         return Inertia::render('Settings/MenuOrder');
     })->name('settings.menu-order');
+    Route::get('/settings/suppliers', [SupplierController::class, 'index'])
+        ->name('settings.suppliers');
+    Route::post('/settings/suppliers', [SupplierController::class, 'store'])
+        ->name('settings.suppliers.store');
 
     Route::get('/users', [UserController::class, 'index'])->name('users.index');
     Route::get('/show-user/{user}', [UserController::class, 'show'])->name('users.show');
@@ -101,6 +107,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/salary-advances/create', [SalaryAdvanceController::class, 'create'])->name('salary-advances.create');
     Route::post('/salary-advances', [SalaryAdvanceController::class, 'store'])->name('salary-advances.store');
     Route::delete('/salary-advances/{salaryAdvance}', [SalaryAdvanceController::class, 'destroy'])->name('salary-advances.destroy');
+    Route::get('/expenses', [ExpenseController::class, 'index'])->name('expenses.index');
+    Route::post('/expenses', [ExpenseController::class, 'store'])->name('expenses.store');
+    Route::delete('/expenses/{expense}', [ExpenseController::class, 'destroy'])->name('expenses.destroy');
     Route::get('/cashier/close', [CashierClosureController::class, 'index'])->name('cashier.close');
     Route::post('/cashier/close', [CashierClosureController::class, 'store'])->name('cashier.close.store');
 

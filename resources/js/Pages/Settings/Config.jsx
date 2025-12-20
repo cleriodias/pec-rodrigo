@@ -17,6 +17,16 @@ export default function Config({ auth }) {
             icon: 'bi-list-ol',
             href: route('settings.menu-order'),
         },
+        {
+            label: 'Fornecedores',
+            icon: 'bi-truck',
+            href: route('settings.suppliers'),
+        },
+        {
+            label: 'Cadastro de Gastos',
+            icon: 'bi-receipt',
+            href: route('expenses.index'),
+        },
     ];
 
     return (

@@ -86,6 +86,7 @@ export default function AuthenticatedLayout({ header, children }) {
             'switch_unit',
             'switch_role',
             'salary_advances',
+            'expenses',
             'settings',
             'lanchonete_terminal',
         ]);
@@ -280,6 +281,15 @@ export default function AuthenticatedLayout({ header, children }) {
                 node: (
                     <Dropdown.Link href={route('salary-advances.index')}>
                         <MenuLabel icon="bi bi-wallet2" text="Adiantamento" />
+                    </Dropdown.Link>
+                ),
+            },
+            {
+                key: 'expenses',
+                visible: canSeeReports && hasMenuAccess('expenses'),
+                node: (
+                    <Dropdown.Link href={route('expenses.index')}>
+                        <MenuLabel icon="bi bi-receipt" text="Gastos" />
                     </Dropdown.Link>
                 ),
             },
