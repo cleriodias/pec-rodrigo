@@ -8,9 +8,11 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\LanchoneteTerminalController;
 use App\Http\Controllers\RoleSwitchController;
 use App\Http\Controllers\SaleController;
+use App\Http\Controllers\SalesDisputeController;
 use App\Http\Controllers\SalesReportController;
 use App\Http\Controllers\SalaryAdvanceController;
 use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\SupplierPortalController;
 use App\Http\Controllers\UnitController;
 use App\Http\Controllers\UnitSwitchController;
 use App\Http\Controllers\UserController;
@@ -31,6 +33,13 @@ Route::get('/', function () {
 Route::get('/dashboard', function () {
     return Inertia::render('Dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
+
+Route::get('/supplier/access', [SupplierPortalController::class, 'access'])->name('supplier.access');
+Route::post('/supplier/access', [SupplierPortalController::class, 'authenticate'])->name('supplier.authenticate');
+Route::post('/supplier/logout', [SupplierPortalController::class, 'logout'])->name('supplier.logout');
+Route::get('/supplier/disputes', [SupplierPortalController::class, 'disputes'])->name('supplier.disputes');
+Route::put('/supplier/disputes/{bid}', [SupplierPortalController::class, 'updateBid'])->name('supplier.disputes.update');
+Route::post('/supplier/disputes/{bid}/invoice', [SupplierPortalController::class, 'invoice'])->name('supplier.disputes.invoice');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -64,6 +73,18 @@ Route::middleware('auth')->group(function () {
         ->name('settings.suppliers');
     Route::post('/settings/suppliers', [SupplierController::class, 'store'])
         ->name('settings.suppliers.store');
+    Route::get('/settings/sales-disputes', [SalesDisputeController::class, 'index'])
+        ->name('settings.sales-disputes');
+    Route::post('/settings/sales-disputes', [SalesDisputeController::class, 'store'])
+        ->name('settings.sales-disputes.store');
+    Route::delete('/settings/sales-disputes/{salesDispute}', [SalesDisputeController::class, 'destroy'])
+        ->name('settings.sales-disputes.destroy');
+    Route::delete('/settings/sales-disputes/bids/{bid}', [SalesDisputeController::class, 'destroyBid'])
+        ->name('settings.sales-disputes.bids.destroy');
+    Route::put('/settings/sales-disputes/bids/{bid}/approve', [SalesDisputeController::class, 'approveBid'])
+        ->name('settings.sales-disputes.bids.approve');
+    Route::get('/settings/sales-disputes/bids/{bid}/invoice', [SalesDisputeController::class, 'downloadInvoice'])
+        ->name('settings.sales-disputes.bids.invoice');
 
     Route::get('/users', [UserController::class, 'index'])->name('users.index');
     Route::get('/show-user/{user}', [UserController::class, 'show'])->name('users.show');

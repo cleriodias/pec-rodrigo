@@ -27,6 +27,11 @@ export default function Config({ auth }) {
             icon: 'bi-receipt',
             href: route('expenses.index'),
         },
+        {
+            label: 'Disputa de Vendas',
+            icon: 'bi-hammer',
+            href: route('settings.sales-disputes'),
+        },
     ];
 
     return (
