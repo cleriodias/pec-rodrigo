@@ -14,6 +14,32 @@ const MenuLabel = ({ icon, text }) => (
 
 const ACCESS_STORAGE_KEY = 'menuAccessConfig';
 const ORDER_STORAGE_KEY = 'menuOrderConfig';
+const DEFAULT_MENU_KEYS = [
+    'dashboard',
+    'users',
+    'units',
+    'products',
+    'cashier_close',
+    'reports_control',
+    'reports_cash',
+    'reports_sales_today',
+    'reports_sales_period',
+    'reports_sales_detailed',
+    'reports_lanchonete',
+    'reports_vale',
+    'reports_refeicao',
+    'reports_adiantamentos',
+    'reports_fornecedores',
+    'reports_gastos',
+    'reports_descarte',
+    'discard',
+    'switch_unit',
+    'switch_role',
+    'salary_advances',
+    'expenses',
+    'settings',
+    'lanchonete_terminal',
+];
 
 export default function AuthenticatedLayout({ header, children }) {
     const pageProps = usePage().props;
@@ -54,7 +80,33 @@ export default function AuthenticatedLayout({ header, children }) {
         try {
             const raw = window.localStorage.getItem(ACCESS_STORAGE_KEY);
             if (raw) {
-                setMenuAccessConfig(JSON.parse(raw));
+                const parsed = JSON.parse(raw);
+                const allKeys = new Set();
+                Object.values(parsed ?? {}).forEach((value) => {
+                    if (Array.isArray(value)) {
+                        value.forEach((key) => allKeys.add(key));
+                    }
+                });
+                const missingKeys = DEFAULT_MENU_KEYS.filter((key) => !allKeys.has(key));
+                if (missingKeys.length > 0) {
+                    const merged = { ...parsed };
+                    Object.entries(merged).forEach(([role, value]) => {
+                        if (!Array.isArray(value)) {
+                            return;
+                        }
+                        const next = [...value];
+                        missingKeys.forEach((key) => {
+                            if (!next.includes(key)) {
+                                next.push(key);
+                            }
+                        });
+                        merged[role] = next;
+                    });
+                    window.localStorage.setItem(ACCESS_STORAGE_KEY, JSON.stringify(merged));
+                    setMenuAccessConfig(merged);
+                } else {
+                    setMenuAccessConfig(parsed);
+                }
             }
         } catch (err) {
             console.error('Failed to load menuAccessConfig', err);
@@ -70,26 +122,7 @@ export default function AuthenticatedLayout({ header, children }) {
     }, []);
 
     const hasMenuAccess = useMemo(() => {
-        const defaultAllow = new Set([
-            'dashboard',
-            'users',
-            'units',
-            'products',
-            'cashier_close',
-            'reports_control',
-            'reports_cash',
-            'reports_sales_today',
-            'reports_sales_period',
-            'reports_sales_detailed',
-            'reports_lanchonete',
-            'discard',
-            'switch_unit',
-            'switch_role',
-            'salary_advances',
-            'expenses',
-            'settings',
-            'lanchonete_terminal',
-        ]);
+        const defaultAllow = new Set(DEFAULT_MENU_KEYS);
 
         return (key) => {
             if (isMasterOriginal) {
@@ -147,6 +180,18 @@ export default function AuthenticatedLayout({ header, children }) {
                         active={route().current('products.*')}
                     >
                         <MenuLabel icon="bi bi-box-seam" text="Produtos" />
+                    </NavLink>
+                ),
+            },
+            {
+                key: 'expenses',
+                visible: canSeeReports && hasMenuAccess('expenses'),
+                node: (
+                    <NavLink
+                        href={route('expenses.index')}
+                        active={route().current('expenses.*')}
+                    >
+                        <MenuLabel icon="bi bi-receipt" text="Gastos" />
                     </NavLink>
                 ),
             },
@@ -231,47 +276,20 @@ export default function AuthenticatedLayout({ header, children }) {
                 ),
             },
             {
-                key: 'users',
-                visible: canSeeUsers && hasMenuAccess('users'),
+                key: 'reports_lanchonete',
+                visible: canSeeReports && hasMenuAccess('reports_lanchonete'),
                 node: (
-                    <Dropdown.Link href={route('users.index')}>
-                        <MenuLabel icon="bi bi-people-fill" text="Usuários" />
-                    </Dropdown.Link>
-                ),
-            },
-            {
-                key: 'units',
-                visible: canSeeUnits && hasMenuAccess('units'),
-                node: (
-                    <Dropdown.Link href={route('units.index')}>
-                        <MenuLabel icon="bi bi-building" text="Unidades" />
+                    <Dropdown.Link href={route('reports.lanchonete')}>
+                        <MenuLabel icon="bi bi-cup-hot" text="Relatório Lanchonete" />
                     </Dropdown.Link>
                 ),
             },
             {
                 key: 'settings',
-                visible: isMaster && hasMenuAccess('settings'),
+                visible: isMasterOriginal && hasMenuAccess('settings'),
                 node: (
                     <Dropdown.Link href={route('settings.config')}>
-                        <MenuLabel icon="bi bi-gear" text="Configuração" />
-                    </Dropdown.Link>
-                ),
-            },
-            {
-                key: 'switch_unit',
-                visible: canSwitchUnit && hasMenuAccess('switch_unit'),
-                node: (
-                    <Dropdown.Link href={route('reports.switch-unit')}>
-                        <MenuLabel icon="bi bi-arrow-left-right" text="Trocar unidade" />
-                    </Dropdown.Link>
-                ),
-            },
-            {
-                key: 'switch_role',
-                visible: canSwitchRole && hasMenuAccess('switch_role'),
-                node: (
-                    <Dropdown.Link href={route('reports.switch-role')}>
-                        <MenuLabel icon="bi bi-people" text="Trocar funcao" />
+                        <MenuLabel icon="bi bi-gear" text="Farrammentas" />
                     </Dropdown.Link>
                 ),
             },
@@ -281,15 +299,6 @@ export default function AuthenticatedLayout({ header, children }) {
                 node: (
                     <Dropdown.Link href={route('salary-advances.index')}>
                         <MenuLabel icon="bi bi-wallet2" text="Adiantamento" />
-                    </Dropdown.Link>
-                ),
-            },
-            {
-                key: 'expenses',
-                visible: canSeeReports && hasMenuAccess('expenses'),
-                node: (
-                    <Dropdown.Link href={route('expenses.index')}>
-                        <MenuLabel icon="bi bi-receipt" text="Gastos" />
                     </Dropdown.Link>
                 ),
             },

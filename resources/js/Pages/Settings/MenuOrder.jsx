@@ -7,6 +7,8 @@ const MENU_KEYS = [
     'users',
     'units',
     'products',
+    'salary_advances',
+    'expenses',
     'cashier_close',
     'reports_control',
     'reports_cash',
@@ -14,8 +16,12 @@ const MENU_KEYS = [
     'reports_sales_period',
     'reports_sales_detailed',
     'reports_lanchonete',
-    'salary_advances',
-    'expenses',
+    'reports_vale',
+    'reports_refeicao',
+    'reports_adiantamentos',
+    'reports_fornecedores',
+    'reports_gastos',
+    'reports_descarte',
     'discard',
     'switch_unit',
     'switch_role',
@@ -25,22 +31,28 @@ const MENU_KEYS = [
 
 const LABELS = {
     dashboard: 'Dashboard',
-    users: 'Usuários',
+    users: 'Usuarios',
     units: 'Unidades',
     products: 'Produtos',
+    expenses: 'Gastos',
     cashier_close: 'Fechar Caixa',
     reports_control: 'Controle Financeiro',
     reports_cash: 'Fechamento de Caixa',
     reports_sales_today: 'Vendas Hoje',
-    reports_sales_period: 'Vendas Período',
-    reports_sales_detailed: 'Relatório Detalhado',
-    reports_lanchonete: 'Relatório Lanchonete',
+    reports_sales_period: 'Vendas Periodo',
+    reports_sales_detailed: 'Relatorio Detalhado',
+    reports_lanchonete: 'Relatorio Lanchonete',
+    reports_vale: 'Relatorio Vales',
+    reports_refeicao: 'Relatorio Refeicao',
+    reports_adiantamentos: 'Relatorio Adiantamentos',
+    reports_fornecedores: 'Relatorio Fornecedores',
+    reports_gastos: 'Relatorio Gastos',
+    reports_descarte: 'Relatorio Descarte',
     salary_advances: 'Adiantamento',
-    expenses: 'Gastos',
     discard: 'Descarte',
     switch_unit: 'Trocar Unidade',
-    switch_role: 'Trocar Função',
-    settings: 'Configurações',
+    switch_role: 'Trocar Funcao',
+    settings: 'Farrammentas',
     lanchonete_terminal: 'Terminal Lanchonete',
 };
 
@@ -59,7 +71,12 @@ export default function MenuOrder() {
             try {
                 const parsed = JSON.parse(raw);
                 if (Array.isArray(parsed) && parsed.length > 0) {
-                    setOrder(parsed);
+                    const filtered = parsed.filter((key) => MENU_KEYS.includes(key));
+                    const merged = [
+                        ...filtered,
+                        ...MENU_KEYS.filter((key) => !filtered.includes(key)),
+                    ];
+                    setOrder(merged);
                 }
             } catch (err) {
                 console.error('Failed to parse menuOrderConfig', err);
@@ -97,7 +114,7 @@ export default function MenuOrder() {
                         Organizar Menu
                     </h2>
                     <p className="text-sm text-gray-500 dark:text-gray-300">
-                        Arraste ou use as setas para definir a ordem dos itens. Mudanças são salvas no navegador.
+                        Arraste ou use as setas para definir a ordem dos itens. Mudancas sao salvas no navegador.
                     </p>
                 </div>
             }
@@ -120,7 +137,7 @@ export default function MenuOrder() {
                                             className="rounded-full border border-gray-300 px-2 py-1 text-xs font-semibold text-gray-600 transition hover:border-indigo-400 hover:text-indigo-600 disabled:opacity-40 dark:border-gray-600 dark:text-gray-200"
                                             disabled={index === 0}
                                         >
-                                            ↑
+                                            ^
                                         </button>
                                         <button
                                             type="button"
@@ -128,7 +145,7 @@ export default function MenuOrder() {
                                             className="rounded-full border border-gray-300 px-2 py-1 text-xs font-semibold text-gray-600 transition hover:border-indigo-400 hover:text-indigo-600 disabled:opacity-40 dark:border-gray-600 dark:text-gray-200"
                                             disabled={index === order.length - 1}
                                         >
-                                            ↓
+                                            v
                                         </button>
                                     </div>
                                 </div>
@@ -136,7 +153,7 @@ export default function MenuOrder() {
                         </div>
                     </div>
                     <div className="rounded-2xl border border-gray-100 bg-white p-4 text-xs text-gray-500 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
-                        A ordem aplicada afeta o menu superior e o dropdown (após atualizar a página).
+                        A ordem aplicada afeta o menu superior e o dropdown (apos atualizar a pagina).
                     </div>
                 </div>
             </div>

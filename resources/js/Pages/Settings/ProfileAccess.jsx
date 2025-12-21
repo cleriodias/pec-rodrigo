@@ -4,22 +4,28 @@ import { useEffect, useState } from 'react';
 
 const MENU_OPTIONS = [
     { key: 'dashboard', label: 'Dashboard' },
-    { key: 'users', label: 'Usuários' },
+    { key: 'users', label: 'Usuarios' },
     { key: 'units', label: 'Unidades' },
     { key: 'products', label: 'Produtos' },
     { key: 'cashier_close', label: 'Fechar Caixa' },
-    { key: 'reports_sales_today', label: 'Vendas Hoje' },
-    { key: 'reports_sales_period', label: 'Vendas Período' },
-    { key: 'reports_sales_detailed', label: 'Relatório Detalhado' },
     { key: 'reports_control', label: 'Controle Financeiro' },
     { key: 'reports_cash', label: 'Fechamento de Caixa' },
-    { key: 'reports_lanchonete', label: 'Relatório Lanchonete' },
+    { key: 'reports_sales_today', label: 'Vendas Hoje' },
+    { key: 'reports_sales_period', label: 'Vendas Periodo' },
+    { key: 'reports_sales_detailed', label: 'Relatorio Detalhado' },
+    { key: 'reports_lanchonete', label: 'Relatorio Lanchonete' },
+    { key: 'reports_vale', label: 'Relatorio Vales' },
+    { key: 'reports_refeicao', label: 'Relatorio Refeicao' },
+    { key: 'reports_adiantamentos', label: 'Relatorio Adiantamentos' },
+    { key: 'reports_fornecedores', label: 'Relatorio Fornecedores' },
+    { key: 'reports_gastos', label: 'Relatorio Gastos' },
+    { key: 'reports_descarte', label: 'Relatorio Descarte' },
     { key: 'salary_advances', label: 'Adiantamento' },
     { key: 'expenses', label: 'Gastos' },
     { key: 'discard', label: 'Descarte' },
     { key: 'switch_unit', label: 'Trocar Unidade' },
-    { key: 'switch_role', label: 'Trocar Função' },
-    { key: 'settings', label: 'Configurações' },
+    { key: 'switch_role', label: 'Trocar Funcao' },
+    { key: 'settings', label: 'Farrammentas' },
     { key: 'lanchonete_terminal', label: 'Terminal Lanchonete' },
 ];
 
@@ -29,7 +35,7 @@ const ROLES = [
     { id: 2, label: 'SUB-GERENTE' },
     { id: 3, label: 'CAIXA' },
     { id: 4, label: 'LANCHONETE' },
-    { id: 5, label: 'FUNCIONÁRIO' },
+    { id: 5, label: 'FUNCIONARIO' },
     { id: 6, label: 'CLIENTE' },
 ];
 
@@ -79,7 +85,7 @@ export default function ProfileAccess() {
             user={auth.user}
             header={
                 <div className="flex flex-col gap-1">
-                    <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100">Configurações de Acesso</h2>
+                    <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100">Farrammentas de Acesso</h2>
                     <p className="text-sm text-gray-500 dark:text-gray-300">
                         Clique no perfil e habilite/desabilite itens do menu em tempo real.
                     </p>
@@ -145,7 +151,7 @@ export default function ProfileAccess() {
                         </div>
                     </div>
                     <div className="rounded-2xl border border-gray-100 bg-white p-4 text-xs text-gray-500 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
-                        As alterações são salvas no navegador (localStorage) e aplicadas imediatamente ao menu.
+                        As alteracoes sao salvas no navegador (localStorage) e aplicadas imediatamente ao menu.
                     </div>
                 </div>
             </div>

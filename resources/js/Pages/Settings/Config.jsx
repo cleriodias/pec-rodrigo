@@ -5,10 +5,38 @@ export default function Config({ auth }) {
     const options = [
         { label: 'Acesso', icon: 'bi-shield-lock' },
         { label: 'Perfil', icon: 'bi-person-circle' },
-        { label: 'Menu', icon: 'bi-ui-checks' },
-        { label: 'Relatórios', icon: 'bi-clipboard-data' },
         {
-            label: 'Permissões de Menu',
+            label: 'Menu',
+            icon: 'bi-ui-checks',
+            href: route('settings.menu'),
+        },
+        {
+            label: 'Relatorios',
+            icon: 'bi-clipboard-data',
+            href: route('reports.index'),
+        },
+        {
+            label: 'Usuarios',
+            icon: 'bi-people-fill',
+            href: route('users.index'),
+        },
+        {
+            label: 'Unidades',
+            icon: 'bi-building',
+            href: route('units.index'),
+        },
+        {
+            label: 'Trocar unidade',
+            icon: 'bi-arrow-left-right',
+            href: route('reports.switch-unit'),
+        },
+        {
+            label: 'Trocar funcao',
+            icon: 'bi-people',
+            href: route('reports.switch-role'),
+        },
+        {
+            label: 'Permissoes de Menu',
             icon: 'bi-gear',
             href: route('settings.profile-access'),
         },
@@ -40,15 +68,15 @@ export default function Config({ auth }) {
             header={
                 <div className="flex flex-col gap-1">
                     <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100">
-                        Configurações
+                        Farrammentas
                     </h2>
                     <p className="text-sm text-gray-500 dark:text-gray-300">
-                        Gerencie acesso, perfil, menus e relatórios.
+                        Gerencie acesso, perfil, menus e relatorios.
                     </p>
                 </div>
             }
         >
-            <Head title="Configurações" />
+            <Head title="Farrammentas" />
             <div className="py-8">
                 <div className="mx-auto max-w-4xl space-y-6 px-4 sm:px-6 lg:px-8">
                     <div className="grid gap-4 sm:grid-cols-2">

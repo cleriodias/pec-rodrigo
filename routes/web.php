@@ -47,15 +47,26 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
     Route::get('/settings', function () {
         $user = auth()->user();
-        if (! $user || (int) $user->funcao !== 0) {
+        $roleOriginal = (int) ($user?->funcao_original ?? $user?->funcao);
+        if (! $user || $roleOriginal !== 0) {
             abort(403);
         }
 
         return Inertia::render('Settings/Config');
     })->name('settings.config');
+    Route::get('/settings/menu', function () {
+        $user = auth()->user();
+        $roleOriginal = (int) ($user?->funcao_original ?? $user?->funcao);
+        if (! $user || $roleOriginal !== 0) {
+            abort(403);
+        }
+
+        return Inertia::render('Settings/Menu');
+    })->name('settings.menu');
     Route::get('/settings/profile-access', function () {
         $user = auth()->user();
-        if (! $user || (int) $user->funcao !== 0) {
+        $roleOriginal = (int) ($user?->funcao_original ?? $user?->funcao);
+        if (! $user || $roleOriginal !== 0) {
             abort(403);
         }
 
@@ -63,7 +74,8 @@ Route::middleware('auth')->group(function () {
     })->name('settings.profile-access');
     Route::get('/settings/menu-order', function () {
         $user = auth()->user();
-        if (! $user || (int) $user->funcao !== 0) {
+        $roleOriginal = (int) ($user?->funcao_original ?? $user?->funcao);
+        if (! $user || $roleOriginal !== 0) {
             abort(403);
         }
 
@@ -115,9 +127,17 @@ Route::middleware('auth')->group(function () {
     Route::post('/sales', [SaleController::class, 'store'])->name('sales.store');
     Route::post('/sales/comandas/{codigo}/items', [SaleController::class, 'addComandaItem'])->name('sales.comandas.add-item');
     Route::put('/sales/comandas/{codigo}/items/{productId}', [SaleController::class, 'updateComandaItem'])->name('sales.comandas.update-item');
+    Route::get('/reports', [SalesReportController::class, 'index'])->name('reports.index');
     Route::get('/reports/sales-today', [SalesReportController::class, 'today'])->name('reports.sales.today');
     Route::get('/reports/sales-period', [SalesReportController::class, 'period'])->name('reports.sales.period');
     Route::get('/reports/sales-detailed', [SalesReportController::class, 'detailed'])->name('reports.sales.detailed');
+    Route::get('/reports/lanchonete', [SalesReportController::class, 'lanchonete'])->name('reports.lanchonete');
+    Route::get('/reports/vale', [SalesReportController::class, 'vale'])->name('reports.vale');
+    Route::get('/reports/refeicao', [SalesReportController::class, 'refeicao'])->name('reports.refeicao');
+    Route::get('/reports/adiantamentos', [SalesReportController::class, 'adiantamentos'])->name('reports.adiantamentos');
+    Route::get('/reports/fornecedores', [SalesReportController::class, 'fornecedores'])->name('reports.fornecedores');
+    Route::get('/reports/gastos', [SalesReportController::class, 'gastos'])->name('reports.gastos');
+    Route::get('/reports/descarte', [SalesReportController::class, 'descarte'])->name('reports.descarte');
     Route::get('/reports/cash-closure', [SalesReportController::class, 'cashClosure'])->name('reports.cash.closure');
     Route::get('/reports/control', [SalesReportController::class, 'control'])->name('reports.control');
     Route::get('/reports/switch-unit', [UnitSwitchController::class, 'index'])->name('reports.switch-unit');

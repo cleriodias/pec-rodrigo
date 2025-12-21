@@ -16,8 +16,18 @@ export default function SalesPeriod({
     dateValue,
     startDate,
     endDate,
+    unit,
+    filterUnits = [],
+    selectedUnitId = null,
 }) {
-    const { data, setData, get, processing } = useForm({ mode, date: dateValue ?? '' });
+    const { data, setData, get, processing } = useForm({
+        mode,
+        date: dateValue ?? '',
+        unit_id:
+            selectedUnitId !== null && selectedUnitId !== undefined
+                ? String(selectedUnitId)
+                : '',
+    });
 
     const handleSubmit = (event) => {
         event.preventDefault();
@@ -63,6 +73,9 @@ export default function SalesPeriod({
             <p className="text-sm text-gray-500 dark:text-gray-300">
                 Consulte o desempenho por mes completo ou dia especifico.
             </p>
+            <p className="text-sm text-gray-500 dark:text-gray-300">
+                Unidade atual: {unit?.name ?? '---'}.
+            </p>
         </div>
     );
 
@@ -78,7 +91,7 @@ export default function SalesPeriod({
                         onSubmit={handleSubmit}
                         className="rounded-2xl bg-white p-6 shadow dark:bg-gray-800"
                     >
-                        <div className="grid gap-4 sm:grid-cols-3">
+                        <div className="grid gap-4 sm:grid-cols-4">
                             <div>
                                 <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
                                     Tipo de filtro
@@ -102,6 +115,23 @@ export default function SalesPeriod({
                                     onChange={(event) => setData('date', event.target.value)}
                                     className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-gray-800 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
                                 />
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                    Unidade
+                                </label>
+                                <select
+                                    value={data.unit_id}
+                                    onChange={(event) => setData('unit_id', event.target.value)}
+                                    className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-gray-800 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                                >
+                                    <option value="">Todas</option>
+                                    {filterUnits.map((filterUnit) => (
+                                        <option key={filterUnit.id} value={filterUnit.id}>
+                                            {filterUnit.name}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
                             <div className="flex items-end">
                                 <button

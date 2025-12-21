@@ -19,6 +19,8 @@ const formatDate = (value) => {
 };
 
 export default function SalaryAdvanceIndex({ advances, filters = {}, units = [] }) {
+    const createUrl = route('salary-advances.create');
+
     const handleDelete = (advanceId) => {
         if (!advanceId) {
             return;
@@ -97,7 +99,7 @@ export default function SalaryAdvanceIndex({ advances, filters = {}, units = [] 
                             </div>
                             <div className="flex justify-end">
                                 <a
-                                    href={route('salary-advances.create')}
+                                    href={createUrl}
                                     className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-indigo-700"
                                 >
                                     Novo adiantamento

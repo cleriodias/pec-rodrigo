@@ -6,6 +6,7 @@ use App\Models\CashierClosure;
 use App\Models\Expense;
 use App\Models\ProductDiscard;
 use App\Models\SalaryAdvance;
+use App\Models\Supplier;
 use App\Models\Venda;
 use App\Models\VendaPagamento;
 use App\Models\User;
@@ -26,6 +27,389 @@ class SalesReportController extends Controller
         'refeicao' => ['label' => 'Refeição', 'color' => '#facc15'],
         'faturar' => ['label' => 'Faturar', 'color' => '#0f172a'],
     ];
+
+    public function index(Request $request): Response
+    {
+        $this->ensureManager($request);
+
+        $reports = [
+            [
+                'key' => 'control',
+                'label' => 'Controle',
+                'description' => 'Resumo financeiro mensal por unidade.',
+                'icon' => 'bi-graph-up-arrow',
+                'route' => 'reports.control',
+            ],
+            [
+                'key' => 'cash-closure',
+                'label' => 'Fechamento de caixa',
+                'description' => 'Detalhe de pagamentos e diferencas por caixa.',
+                'icon' => 'bi-clipboard-data',
+                'route' => 'reports.cash.closure',
+            ],
+            [
+                'key' => 'sales-today',
+                'label' => 'Vendas hoje',
+                'description' => 'Total do dia e formas de pagamento.',
+                'icon' => 'bi-calendar-day',
+                'route' => 'reports.sales.today',
+            ],
+            [
+                'key' => 'sales-period',
+                'label' => 'Vendas periodo',
+                'description' => 'Totais diarios no periodo selecionado.',
+                'icon' => 'bi-calendar-range',
+                'route' => 'reports.sales.period',
+            ],
+            [
+                'key' => 'sales-detailed',
+                'label' => 'Relatorio detalhado',
+                'description' => 'Itens vendidos com detalhes por venda.',
+                'icon' => 'bi-card-checklist',
+                'route' => 'reports.sales.detailed',
+            ],
+            [
+                'key' => 'lanchonete',
+                'label' => 'Relatorio lanchonete',
+                'description' => 'Comandas por dia e status na lanchonete.',
+                'icon' => 'bi-cup-hot',
+                'route' => 'reports.lanchonete',
+            ],
+            [
+                'key' => 'vales',
+                'label' => 'Vales',
+                'description' => 'Compras feitas no vale.',
+                'icon' => 'bi-ticket-perforated',
+                'route' => 'reports.vale',
+            ],
+            [
+                'key' => 'refeicao',
+                'label' => 'Refeicao',
+                'description' => 'Compras feitas na refeicao.',
+                'icon' => 'bi-cup-straw',
+                'route' => 'reports.refeicao',
+            ],
+            [
+                'key' => 'adiantamentos',
+                'label' => 'Adiantamento',
+                'description' => 'Adiantamentos realizados no periodo.',
+                'icon' => 'bi-wallet2',
+                'route' => 'reports.adiantamentos',
+            ],
+            [
+                'key' => 'fornecedores',
+                'label' => 'Fornecedores',
+                'description' => 'Fornecedores cadastrados.',
+                'icon' => 'bi-truck',
+                'route' => 'reports.fornecedores',
+            ],
+            [
+                'key' => 'gastos',
+                'label' => 'Gastos',
+                'description' => 'Gastos cadastrados no periodo.',
+                'icon' => 'bi-receipt',
+                'route' => 'reports.gastos',
+            ],
+            [
+                'key' => 'descarte',
+                'label' => 'Descarte',
+                'description' => 'Descartes registrados no periodo.',
+                'icon' => 'bi-recycle',
+                'route' => 'reports.descarte',
+            ],
+        ];
+
+        return Inertia::render('Reports/Index', [
+            'reports' => $reports,
+        ]);
+    }
+
+    public function vale(Request $request): Response
+    {
+        $this->ensureManager($request);
+        [$filterUnitId, $filterUnits, $selectedUnit] = $this->resolveReportUnit($request);
+        [$start, $end, $startDate, $endDate] = $this->resolveDateRange($request);
+
+        $rows = Venda::query()
+            ->with(['unidade:tb2_id,tb2_nome', 'caixa:id,name', 'valeUser:id,name'])
+            ->where('tipo_pago', 'vale')
+            ->when($filterUnitId, function ($query) use ($filterUnitId) {
+                $query->where('id_unidade', $filterUnitId);
+            })
+            ->whereBetween('data_hora', [$start, $end])
+            ->orderByDesc('data_hora')
+            ->get([
+                'tb3_id',
+                'id_comanda',
+                'produto_nome',
+                'valor_unitario',
+                'quantidade',
+                'valor_total',
+                'data_hora',
+                'id_unidade',
+                'id_user_caixa',
+                'id_user_vale',
+            ])
+            ->map(function (Venda $row) {
+                return [
+                    'id' => $row->tb3_id,
+                    'comanda' => $row->id_comanda,
+                    'product' => $row->produto_nome,
+                    'quantity' => (int) $row->quantidade,
+                    'unit_price' => (float) $row->valor_unitario,
+                    'total' => round((float) $row->valor_total, 2),
+                    'sold_at' => $row->data_hora ? $row->data_hora->toIso8601String() : null,
+                    'unit_name' => $row->unidade?->tb2_nome ?? '---',
+                    'cashier' => $row->caixa?->name ?? null,
+                    'vale_user' => $row->valeUser?->name ?? null,
+                ];
+            })
+            ->values();
+
+        return Inertia::render('Reports/Vale', [
+            'rows' => $rows,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'unit' => $selectedUnit,
+            'filterUnits' => $filterUnits,
+            'selectedUnitId' => $filterUnitId,
+        ]);
+    }
+
+    public function refeicao(Request $request): Response
+    {
+        $this->ensureManager($request);
+        [$filterUnitId, $filterUnits, $selectedUnit] = $this->resolveReportUnit($request);
+        [$start, $end, $startDate, $endDate] = $this->resolveDateRange($request);
+
+        $rows = Venda::query()
+            ->with(['unidade:tb2_id,tb2_nome', 'caixa:id,name', 'valeUser:id,name'])
+            ->where('tipo_pago', 'refeicao')
+            ->when($filterUnitId, function ($query) use ($filterUnitId) {
+                $query->where('id_unidade', $filterUnitId);
+            })
+            ->whereBetween('data_hora', [$start, $end])
+            ->orderByDesc('data_hora')
+            ->get([
+                'tb3_id',
+                'id_comanda',
+                'produto_nome',
+                'valor_unitario',
+                'quantidade',
+                'valor_total',
+                'data_hora',
+                'id_unidade',
+                'id_user_caixa',
+                'id_user_vale',
+            ])
+            ->map(function (Venda $row) {
+                return [
+                    'id' => $row->tb3_id,
+                    'comanda' => $row->id_comanda,
+                    'product' => $row->produto_nome,
+                    'quantity' => (int) $row->quantidade,
+                    'unit_price' => (float) $row->valor_unitario,
+                    'total' => round((float) $row->valor_total, 2),
+                    'sold_at' => $row->data_hora ? $row->data_hora->toIso8601String() : null,
+                    'unit_name' => $row->unidade?->tb2_nome ?? '---',
+                    'cashier' => $row->caixa?->name ?? null,
+                    'vale_user' => $row->valeUser?->name ?? null,
+                ];
+            })
+            ->values();
+
+        return Inertia::render('Reports/Refeicao', [
+            'rows' => $rows,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'unit' => $selectedUnit,
+            'filterUnits' => $filterUnits,
+            'selectedUnitId' => $filterUnitId,
+        ]);
+    }
+
+    public function adiantamentos(Request $request): Response
+    {
+        $this->ensureManager($request);
+        [$filterUnitId, $filterUnits, $selectedUnit] = $this->resolveReportUnit($request);
+        [$start, $end, $startDate, $endDate] = $this->resolveDateRange($request);
+
+        $rows = SalaryAdvance::query()
+            ->with('user:id,name,tb2_id')
+            ->whereBetween('advance_date', [$startDate, $endDate])
+            ->when($filterUnitId, function ($query) use ($filterUnitId) {
+                $query->where(function ($sub) use ($filterUnitId) {
+                    $sub->where('unit_id', $filterUnitId)
+                        ->orWhere(function ($legacy) use ($filterUnitId) {
+                            $legacy->whereNull('unit_id')
+                                ->where(function ($legacyUnit) use ($filterUnitId) {
+                                    $legacyUnit->whereHas('user', function ($userQuery) use ($filterUnitId) {
+                                        $userQuery->where('tb2_id', $filterUnitId);
+                                    })->orWhereHas('user.units', function ($unitQuery) use ($filterUnitId) {
+                                        $unitQuery->where('tb2_unidades.tb2_id', $filterUnitId);
+                                    });
+                                });
+                        });
+                });
+            })
+            ->orderByDesc('advance_date')
+            ->get([
+                'id',
+                'user_id',
+                'unit_id',
+                'advance_date',
+                'amount',
+                'reason',
+            ])
+            ->map(function (SalaryAdvance $advance) {
+                return [
+                    'id' => $advance->id,
+                    'user_name' => $advance->user?->name ?? '---',
+                    'advance_date' => $advance->advance_date?->toDateString(),
+                    'amount' => round((float) $advance->amount, 2),
+                    'reason' => $advance->reason,
+                ];
+            })
+            ->values();
+
+        return Inertia::render('Reports/Advances', [
+            'rows' => $rows,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'unit' => $selectedUnit,
+            'filterUnits' => $filterUnits,
+            'selectedUnitId' => $filterUnitId,
+        ]);
+    }
+
+    public function fornecedores(Request $request): Response
+    {
+        $this->ensureManager($request);
+        [$filterUnitId, $filterUnits, $selectedUnit] = $this->resolveReportUnit($request);
+
+        $suppliers = Supplier::query()
+            ->when($filterUnitId, function ($query) use ($filterUnitId) {
+                $query->whereHas('expenses', function ($expenseQuery) use ($filterUnitId) {
+                    $expenseQuery->where('unit_id', $filterUnitId);
+                });
+            })
+            ->orderBy('name')
+            ->get([
+                'id',
+                'name',
+                'access_code',
+                'dispute',
+                'created_at',
+            ])
+            ->map(function (Supplier $supplier) {
+                return [
+                    'id' => $supplier->id,
+                    'name' => $supplier->name,
+                    'access_code' => $supplier->access_code,
+                    'dispute' => (bool) $supplier->dispute,
+                    'created_at' => $supplier->created_at?->toIso8601String(),
+                ];
+            })
+            ->values();
+
+        return Inertia::render('Reports/Suppliers', [
+            'suppliers' => $suppliers,
+            'unit' => $selectedUnit,
+            'filterUnits' => $filterUnits,
+            'selectedUnitId' => $filterUnitId,
+        ]);
+    }
+
+    public function gastos(Request $request): Response
+    {
+        $this->ensureManager($request);
+        [$filterUnitId, $filterUnits, $selectedUnit] = $this->resolveReportUnit($request);
+        [$start, $end, $startDate, $endDate] = $this->resolveDateRange($request);
+
+        $rows = Expense::query()
+            ->with(['supplier:id,name', 'unit:tb2_id,tb2_nome'])
+            ->whereBetween('expense_date', [$startDate, $endDate])
+            ->when($filterUnitId, function ($query) use ($filterUnitId) {
+                $query->where('unit_id', $filterUnitId);
+            })
+            ->orderByDesc('expense_date')
+            ->get([
+                'id',
+                'supplier_id',
+                'unit_id',
+                'expense_date',
+                'amount',
+                'notes',
+            ])
+            ->map(function (Expense $expense) {
+                return [
+                    'id' => $expense->id,
+                    'expense_date' => $expense->expense_date?->toDateString(),
+                    'supplier' => $expense->supplier?->name ?? '---',
+                    'unit' => $expense->unit?->tb2_nome ?? '---',
+                    'amount' => round((float) $expense->amount, 2),
+                    'notes' => $expense->notes,
+                ];
+            })
+            ->values();
+
+        return Inertia::render('Reports/Expenses', [
+            'rows' => $rows,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'unit' => $selectedUnit,
+            'filterUnits' => $filterUnits,
+            'selectedUnitId' => $filterUnitId,
+        ]);
+    }
+
+    public function descarte(Request $request): Response
+    {
+        $this->ensureManager($request);
+        [$filterUnitId, $filterUnits, $selectedUnit] = $this->resolveReportUnit($request);
+        [$start, $end, $startDate, $endDate] = $this->resolveDateRange($request);
+
+        $rows = ProductDiscard::query()
+            ->with(['product:tb1_id,tb1_nome,tb1_vlr_venda', 'user:id,name,tb2_id'])
+            ->whereBetween('created_at', [$start, $end])
+            ->when($filterUnitId, function ($query) use ($filterUnitId) {
+                $query->whereHas('user', function ($userQuery) use ($filterUnitId) {
+                    $userQuery->where('tb2_id', $filterUnitId);
+                });
+            })
+            ->orderByDesc('created_at')
+            ->get([
+                'id',
+                'product_id',
+                'user_id',
+                'quantity',
+                'created_at',
+            ])
+            ->map(function (ProductDiscard $discard) {
+                $unitPrice = (float) ($discard->product?->tb1_vlr_venda ?? 0);
+                $quantity = (float) $discard->quantity;
+
+                return [
+                    'id' => $discard->id,
+                    'product' => $discard->product?->tb1_nome ?? '---',
+                    'quantity' => round($quantity, 3),
+                    'unit_price' => round($unitPrice, 2),
+                    'total' => round($unitPrice * $quantity, 2),
+                    'user_name' => $discard->user?->name ?? '---',
+                    'created_at' => $discard->created_at?->toIso8601String(),
+                ];
+            })
+            ->values();
+
+        return Inertia::render('Reports/Discards', [
+            'rows' => $rows,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'unit' => $selectedUnit,
+            'filterUnits' => $filterUnits,
+            'selectedUnitId' => $filterUnitId,
+        ]);
+    }
 
     public function today(Request $request): Response
     {
@@ -311,7 +695,7 @@ class SalesReportController extends Controller
     public function period(Request $request): Response
     {
         $this->ensureManager($request);
-        $unitId = $this->resolveUnitId($request);
+        [$filterUnitId, $filterUnits, $selectedUnit] = $this->resolveReportUnit($request);
 
         $mode = $request->query('mode', 'month') === 'day' ? 'day' : 'month';
         $dateValue = $request->query('date');
@@ -328,9 +712,9 @@ class SalesReportController extends Controller
             $dateValue = $month->format('Y-m');
         }
 
-        $payments = $this->fetchPayments($start, $end, $unitId);
+        $payments = $this->fetchPayments($start, $end, $filterUnitId);
         [$totals, $details, $chartData] = $this->summarizePayments($payments);
-        [$totals, $details] = $this->applyGlobalValeTotals($start, $end, $totals, $details);
+        [$totals, $details] = $this->applyGlobalValeTotals($start, $end, $totals, $details, $filterUnitId);
         $chartData = $this->buildChartData($totals);
 
         $dailyTotals = $payments
@@ -357,13 +741,16 @@ class SalesReportController extends Controller
             'dateValue' => $dateValue,
             'startDate' => $start->toDateString(),
             'endDate' => $end->toDateString(),
+            'filterUnits' => $filterUnits,
+            'selectedUnitId' => $filterUnitId,
+            'unit' => $selectedUnit,
         ]);
     }
 
     public function detailed(Request $request): Response
     {
         $this->ensureManager($request);
-        $unitId = $this->resolveUnitId($request);
+        [$filterUnitId, $filterUnits, $selectedUnit] = $this->resolveReportUnit($request);
 
         $dateValue = $request->query('date');
         $date = $this->parseDate($dateValue, 'Y-m-d', Carbon::today());
@@ -371,7 +758,7 @@ class SalesReportController extends Controller
         $end = $date->copy()->endOfDay();
         $dateValue = $date->format('Y-m-d');
 
-        $payments = VendaPagamento::with(['vendas' => function ($query) {
+        $payments = VendaPagamento::with(['vendas' => function ($query) use ($filterUnitId) {
             $query->orderBy('tb3_id')->select([
                 'tb3_id',
                 'tb4_id',
@@ -383,10 +770,16 @@ class SalesReportController extends Controller
                 'id_comanda',
                 'id_lanc',
             ]);
+
+            if ($filterUnitId) {
+                $query->where('id_unidade', $filterUnitId);
+            }
         }])
             ->whereBetween('created_at', [$start, $end])
-            ->whereHas('vendas', function ($query) use ($unitId) {
-                $query->where('id_unidade', $unitId);
+            ->when($filterUnitId, function ($query) use ($filterUnitId) {
+                $query->whereHas('vendas', function ($subQuery) use ($filterUnitId) {
+                    $subQuery->where('id_unidade', $filterUnitId);
+                });
             })
             ->orderByDesc('tb4_id')
             ->get([
@@ -441,6 +834,107 @@ class SalesReportController extends Controller
         return Inertia::render('Reports/SalesDetailed', [
             'payments' => $payments,
             'dateValue' => $dateValue,
+            'filterUnits' => $filterUnits,
+            'selectedUnitId' => $filterUnitId,
+            'unit' => $selectedUnit,
+        ]);
+    }
+
+    public function lanchonete(Request $request): Response
+    {
+        $this->ensureManager($request);
+        [$filterUnitId, $filterUnits, $selectedUnit] = $this->resolveReportUnit($request);
+        $dateValue = $request->query('date');
+        $date = $this->parseDate($dateValue, 'Y-m-d', Carbon::today());
+        $start = $date->copy()->startOfDay();
+        $end = $date->copy()->endOfDay();
+        $dateValue = $date->format('Y-m-d');
+
+        $rows = Venda::query()
+            ->whereNotNull('id_comanda')
+            ->whereBetween('id_comanda', [3000, 3100])
+            ->when($filterUnitId, function ($query) use ($filterUnitId) {
+                $query->where('id_unidade', $filterUnitId);
+            })
+            ->whereBetween('data_hora', [$start, $end])
+            ->orderByDesc('data_hora')
+            ->get([
+                'tb3_id',
+                'id_comanda',
+                'produto_nome',
+                'valor_unitario',
+                'quantidade',
+                'valor_total',
+                'data_hora',
+                'id_user_caixa',
+                'id_lanc',
+                'tipo_pago',
+                'status_pago',
+                'status',
+            ]);
+
+        $userIds = $rows
+            ->flatMap(fn (Venda $row) => [$row->id_user_caixa, $row->id_lanc])
+            ->filter()
+            ->unique()
+            ->values();
+
+        $users = $userIds->isNotEmpty()
+            ? User::whereIn('id', $userIds)->pluck('name', 'id')
+            : collect();
+
+        $openComandas = [];
+        $closedComandas = [];
+
+        $grouped = $rows->groupBy('id_comanda');
+
+        foreach ($grouped as $comanda => $items) {
+            $first = $items->first();
+            $status = (int) ($first->status ?? 0);
+            $lastUpdate = $items->max('data_hora');
+            $lastUpdate = $lastUpdate ? Carbon::parse($lastUpdate)->toIso8601String() : null;
+
+            $payload = [
+                'comanda' => (int) $comanda,
+                'status' => $status,
+                'payment_type' => $first->tipo_pago,
+                'status_paid' => (bool) $first->status_pago,
+                'total' => round((float) $items->sum('valor_total'), 2),
+                'quantity' => (int) $items->sum('quantidade'),
+                'updated_at' => $lastUpdate,
+                'items' => $items->map(function (Venda $item) use ($users) {
+                    return [
+                        'id' => $item->tb3_id,
+                        'name' => $item->produto_nome,
+                        'quantity' => (int) $item->quantidade,
+                        'unit_price' => (float) $item->valor_unitario,
+                        'total' => round((float) $item->valor_total, 2),
+                        'launched_by' => $item->id_lanc ? ($users[$item->id_lanc] ?? null) : null,
+                        'cashier' => $item->id_user_caixa ? ($users[$item->id_user_caixa] ?? null) : null,
+                    ];
+                })->values()->all(),
+            ];
+
+            if ($status === 0) {
+                $openComandas[] = $payload;
+            } else {
+                $closedComandas[] = $payload;
+            }
+        }
+
+        usort($openComandas, fn (array $a, array $b) => $a['comanda'] <=> $b['comanda']);
+        usort($closedComandas, fn (array $a, array $b) => strcmp((string) $b['updated_at'], (string) $a['updated_at']));
+
+        return Inertia::render('Reports/Lanchonete', [
+            'unit' => [
+                'id' => $selectedUnit['id'] ?? null,
+                'name' => $selectedUnit['name'] ?? '---',
+            ],
+            'dateValue' => $dateValue,
+            'openComandas' => $openComandas,
+            'closedComandas' => $closedComandas,
+            'filterUnits' => $filterUnits,
+            'selectedUnitId' => $filterUnitId,
         ]);
     }
 
@@ -803,6 +1297,67 @@ class SalesReportController extends Controller
         $amount = max((float) $payment->valor_total, 0);
 
         return $amount > 0 ? [$type => $amount] : [];
+    }
+
+    private function resolveDateRange(Request $request): array
+    {
+        $defaultStart = Carbon::today()->startOfMonth();
+        $defaultEnd = Carbon::today()->endOfMonth();
+
+        $startInput = $request->query('start_date');
+        $endInput = $request->query('end_date');
+
+        $start = $this->parseDate($startInput, 'Y-m-d', $defaultStart)->startOfDay();
+        $end = $this->parseDate($endInput, 'Y-m-d', $defaultEnd)->endOfDay();
+
+        if ($end->lt($start)) {
+            $end = $start->copy()->endOfDay();
+        }
+
+        return [$start, $end, $start->toDateString(), $end->toDateString()];
+    }
+
+    private function resolveUnitPayload(int $unitId): array
+    {
+        if ($unitId <= 0) {
+            return [
+                'id' => $unitId,
+                'name' => '---',
+            ];
+        }
+
+        $unit = Unidade::find($unitId, ['tb2_id', 'tb2_nome']);
+
+        return [
+            'id' => $unit?->tb2_id ?? $unitId,
+            'name' => $unit?->tb2_nome ?? '---',
+        ];
+    }
+
+    private function resolveReportUnit(Request $request): array
+    {
+        $availableUnits = $this->availableUnits($request->user());
+        $requestedUnitId = $request->query('unit_id', null);
+
+        if ($requestedUnitId === null) {
+            $filterUnitId = $this->resolveUnitId($request);
+        } else {
+            $filterUnitId = $requestedUnitId !== '' ? (int) $requestedUnitId : null;
+        }
+
+        if (! $filterUnitId) {
+            $filterUnitId = null;
+        }
+
+        if ($filterUnitId && ! $availableUnits->contains(fn ($unit) => $unit['id'] === $filterUnitId)) {
+            $filterUnitId = null;
+        }
+
+        $selectedUnit = $filterUnitId
+            ? $availableUnits->firstWhere('id', $filterUnitId)
+            : ['id' => null, 'name' => 'Todas as unidades'];
+
+        return [$filterUnitId, $availableUnits->values(), $selectedUnit];
     }
 
     private function availableUnits(User $user): Collection

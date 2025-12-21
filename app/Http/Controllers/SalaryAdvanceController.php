@@ -26,7 +26,7 @@ class SalaryAdvanceController extends Controller
             'unit_id' => $unitParam ? (int) $unitParam : null,
         ];
 
-        $advancesQuery = SalaryAdvance::with('user:id,name,tb2_id')
+        $advancesQuery = SalaryAdvance::with(['user:id,name,tb2_id', 'unit:tb2_id,tb2_nome'])
             ->when($filters['month'], function ($query) use ($filters) {
                 try {
                     [$year, $month] = explode('-', $filters['month']);
@@ -39,11 +39,17 @@ class SalaryAdvanceController extends Controller
             ->when($filters['unit_id'], function ($query) use ($filters) {
                 $unitId = (int) $filters['unit_id'];
                 $query->where(function ($sub) use ($unitId) {
-                    $sub->whereHas('user', function ($userQuery) use ($unitId) {
-                        $userQuery->where('tb2_id', $unitId);
-                    })->orWhereHas('user.units', function ($unitQuery) use ($unitId) {
-                        $unitQuery->where('tb2_unidades.tb2_id', $unitId);
-                    });
+                    $sub->where('unit_id', $unitId)
+                        ->orWhere(function ($legacy) use ($unitId) {
+                            $legacy->whereNull('unit_id')
+                                ->where(function ($legacyUnit) use ($unitId) {
+                                    $legacyUnit->whereHas('user', function ($userQuery) use ($unitId) {
+                                        $userQuery->where('tb2_id', $unitId);
+                                    })->orWhereHas('user.units', function ($unitQuery) use ($unitId) {
+                                        $unitQuery->where('tb2_unidades.tb2_id', $unitId);
+                                    });
+                                });
+                        });
                 });
             });
 
@@ -75,6 +81,7 @@ class SalaryAdvanceController extends Controller
 
         $users = User::orderBy('name')
             ->get(['id', 'name', 'salario']);
+        $activeUnit = $this->resolveUnit($request);
 
         return Inertia::render('Finance/SalaryAdvanceCreate', [
             'users' => $users->map(fn ($user) => [
@@ -83,12 +90,18 @@ class SalaryAdvanceController extends Controller
                 'salary_limit' => (float) ($user->salario ?? 0),
                 'formatted_limit' => number_format((float) ($user->salario ?? 0), 2, ',', '.'),
             ]),
+            'activeUnit' => $activeUnit,
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
         $this->ensureManager($request->user());
+
+        $activeUnit = $this->resolveUnit($request);
+        if (! $activeUnit) {
+            return back()->with('error', 'Unidade ativa nao definida para registrar o adiantamento.');
+        }
 
         $data = $request->validate([
             'user_id' => ['required', 'integer', 'exists:users,id'],
@@ -113,7 +126,9 @@ class SalaryAdvanceController extends Controller
             ]);
         }
 
-        SalaryAdvance::create($data);
+        SalaryAdvance::create(array_merge($data, [
+            'unit_id' => $activeUnit['id'],
+        ]));
 
         return redirect()
             ->route('salary-advances.index')
@@ -136,5 +151,31 @@ class SalaryAdvanceController extends Controller
         if (! $user || ! in_array((int) $user->funcao, [0, 1], true)) {
             abort(403);
         }
+    }
+
+    private function resolveUnit(Request $request): ?array
+    {
+        $sessionUnit = $request->session()->get('active_unit');
+
+        if (is_array($sessionUnit) && isset($sessionUnit['id'])) {
+            return [
+                'id' => (int) $sessionUnit['id'],
+                'name' => (string) ($sessionUnit['name'] ?? ''),
+            ];
+        }
+
+        $user = $request->user();
+        $unitId = (int) ($user?->tb2_id ?? 0);
+
+        if ($unitId <= 0) {
+            return null;
+        }
+
+        $unit = Unidade::find($unitId, ['tb2_id', 'tb2_nome']);
+
+        return [
+            'id' => (int) $unitId,
+            'name' => $unit?->tb2_nome ?? ('Unidade #' . $unitId),
+        ];
     }
 }

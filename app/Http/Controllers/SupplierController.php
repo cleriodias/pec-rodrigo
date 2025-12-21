@@ -57,7 +57,8 @@ class SupplierController extends Controller
 
     private function ensureMaster($user): void
     {
-        if (! $user || (int) $user->funcao !== 0) {
+        $roleOriginal = (int) ($user?->funcao_original ?? $user?->funcao);
+        if (! $user || $roleOriginal !== 0) {
             abort(403);
         }
     }
