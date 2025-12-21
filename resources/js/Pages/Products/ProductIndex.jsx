@@ -178,35 +178,31 @@ export default function ProductIndex({
 
             <div className="py-4 max-w-7xl mx-auto sm:px-6 lg:px-8">
                 <div className="overflow-hidden bg-white shadow-lg sm:rounded-lg dark:bg-gray-800">
-                    <div className="flex justify-between items-center m-4">
-                        <h3 className="text-lg">Listar</h3>
-                        <div className="flex space-x-4">
-                            <Link href={route("products.create")}>
-                                <SuccessButton aria-label="Cadastrar" title="Cadastrar">
-                                    <i className="bi bi-plus-lg text-lg" aria-hidden="true"></i>
-                                </SuccessButton>
-                            </Link>
-                        </div>
-                    </div>
-
                     <AlertMessage message={flash} />
 
                     <div className="px-4 pb-4">
                         <div className="flex flex-col gap-3">
                             <label htmlFor="product-search" className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                                Buscar produto
+
                             </label>
-                            <input
-                                id="product-search"
-                                type="text"
-                                value={searchTerm}
-                                onChange={(event) => setSearchTerm(event.target.value)}
-                                placeholder="Digite ID, código de barras ou nome"
-                                className="w-full rounded-xl border border-gray-300 px-3 py-2 text-gray-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-                            />
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                                IDs ou c?digos num?ricos podem ser pesquisados imediatamente; nomes exigem pelo menos {MIN_SEARCH_CHARACTERS} letras.
-                            </p>
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                                <input
+                                    id="product-search"
+                                    type="text"
+                                    value={searchTerm}
+                                    onChange={(event) => setSearchTerm(event.target.value)}
+                                    placeholder="Digite ID, código de barras ou nome"
+                                    className="w-full flex-1 rounded-xl border border-gray-300 px-3 py-2 text-gray-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 sm:w-auto dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                                />
+                                <Link
+                                    href={route("products.create")}
+                                    className="self-start sm:self-auto"
+                                >
+                                    <SuccessButton aria-label="Cadastrar" title="Cadastrar" className="h-10 w-10 justify-center p-0">
+                                        <i className="bi bi-plus-lg text-lg" aria-hidden="true"></i>
+                                    </SuccessButton>
+                                </Link>
+                            </div>
                             {searchError && (
                                 <p className="text-sm text-red-600 dark:text-red-400">{searchError}</p>
                             )}
