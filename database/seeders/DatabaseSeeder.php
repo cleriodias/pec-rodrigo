@@ -17,6 +17,10 @@ class DatabaseSeeder extends Seeder
             UnitSeeder::class,
             UserSeeder::class,
             UserUnitSeeder::class,
+            SupplierSeeder::class,
+            ProdutoSeeder::class,
+            FavoriteProdutoSeeder::class,
+            VrCreditProdutoSeeder::class,
         ]);
     }
 }

@@ -10,7 +10,7 @@ class UserUnitSeeder extends Seeder
 {
     public function run(): void
     {
-        $defaultUnitId = 1;
+        $unitIds = [1, 2, 3];
         $emails = [
             'cleriodias@gmail.com',
             'trucadoturbinado@gmail.com',
@@ -24,10 +24,12 @@ class UserUnitSeeder extends Seeder
                 continue;
             }
 
-            DB::table('tb2_unidade_user')->updateOrInsert(
-                ['user_id' => $userId, 'tb2_id' => $defaultUnitId],
-                ['created_at' => now(), 'updated_at' => now()]
-            );
+            foreach ($unitIds as $unitId) {
+                DB::table('tb2_unidade_user')->updateOrInsert(
+                    ['user_id' => $userId, 'tb2_id' => $unitId],
+                    ['created_at' => now(), 'updated_at' => now()]
+                );
+            }
         }
     }
 }

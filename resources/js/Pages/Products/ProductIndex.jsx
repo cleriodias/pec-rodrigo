@@ -28,17 +28,54 @@ const resolveLabel = (labels, key) => {
     return labels[key] ?? "---";
 };
 
-export default function ProductIndex({ auth, products, typeLabels, statusLabels, search = '' }) {
+export default function ProductIndex({
+    auth,
+    products,
+    typeLabels,
+    statusLabels,
+    search = '',
+    sort = '',
+    direction = '',
+}) {
     const { flash } = usePage().props;
 
     const [searchTerm, setSearchTerm] = useState(search ?? '');
     const [searchError, setSearchError] = useState('');
     const [favoriteLoading, setFavoriteLoading] = useState(null);
+    const [sortField, setSortField] = useState(sort ?? '');
+    const [sortDirection, setSortDirection] = useState(direction || 'asc');
     const initialSearchHandled = useRef(false);
 
     useEffect(() => {
         setSearchTerm(search ?? '');
     }, [search]);
+
+    useEffect(() => {
+        setSortField(sort ?? '');
+        setSortDirection(direction || 'asc');
+    }, [sort, direction]);
+
+    const buildQuery = ({ term, field, dir } = {}) => {
+        const resolvedTerm = term !== undefined ? term : (search ?? '').trim();
+        const resolvedField = field !== undefined ? field : sortField;
+        const resolvedDir = dir !== undefined ? dir : sortDirection;
+        const query = {};
+
+        if (resolvedTerm !== '') {
+            query.search = resolvedTerm;
+        }
+
+        if (resolvedField) {
+            query.sort = resolvedField;
+            query.direction = resolvedDir;
+        }
+
+        return query;
+    };
+
+    const applyQuery = (overrides = {}) => {
+        router.get(route('products.index'), buildQuery(overrides), { preserveState: true, replace: true });
+    };
 
     useEffect(() => {
         const handler = setTimeout(() => {
@@ -54,7 +91,7 @@ export default function ProductIndex({ auth, products, typeLabels, statusLabels,
 
             if (term === '') {
                 setSearchError('');
-                router.get(route('products.index'), {}, { preserveState: true, replace: true });
+                applyQuery({ term: '' });
                 return;
             }
 
@@ -64,7 +101,7 @@ export default function ProductIndex({ auth, products, typeLabels, statusLabels,
             }
 
             setSearchError('');
-            router.get(route('products.index'), { search: term }, { preserveState: true, replace: true });
+            applyQuery({ term });
         }, 400);
 
         return () => clearTimeout(handler);
@@ -77,6 +114,55 @@ export default function ProductIndex({ auth, products, typeLabels, statusLabels,
             preserveState: true,
             onFinish: () => setFavoriteLoading(null),
         });
+    };
+
+    const handleSort = (field, dir) => {
+        setSortField(field);
+        setSortDirection(dir);
+        applyQuery({ field, dir });
+    };
+
+    const renderSortHeader = (label, field, align = 'left') => {
+        const isActive = sortField === field;
+        const isAsc = isActive && sortDirection === 'asc';
+        const isDesc = isActive && sortDirection === 'desc';
+        const alignClass = align === 'right'
+            ? 'justify-end'
+            : align === 'center'
+                ? 'justify-center'
+                : 'justify-start';
+
+        return (
+            <div className={`flex items-center gap-2 ${alignClass}`}>
+                <span>{label}</span>
+                <span className="flex flex-col leading-none">
+                    <button
+                        type="button"
+                        onClick={() => handleSort(field, 'asc')}
+                        className="leading-none"
+                        aria-label={`Ordenar ${label} crescente`}
+                        title={`Ordenar ${label} crescente`}
+                    >
+                        <i
+                            className={`bi bi-caret-up-fill text-xs ${isAsc ? 'text-indigo-600' : 'text-gray-400'}`}
+                            aria-hidden="true"
+                        ></i>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => handleSort(field, 'desc')}
+                        className="-mt-1 leading-none"
+                        aria-label={`Ordenar ${label} decrescente`}
+                        title={`Ordenar ${label} decrescente`}
+                    >
+                        <i
+                            className={`bi bi-caret-down-fill text-xs ${isDesc ? 'text-indigo-600' : 'text-gray-400'}`}
+                            aria-hidden="true"
+                        ></i>
+                    </button>
+                </span>
+            </div>
+        );
     };
 
     return (
@@ -131,28 +217,28 @@ export default function ProductIndex({ auth, products, typeLabels, statusLabels,
                         <thead className="bg-gray-50 dark:bg-gray-700">
                             <tr>
                                 <td className="px-4 py-3 text-center text-sm font-medium text-gray-500 tracking-wider">
-                                    Favorito
+                                    {renderSortHeader('Favorito', 'tb1_favorito', 'center')}
                                 </td>
                                 <td className="px-4 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">
-                                    ID
+                                    {renderSortHeader('ID', 'tb1_id')}
                                 </td>
                                 <td className="px-4 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">
-                                    Nome
+                                    {renderSortHeader('Nome', 'tb1_nome')}
                                 </td>
                                 <td className="px-4 py-3 text-right text-sm font-medium text-gray-500 tracking-wider">
-                                    Custo
+                                    {renderSortHeader('Custo', 'tb1_vlr_custo', 'right')}
                                 </td>
                                 <td className="px-4 py-3 text-right text-sm font-medium text-gray-500 tracking-wider">
-                                    Venda
+                                    {renderSortHeader('Venda', 'tb1_vlr_venda', 'right')}
                                 </td>
                                 <td className="px-4 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">
-                                    Código de barras
+                                    {renderSortHeader('Código de barras', 'tb1_codbar')}
                                 </td>
                                 <td className="px-4 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">
-                                    Tipo
+                                    {renderSortHeader('Tipo', 'tb1_tipo')}
                                 </td>
                                 <td className="px-4 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">
-                                    Status
+                                    {renderSortHeader('Status', 'tb1_status')}
                                 </td>
                                 <td className="px-4 py-3 text-center text-sm font-medium text-gray-500 tracking-wider">
                                     Ações

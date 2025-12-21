@@ -26,6 +26,8 @@ class ProductController extends Controller
     public function index(Request $request): Response
     {
         $search = trim((string) $request->input('search', ''));
+        $sort = (string) $request->input('sort', '');
+        $direction = strtolower((string) $request->input('direction', 'asc'));
         $query = Produto::query();
 
         if ($search !== '') {
@@ -50,17 +52,44 @@ class ProductController extends Controller
             });
         }
 
-        $products = $query
-            ->orderByDesc('tb1_favorito')
-            ->orderByDesc('tb1_id')
-            ->paginate(10)
-            ->withQueryString();
+        $allowedSorts = [
+            'tb1_favorito',
+            'tb1_id',
+            'tb1_nome',
+            'tb1_vlr_custo',
+            'tb1_vlr_venda',
+            'tb1_codbar',
+            'tb1_tipo',
+            'tb1_status',
+        ];
+        $allowedDirections = ['asc', 'desc'];
+
+        if (! in_array($sort, $allowedSorts, true)) {
+            $sort = '';
+        }
+
+        if (! in_array($direction, $allowedDirections, true)) {
+            $direction = 'asc';
+        }
+
+        if ($sort !== '') {
+            $query->orderBy($sort, $direction)
+                ->orderBy('tb1_id', $direction);
+        } else {
+            $query->orderByDesc('tb1_favorito')
+                ->orderByDesc('tb1_id');
+            $direction = '';
+        }
+
+        $products = $query->paginate(10)->withQueryString();
 
         return Inertia::render('Products/ProductIndex', [
             'products' => $products,
             'typeLabels' => self::TYPE_LABELS,
             'statusLabels' => self::STATUS_LABELS,
             'search' => $search,
+            'sort' => $sort,
+            'direction' => $direction,
         ]);
     }
 
