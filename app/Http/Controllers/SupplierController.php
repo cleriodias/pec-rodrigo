@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Supplier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -26,9 +27,15 @@ class SupplierController extends Controller
     {
         $this->ensureMaster($request->user());
 
+        $request->merge([
+            'name' => trim((string) $request->input('name')),
+        ]);
+
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:120'],
+            'name' => ['required', 'string', 'max:120', Rule::unique('suppliers', 'name')],
             'dispute' => ['required', 'boolean'],
+        ], [
+            'name.unique' => 'Fornecedor ja cadastrado.',
         ]);
 
         $accessCode = $this->generateAccessCode();
