@@ -123,6 +123,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/products/{product}/favorite', [ProductController::class, 'toggleFavorite'])->name('products.favorite');
     Route::resource('products', ProductController::class);
     Route::get('/sales/open-comandas', [SaleController::class, 'openComandas'])->name('sales.open-comandas');
+    Route::get('/sales/restrictions', [SaleController::class, 'restrictions'])->name('sales.restrictions');
     Route::get('/sales/comandas/{codigo}/items', [SaleController::class, 'comandaItems'])->name('sales.comandas.items');
     Route::post('/sales', [SaleController::class, 'store'])->name('sales.store');
     Route::post('/sales/comandas/{codigo}/items', [SaleController::class, 'addComandaItem'])->name('sales.comandas.add-item');

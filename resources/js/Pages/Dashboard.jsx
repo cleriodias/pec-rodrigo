@@ -1,5 +1,5 @@
 ﻿import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, usePage, router } from '@inertiajs/react';
+import { Head, Link, usePage, router } from '@inertiajs/react';
 import axios from 'axios';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -63,6 +63,14 @@ const formatDateTime = (value) => {
     });
 };
 
+const formatDate = (value) => {
+    if (!value) {
+        return '--';
+    }
+
+    return new Date(value).toLocaleDateString('pt-BR');
+};
+
 export default function Dashboard() {
     const pageProps = usePage().props;
     const { auth } = pageProps;
@@ -97,12 +105,13 @@ export default function Dashboard() {
     const [savedCarts, setSavedCarts] = useState([]);
     const [favoriteProducts, setFavoriteProducts] = useState([]);
     const [showChangeCard, setShowChangeCard] = useState(false);
-    const [openComandasAmount, setOpenComandasAmount] = useState(0);
-    const [openComandasCount, setOpenComandasCount] = useState(0);
     const [openComandasList, setOpenComandasList] = useState([]);
     const [showComandasButtons, setShowComandasButtons] = useState(false);
     const [comandaLoading, setComandaLoading] = useState(false);
     const [selectedComandaCode, setSelectedComandaCode] = useState(null);
+    const [cashierRestrictions, setCashierRestrictions] = useState(null);
+    const [cashierRestrictionsLoading, setCashierRestrictionsLoading] = useState(false);
+    const lastAutoOpenComandasKey = useRef('');
 
     useEffect(() => {
         if (typeof window === 'undefined') {
@@ -174,8 +183,82 @@ export default function Dashboard() {
         () => items.reduce((sum, item) => sum + (item.quantity ?? 0), 0),
         [items],
     );
-    const openCommandasCount = 0;
-    const isComandaMode = false;
+    const isCashier = effectiveRole === 3;
+    const pendingComandas = useMemo(() => {
+        const list = cashierRestrictions?.pending_comandas;
+        if (!Array.isArray(list)) {
+            return [];
+        }
+
+        return list
+            .map((value) => Number(value))
+            .filter((value) => !Number.isNaN(value));
+    }, [cashierRestrictions]);
+    const hasPendingComandas = pendingComandas.length > 0;
+    const pendingClosureDate = cashierRestrictions?.pending_closure_date ?? null;
+    const requiresClosure = Boolean(cashierRestrictions?.requires_closure);
+    const isPendingComandaSelected =
+        selectedComandaCode !== null && pendingComandas.includes(selectedComandaCode);
+    const isSalesBlocked =
+        isCashier &&
+        ((hasPendingComandas && !isPendingComandaSelected) ||
+            (requiresClosure && selectedComandaCode === null));
+    const pendingComandasLabel = pendingComandas.join(', ');
+    const closureBlockMessage = requiresClosure
+        ? `Fechamento pendente${
+              pendingClosureDate ? ` em ${formatDate(pendingClosureDate)}` : ''
+          }. Receba uma comanda em aberto para continuar.`
+        : '';
+    const pendingComandaMessage = hasPendingComandas
+        ? `Comanda${
+              pendingComandas.length > 1 ? 's' : ''
+          } pendente${
+              pendingComandas.length > 1 ? 's' : ''
+          } de dia anterior: ${pendingComandasLabel}. Receba apenas ${
+              pendingComandas.length > 1 ? 'as comandas' : 'a comanda'
+          } pendente${pendingComandas.length > 1 ? 's' : ''}.`
+        : '';
+    const blockedSaleMessage = useMemo(() => {
+        if (requiresClosure && !hasPendingComandas) {
+            return closureBlockMessage;
+        }
+        if (hasPendingComandas && !isPendingComandaSelected) {
+            return pendingComandaMessage;
+        }
+        if (requiresClosure) {
+            return closureBlockMessage;
+        }
+        return '';
+    }, [
+        closureBlockMessage,
+        hasPendingComandas,
+        isPendingComandaSelected,
+        pendingComandaMessage,
+        requiresClosure,
+    ]);
+    const visibleComandasList = useMemo(() => {
+        if (!hasPendingComandas) {
+            return openComandasList;
+        }
+
+        return openComandasList.filter((comanda) =>
+            pendingComandas.includes(comanda.codigo),
+        );
+    }, [hasPendingComandas, openComandasList, pendingComandas]);
+    const openComandasDisplayAmount = useMemo(
+        () =>
+            visibleComandasList.reduce(
+                (sum, comanda) => sum + Number(comanda.total ?? 0),
+                0,
+            ),
+        [visibleComandasList],
+    );
+    const openComandasDisplayCount = visibleComandasList.length;
+    const shouldFocusComandas =
+        isCashier &&
+        (requiresClosure || hasPendingComandas) &&
+        visibleComandasList.length > 0;
+    const autoOpenComandasKey = `${requiresClosure ? '1' : '0'}-${pendingComandasLabel}-${openComandasDisplayCount}`;
 
     const hasVrRestrictions = useMemo(
         () => items.some((item) => !item.vrEligible),
@@ -280,6 +363,53 @@ export default function Dashboard() {
         };
     }, []);
 
+    const refreshCashierRestrictions = useCallback(() => {
+        if (!isCashier || typeof route !== 'function') {
+            return () => {};
+        }
+
+        let isMounted = true;
+        setCashierRestrictionsLoading(true);
+
+        axios
+            .get(route('sales.restrictions'))
+            .then((response) => {
+                if (!isMounted) {
+                    return;
+                }
+                setCashierRestrictions(response.data ?? null);
+            })
+            .catch(() => {
+                if (isMounted) {
+                    setCashierRestrictions(null);
+                }
+            })
+            .finally(() => {
+                if (isMounted) {
+                    setCashierRestrictionsLoading(false);
+                }
+            });
+
+        return () => {
+            isMounted = false;
+        };
+    }, [isCashier]);
+
+    useEffect(() => {
+        const cleanup = refreshCashierRestrictions();
+        return cleanup;
+    }, []);
+
+    useEffect(() => {
+        if (!shouldFocusComandas) {
+            return;
+        }
+        if (autoOpenComandasKey !== lastAutoOpenComandasKey.current) {
+            setShowComandasButtons(true);
+            lastAutoOpenComandasKey.current = autoOpenComandasKey;
+        }
+    }, [autoOpenComandasKey, shouldFocusComandas]);
+
     const fetchOpenComandas = useCallback(() => {
         let isMounted = true;
 
@@ -290,14 +420,10 @@ export default function Dashboard() {
                     return;
                 }
                 const data = response.data ?? {};
-                setOpenComandasAmount(Number(data.total_amount ?? 0));
-                setOpenComandasCount(Number(data.total_comandas ?? 0));
                 setOpenComandasList(Array.isArray(data.comandas) ? data.comandas : []);
             })
             .catch(() => {
                 if (isMounted) {
-                    setOpenComandasAmount(0);
-                    setOpenComandasCount(0);
                     setOpenComandasList([]);
                 }
             });
@@ -305,7 +431,7 @@ export default function Dashboard() {
         return () => {
             isMounted = false;
         };
-    }, []);
+    }, [refreshCashierRestrictions]);
 
     useEffect(() => {
         const cleanup = fetchOpenComandas();
@@ -459,6 +585,12 @@ export default function Dashboard() {
 
     const addItemFromProduct = (product, { preserveInput = false } = {}) => {
         if (!product) {
+            return;
+        }
+        if (isSalesBlocked) {
+            if (blockedSaleMessage) {
+                setSaleError(blockedSaleMessage);
+            }
             return;
         }
 
@@ -638,6 +770,12 @@ export default function Dashboard() {
     };
 
     const finalizeSale = (type, { valeUserId = null, valeType = null, cashAmount = null } = {}) => {
+        if (isSalesBlocked) {
+            if (blockedSaleMessage) {
+                setSaleError(blockedSaleMessage);
+            }
+            return;
+        }
         if (items.length === 0) {
             setSaleError('Adicione pelo menos um item antes de finalizar.');
             return;
@@ -683,6 +821,7 @@ export default function Dashboard() {
                     setItems([]);
                     fetchOpenComandas();
                 }
+                refreshCashierRestrictions();
             })
             .catch((error) => {
                 let message = 'Falha ao registrar a venda.';
@@ -710,6 +849,12 @@ export default function Dashboard() {
 
     const handlePaymentClick = (type) => {
         if (saleLoading) {
+            return;
+        }
+        if (isSalesBlocked) {
+            if (blockedSaleMessage) {
+                setSaleError(blockedSaleMessage);
+            }
             return;
         }
 
@@ -759,6 +904,12 @@ export default function Dashboard() {
     };
 
     const handleLoadComandaItems = (codigo) => {
+        if (isCashier && hasPendingComandas && !pendingComandas.includes(codigo)) {
+            if (pendingComandaMessage) {
+                setSaleError(pendingComandaMessage);
+            }
+            return;
+        }
         setComandaLoading(true);
         axios
             .get(route('sales.comandas.items', { codigo }))
@@ -949,6 +1100,12 @@ export default function Dashboard() {
     };
 
     const handleRestoreCart = (cartId) => {
+        if (isSalesBlocked) {
+            if (blockedSaleMessage) {
+                setSaleError(blockedSaleMessage);
+            }
+            return;
+        }
         const targetCart = savedCarts.find((cart) => cart.id === cartId);
 
         if (!targetCart) {
@@ -992,7 +1149,7 @@ export default function Dashboard() {
                         placeholder="Digite nome, codigo ou ID"
                         aria-label="Buscar produto"
                         className="block w-full rounded-2xl border-2 border-indigo-300 bg-white px-4 py-4 text-xl text-gray-900 shadow focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-200 disabled:opacity-60 dark:bg-gray-700 dark:text-gray-100"
-                        disabled={addingItem || saleLoading}
+                        disabled={addingItem || saleLoading || isSalesBlocked}
                     />
                     {favoriteProducts.length > 0 && (
                         <div className="flex flex-nowrap gap-1 overflow-x-auto pb-0.5">
@@ -1001,7 +1158,8 @@ export default function Dashboard() {
                                     type="button"
                                     key={`favorite-${product.tb1_id}`}
                                     onClick={() => handleFavoriteQuickAdd(product)}
-                                    className="shrink-0 whitespace-nowrap rounded-full border border-gray-200 px-2 py-0.5 text-[11px] font-semibold leading-4 text-gray-600 transition hover:border-indigo-400 hover:text-indigo-600 dark:border-gray-600 dark:text-gray-200"
+                                    disabled={addingItem || saleLoading || isSalesBlocked}
+                                    className="shrink-0 whitespace-nowrap rounded-full border border-gray-200 px-2 py-0.5 text-[11px] font-semibold leading-4 text-gray-600 transition hover:border-indigo-400 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-200"
                                 >
                                     {product.tb1_nome}
                                 </button>
@@ -1032,9 +1190,11 @@ export default function Dashboard() {
                         <div>
                             <p className="text-xs font-semibold uppercase text-red-700 dark:text-red-200">Comandas</p>
                             <p className="text-xl font-bold text-red-600 dark:text-red-100">
-                                {formatCurrency(openComandasAmount)}
+                                {formatCurrency(openComandasDisplayAmount)}
                             </p>
-                            <p className="text-[11px] font-semibold text-red-500 dark:text-red-200">{openComandasCount} em aberto</p>
+                            <p className="text-[11px] font-semibold text-red-500 dark:text-red-200">
+                                {openComandasDisplayCount} em aberto
+                            </p>
                         </div>
                         <button
                             type="button"
@@ -1058,6 +1218,35 @@ export default function Dashboard() {
                     <div className="overflow-hidden bg-white shadow-sm sm:rounded-lg dark:bg-gray-800">
                         <div className="p-6 text-gray-900 dark:text-gray-100">
                             <div className="space-y-6">
+                                {isCashier && (requiresClosure || hasPendingComandas) && (
+                                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-400/40 dark:bg-amber-900/20 dark:text-amber-100">
+                                        <div className="flex flex-col gap-2">
+                                            {requiresClosure && (
+                                                <p className="font-semibold">{closureBlockMessage}</p>
+                                            )}
+                                            {hasPendingComandas && (
+                                                <p className={requiresClosure ? '' : 'font-semibold'}>
+                                                    {pendingComandaMessage}
+                                                </p>
+                                            )}
+                                            {requiresClosure && (
+                                                <div>
+                                                    <Link
+                                                        href={route('cashier.close')}
+                                                        className="inline-flex items-center rounded-full bg-amber-600 px-4 py-1.5 text-xs font-semibold text-white shadow hover:bg-amber-700"
+                                                    >
+                                                        Fechar caixa
+                                                    </Link>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                                {isCashier && cashierRestrictionsLoading && !cashierRestrictions && (
+                                    <p className="text-xs text-gray-500 dark:text-gray-300">
+                                        Verificando restricoes do caixa...
+                                    </p>
+                                )}
                                 {saleError && (
                                     <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-400/50 dark:bg-red-950/30 dark:text-red-200">
                                         {saleError}
@@ -1195,7 +1384,7 @@ export default function Dashboard() {
                                                                         type="button"
                                                                         onClick={() => incrementItemQuantity(item.id)}
                                                                         className="text-indigo-600 transition hover:text-indigo-400 focus:outline-none disabled:opacity-50"
-                                                                        disabled={saleLoading}
+                                                                        disabled={saleLoading || isSalesBlocked}
                                                                         aria-label={`Adicionar uma unidade de ${item.name}`}
                                                                     >
                                                                         <i className="bi bi-plus-circle-fill text-lg" aria-hidden="true"></i>
@@ -1205,7 +1394,7 @@ export default function Dashboard() {
                                                                         type="button"
                                                                         onClick={() => decrementItemQuantity(item.id)}
                                                                         className="text-red-500 transition hover:text-red-400 focus:outline-none disabled:opacity-50"
-                                                                        disabled={saleLoading}
+                                                                        disabled={saleLoading || isSalesBlocked}
                                                                         aria-label={`Remover uma unidade de ${item.name}`}
                                                                     >
                                                                         <i className="bi bi-dash-circle-fill text-lg" aria-hidden="true"></i>
@@ -1223,7 +1412,7 @@ export default function Dashboard() {
                                                                     type="button"
                                                                     onClick={() => removeItem(item.id)}
                                                                     className="text-red-600 transition hover:text-red-400 focus:outline-none disabled:opacity-50"
-                                                                    disabled={saleLoading}
+                                                                    disabled={saleLoading || isSalesBlocked}
                                                                 >
                                                                     <i className="bi bi-trash-fill text-lg" aria-hidden="true"></i>
                                                                     <span className="sr-only">Remover {item.name}</span>
@@ -1255,7 +1444,7 @@ export default function Dashboard() {
                                                 type="button"
                                                 key={option.value}
                                                 onClick={() => handlePaymentClick(option.value)}
-                                                disabled={saleLoading || items.length === 0}
+                                                disabled={saleLoading || items.length === 0 || isSalesBlocked}
                                                 className={`rounded-lg px-4 py-3 text-center text-base font-semibold shadow focus:outline-none focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60 ${option.classes}`}
                                             >
                                                 {option.label}
@@ -1264,13 +1453,24 @@ export default function Dashboard() {
                                     </div>
 
                                     {showComandasButtons && (
-                                        <div className="mt-3 flex flex-wrap gap-2">
-                                            {openComandasList.length === 0 ? (
+                                        <div
+                                            className={`mt-3 flex flex-wrap gap-2 ${
+                                                shouldFocusComandas
+                                                    ? 'rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-400/40 dark:bg-amber-900/20'
+                                                    : ''
+                                            }`}
+                                        >
+                                            {shouldFocusComandas && (
+                                                <span className="text-xs font-semibold text-amber-800 dark:text-amber-200">
+                                                    Comandas abertas para recebimento:
+                                                </span>
+                                            )}
+                                            {visibleComandasList.length === 0 ? (
                                                 <span className="text-xs text-gray-500 dark:text-gray-300">
                                                     Nenhuma comanda em aberto.
                                                 </span>
                                             ) : (
-                                                openComandasList.map((comanda) => (
+                                                visibleComandasList.map((comanda) => (
                                                     <button
                                                         type="button"
                                                         key={`comanda-${comanda.codigo}`}
@@ -1300,7 +1500,8 @@ export default function Dashboard() {
                                                         type="button"
                                                         key={cart.id}
                                                         onClick={() => handleRestoreCart(cart.id)}
-                                                        className="rounded-full border border-indigo-200 px-4 py-2 text-sm font-semibold text-indigo-700 shadow-sm transition hover:border-indigo-400 hover:bg-indigo-50 dark:border-indigo-500 dark:text-indigo-200"
+                                                        disabled={saleLoading || isSalesBlocked}
+                                                        className="rounded-full border border-indigo-200 px-4 py-2 text-sm font-semibold text-indigo-700 shadow-sm transition hover:border-indigo-400 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-indigo-500 dark:text-indigo-200"
                                                     >
                                                         {formatCurrency(cart.total)}
                                                     </button>

@@ -612,3 +612,31 @@ Stack trace:
 #70 C:\\xampp\\htdocs\\pec\\vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\resources\\server.php(23): require_once('C:\\\\xampp\\\\htdocs...')
 #71 {main}
 "} 
+[2025-12-21 23:24:55] local.ERROR: Cannot use App\Models\VendaPagamento as VendaPagamento because the name is already in use {"exception":"[object] (Symfony\\Component\\ErrorHandler\\Error\\FatalError(code: 0): Cannot use App\\Models\\VendaPagamento as VendaPagamento because the name is already in use at C:\\xampp\\htdocs\\pec\\app\\Http\\Controllers\\SaleController.php:10)
+[stacktrace]
+#0 {main}
+"} 
+[2025-12-21 23:24:55] local.ERROR: Cannot use App\Models\VendaPagamento as VendaPagamento because the name is already in use {"exception":"[object] (Symfony\\Component\\ErrorHandler\\Error\\FatalError(code: 0): Cannot use App\\Models\\VendaPagamento as VendaPagamento because the name is already in use at C:\\xampp\\htdocs\\pec\\app\\Http\\Controllers\\SaleController.php:10)
+[stacktrace]
+#0 {main}
+"} 
+[2025-12-21 23:24:58] local.ERROR: Cannot use App\Models\VendaPagamento as VendaPagamento because the name is already in use {"exception":"[object] (Symfony\\Component\\ErrorHandler\\Error\\FatalError(code: 0): Cannot use App\\Models\\VendaPagamento as VendaPagamento because the name is already in use at C:\\xampp\\htdocs\\pec\\app\\Http\\Controllers\\SaleController.php:10)
+[stacktrace]
+#0 {main}
+"} 
+[2025-12-21 23:24:58] local.ERROR: Cannot use App\Models\VendaPagamento as VendaPagamento because the name is already in use {"exception":"[object] (Symfony\\Component\\ErrorHandler\\Error\\FatalError(code: 0): Cannot use App\\Models\\VendaPagamento as VendaPagamento because the name is already in use at C:\\xampp\\htdocs\\pec\\app\\Http\\Controllers\\SaleController.php:10)
+[stacktrace]
+#0 {main}
+"} 
+[2025-12-21 23:25:27] local.ERROR: Cannot use App\Models\VendaPagamento as VendaPagamento because the name is already in use {"exception":"[object] (Symfony\\Component\\ErrorHandler\\Error\\FatalError(code: 0): Cannot use App\\Models\\VendaPagamento as VendaPagamento because the name is already in use at C:\\xampp\\htdocs\\pec\\app\\Http\\Controllers\\SaleController.php:10)
+[stacktrace]
+#0 {main}
+"} 
+[2025-12-21 23:25:40] local.ERROR: Cannot use App\Models\VendaPagamento as VendaPagamento because the name is already in use {"exception":"[object] (Symfony\\Component\\ErrorHandler\\Error\\FatalError(code: 0): Cannot use App\\Models\\VendaPagamento as VendaPagamento because the name is already in use at C:\\xampp\\htdocs\\pec\\app\\Http\\Controllers\\SaleController.php:10)
+[stacktrace]
+#0 {main}
+"} 
+[2025-12-21 23:25:42] local.ERROR: Cannot use App\Models\VendaPagamento as VendaPagamento because the name is already in use {"exception":"[object] (Symfony\\Component\\ErrorHandler\\Error\\FatalError(code: 0): Cannot use App\\Models\\VendaPagamento as VendaPagamento because the name is already in use at C:\\xampp\\htdocs\\pec\\app\\Http\\Controllers\\SaleController.php:10)
+[stacktrace]
+#0 {main}
+"} 

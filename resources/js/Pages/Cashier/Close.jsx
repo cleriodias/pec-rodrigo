@@ -19,13 +19,25 @@ const formatDateTime = (value) => {
     });
 };
 
-export default function CashierClose({ activeUnit, todayClosure, lastClosure }) {
+const formatDate = (value) => {
+    if (!value) {
+        return '--';
+    }
+
+    return new Date(value).toLocaleDateString('pt-BR');
+};
+
+export default function CashierClose({ activeUnit, todayClosure, lastClosure, pendingClosureDate }) {
     const { data, setData, post, processing, errors } = useForm({
         cash_amount: '',
         card_amount: '',
+        closure_date: pendingClosureDate ?? '',
+        confirm_pending: false,
     });
 
     const hasClosedToday = Boolean(todayClosure);
+    const hasPendingClosure = Boolean(pendingClosureDate);
+    const pendingLabel = formatDate(pendingClosureDate);
 
     const handleSubmit = (event) => {
         event.preventDefault();
@@ -78,6 +90,26 @@ export default function CashierClose({ activeUnit, todayClosure, lastClosure }) 
                             </div>
                         ) : (
                             <form onSubmit={handleSubmit} className="mt-6 space-y-6">
+                                {hasPendingClosure && (
+                                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-400/50 dark:bg-amber-900/10 dark:text-amber-100">
+                                        <p className="font-semibold">
+                                            Fechamento pendente do dia {pendingLabel}.
+                                        </p>
+                                        <p className="mt-1">
+                                            Confirme para fechar o caixa pendente.
+                                        </p>
+                                        <label className="mt-3 flex items-center gap-2 text-sm text-amber-900 dark:text-amber-100">
+                                            <input
+                                                type="checkbox"
+                                                checked={data.confirm_pending}
+                                                onChange={(event) => setData('confirm_pending', event.target.checked)}
+                                                className="h-4 w-4 text-amber-600 focus:ring-amber-500"
+                                            />
+                                            Confirmo fechar o caixa pendente.
+                                        </label>
+                                        <InputError message={errors.confirm_pending} className="mt-2" />
+                                    </div>
+                                )}
                                 <div>
                                     <label htmlFor="cash_amount" className="text-sm font-medium text-gray-700 dark:text-gray-200">
                                         Total em dinheiro
@@ -124,7 +156,7 @@ export default function CashierClose({ activeUnit, todayClosure, lastClosure }) 
                                 <div className="flex justify-end">
                                     <button
                                         type="submit"
-                                        disabled={processing}
+                                        disabled={processing || (hasPendingClosure && !data.confirm_pending)}
                                         className="rounded-xl bg-indigo-600 px-6 py-2 text-sm font-semibold text-white shadow transition hover:bg-indigo-700 disabled:opacity-50"
                                     >
                                         Confirmar fechamento
