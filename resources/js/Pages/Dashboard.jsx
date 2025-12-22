@@ -979,54 +979,38 @@ export default function Dashboard() {
     };
 
     const headerContent = (
-        <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-3">
-                <label
-                    htmlFor="campo-dashboard"
-                    className="text-sm font-medium text-gray-700 dark:text-gray-200"
-                >
-                    Busca por produto
-                </label>
-                {favoriteProducts.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                        {favoriteProducts.map((product) => (
-                            <button
-                                type="button"
-                                key={`favorite-${product.tb1_id}`}
-                                onClick={() => handleFavoriteQuickAdd(product)}
-                                className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 transition hover:border-indigo-400 hover:text-indigo-600 dark:border-gray-600 dark:text-gray-200"
-                            >
-                                {product.tb1_nome}
-                            </button>
-                        ))}
-                    </div>
-                )}
-            </div>
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-6">
-                <div className="flex-1">
-                    <div className="flex flex-col gap-1">
-                        <input
-                            id="campo-dashboard"
-                            type="text"
-                            ref={inputRef}
-                            value={texto}
-                            onChange={handleInputChange}
-                            onKeyDown={handleKeyDown}
-                            placeholder="Digite nome, codigo ou ID"
-                            className="block w-full rounded-2xl border-2 border-indigo-300 bg-white px-4 py-3 text-lg text-gray-900 shadow focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-200 disabled:opacity-60 dark:bg-gray-700 dark:text-gray-100"
-                            disabled={addingItem || saleLoading}
-                        />
-                        <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-300">
-                            <span>Digite pelo menos {MIN_CHARACTERS} caracteres ou pressione Enter com o ID do produto.</span>
-                            <span className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400">
-                                <i className="bi bi-list-check" aria-hidden="true"></i>
-                                {totalItems} item(s)
-                            </span>
+        <div className="space-y-2">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:gap-4">
+                <div className="flex-1 space-y-2">
+                    <input
+                        id="campo-dashboard"
+                        type="text"
+                        ref={inputRef}
+                        value={texto}
+                        onChange={handleInputChange}
+                        onKeyDown={handleKeyDown}
+                        placeholder="Digite nome, codigo ou ID"
+                        aria-label="Buscar produto"
+                        className="block w-full rounded-2xl border-2 border-indigo-300 bg-white px-4 py-4 text-xl text-gray-900 shadow focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-200 disabled:opacity-60 dark:bg-gray-700 dark:text-gray-100"
+                        disabled={addingItem || saleLoading}
+                    />
+                    {favoriteProducts.length > 0 && (
+                        <div className="flex flex-nowrap gap-1 overflow-x-auto pb-0.5">
+                            {favoriteProducts.map((product) => (
+                                <button
+                                    type="button"
+                                    key={`favorite-${product.tb1_id}`}
+                                    onClick={() => handleFavoriteQuickAdd(product)}
+                                    className="shrink-0 whitespace-nowrap rounded-full border border-gray-200 px-2 py-0.5 text-[11px] font-semibold leading-4 text-gray-600 transition hover:border-indigo-400 hover:text-indigo-600 dark:border-gray-600 dark:text-gray-200"
+                                >
+                                    {product.tb1_nome}
+                                </button>
+                            ))}
                         </div>
-                    </div>
+                    )}
                 </div>
-                <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-end lg:w-auto lg:gap-3">
-                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-left shadow-sm dark:border-emerald-500/30 dark:bg-emerald-900/20">
+                <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-end lg:w-auto lg:gap-2">
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-left shadow-sm dark:border-emerald-500/30 dark:bg-emerald-900/20">
                         <p className="text-xs font-semibold uppercase text-emerald-700 dark:text-emerald-200">Total</p>
                         <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-100">
                             {formatCurrency(totalAmount)}
@@ -1034,7 +1018,7 @@ export default function Dashboard() {
                         <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-200">{totalItems} item(s)</p>
                     </div>
                     {showChangeCard && (
-                        <div className="flex items-center justify-between rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 shadow-sm dark:border-blue-500/30 dark:bg-blue-900/20">
+                        <div className="flex items-center justify-between rounded-2xl border border-blue-200 bg-blue-50 px-3 py-2 shadow-sm dark:border-blue-500/30 dark:bg-blue-900/20">
                             <div>
                                 <p className="text-xs font-semibold uppercase text-blue-700 dark:text-blue-200">Troco</p>
                                 <p className="text-2xl font-bold text-blue-700 dark:text-blue-100">
@@ -1044,7 +1028,7 @@ export default function Dashboard() {
                             <i className="bi bi-wallet2 text-xl text-blue-500 dark:text-blue-200" aria-hidden="true"></i>
                         </div>
                     )}
-                    <div className="flex items-center justify-between rounded-2xl border border-red-200 bg-red-50 px-4 py-3 shadow-sm dark:border-red-500/30 dark:bg-red-900/20">
+                    <div className="flex items-center justify-between rounded-2xl border border-red-200 bg-red-50 px-3 py-2 shadow-sm dark:border-red-500/30 dark:bg-red-900/20">
                         <div>
                             <p className="text-xs font-semibold uppercase text-red-700 dark:text-red-200">Comandas</p>
                             <p className="text-xl font-bold text-red-600 dark:text-red-100">
@@ -1066,10 +1050,10 @@ export default function Dashboard() {
         </div>
     );
     return (
-        <AuthenticatedLayout header={headerContent}>
+        <AuthenticatedLayout header={headerContent} headerClassName="py-1">
             <Head title="Dashboard" />
 
-            <div className="py-12">
+            <div className="pt-3 pb-8">
                 <div className="mx-auto max-w-7xl sm:px-6 lg:px-8">
                     <div className="overflow-hidden bg-white shadow-sm sm:rounded-lg dark:bg-gray-800">
                         <div className="p-6 text-gray-900 dark:text-gray-100">

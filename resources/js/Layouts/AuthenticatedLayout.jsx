@@ -41,7 +41,7 @@ const DEFAULT_MENU_KEYS = [
     'lanchonete_terminal',
 ];
 
-export default function AuthenticatedLayout({ header, children }) {
+export default function AuthenticatedLayout({ header, headerClassName = '', children }) {
     const pageProps = usePage().props;
     const user = pageProps.auth.user;
     const activeUnitName = pageProps.auth.unit?.name ?? 'Dashboard';
@@ -484,7 +484,9 @@ export default function AuthenticatedLayout({ header, children }) {
 
             {header && (
                 <header className="bg-white shadow dark:bg-gray-800">
-                    <div className="mx-auto max-w-7xl py-6 px-4 sm:px-6 lg:px-8">
+                    <div
+                        className={`mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-2 ${headerClassName}`}
+                    >
                         {header}
                     </div>
                 </header>

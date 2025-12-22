@@ -3,8 +3,6 @@ import { Head } from '@inertiajs/react';
 
 export default function Config({ auth }) {
     const options = [
-        { label: 'Acesso', icon: 'bi-shield-lock' },
-        { label: 'Perfil', icon: 'bi-person-circle' },
         {
             label: 'Menu',
             icon: 'bi-ui-checks',
@@ -71,7 +69,7 @@ export default function Config({ auth }) {
                         Farrammentas
                     </h2>
                     <p className="text-sm text-gray-500 dark:text-gray-300">
-                        Gerencie acesso, perfil, menus e relatorios.
+                        Gerencie menus e relatorios.
                     </p>
                 </div>
             }
