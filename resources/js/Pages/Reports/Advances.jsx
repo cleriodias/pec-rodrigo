@@ -29,7 +29,7 @@ export default function AdvancesReport({
         unit_id:
             selectedUnitId !== null && selectedUnitId !== undefined
                 ? String(selectedUnitId)
-                : '',
+                : 'all',
     });
 
     const handleSubmit = (event) => {
@@ -41,6 +41,7 @@ export default function AdvancesReport({
             data,
         });
     };
+    const totalAmount = rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
 
     return (
         <AuthenticatedLayout
@@ -95,7 +96,7 @@ export default function AdvancesReport({
                                     onChange={(event) => setData('unit_id', event.target.value)}
                                     className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
                                 >
-                                    <option value="">Todas</option>
+                                    <option value="all">Todas</option>
                                     {filterUnits.map((filterUnit) => (
                                         <option key={filterUnit.id} value={filterUnit.id}>
                                             {filterUnit.name}
@@ -118,9 +119,19 @@ export default function AdvancesReport({
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                                 Adiantamentos
                             </h3>
-                            <span className="text-xs font-semibold text-gray-500 dark:text-gray-300">
-                                {rows.length} registros
-                            </span>
+                            <div className="flex flex-wrap items-center gap-3">
+                                <span className="text-xs font-semibold text-gray-500 dark:text-gray-300">
+                                    {rows.length} registros
+                                </span>
+                                <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-indigo-700 shadow-sm dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide">
+                                        Total
+                                    </p>
+                                    <p className="text-sm font-bold">
+                                        {formatCurrency(totalAmount)}
+                                    </p>
+                                </div>
+                            </div>
                         </div>
 
                         {rows.length === 0 ? (

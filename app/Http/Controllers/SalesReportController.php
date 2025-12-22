@@ -370,11 +370,21 @@ class SalesReportController extends Controller
         [$start, $end, $startDate, $endDate] = $this->resolveDateRange($request);
 
         $rows = ProductDiscard::query()
-            ->with(['product:tb1_id,tb1_nome,tb1_vlr_venda', 'user:id,name,tb2_id'])
+            ->with(['product:tb1_id,tb1_nome,tb1_vlr_venda', 'user:id,name,tb2_id', 'unit:tb2_id,tb2_nome'])
             ->whereBetween('created_at', [$start, $end])
             ->when($filterUnitId, function ($query) use ($filterUnitId) {
-                $query->whereHas('user', function ($userQuery) use ($filterUnitId) {
-                    $userQuery->where('tb2_id', $filterUnitId);
+                $query->where(function ($subQuery) use ($filterUnitId) {
+                    $subQuery->where('unit_id', $filterUnitId)
+                        ->orWhere(function ($legacy) use ($filterUnitId) {
+                            $legacy->whereNull('unit_id')
+                                ->where(function ($legacyUnit) use ($filterUnitId) {
+                                    $legacyUnit->whereHas('user', function ($userQuery) use ($filterUnitId) {
+                                        $userQuery->where('tb2_id', $filterUnitId);
+                                    })->orWhereHas('user.units', function ($unitQuery) use ($filterUnitId) {
+                                        $unitQuery->where('tb2_unidades.tb2_id', $filterUnitId);
+                                    });
+                                });
+                        });
                 });
             })
             ->orderByDesc('created_at')
@@ -382,6 +392,7 @@ class SalesReportController extends Controller
                 'id',
                 'product_id',
                 'user_id',
+                'unit_id',
                 'quantity',
                 'created_at',
             ])
@@ -397,6 +408,7 @@ class SalesReportController extends Controller
                     'total' => round($unitPrice * $quantity, 2),
                     'user_name' => $discard->user?->name ?? '---',
                     'created_at' => $discard->created_at?->toIso8601String(),
+                    'unit_name' => $discard->unit?->tb2_nome ?? '---',
                 ];
             })
             ->values();
@@ -1342,7 +1354,10 @@ class SalesReportController extends Controller
         if ($requestedUnitId === null) {
             $filterUnitId = $this->resolveUnitId($request);
         } else {
-            $filterUnitId = $requestedUnitId !== '' ? (int) $requestedUnitId : null;
+            $filterUnitId =
+                ($requestedUnitId !== '' && $requestedUnitId !== 'all')
+                    ? (int) $requestedUnitId
+                    : null;
         }
 
         if (! $filterUnitId) {

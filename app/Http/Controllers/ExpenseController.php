@@ -96,11 +96,24 @@ class ExpenseController extends Controller
     {
         $sessionUnit = $request->session()->get('active_unit');
 
-        if (is_array($sessionUnit) && isset($sessionUnit['id'])) {
-            return [
-                'id' => (int) $sessionUnit['id'],
-                'name' => (string) ($sessionUnit['name'] ?? ''),
-            ];
+        if (is_array($sessionUnit)) {
+            $unitId = $sessionUnit['id'] ?? $sessionUnit['tb2_id'] ?? null;
+            if ($unitId) {
+                return [
+                    'id' => (int) $unitId,
+                    'name' => (string) ($sessionUnit['name'] ?? $sessionUnit['tb2_nome'] ?? ''),
+                ];
+            }
+        }
+
+        if (is_object($sessionUnit)) {
+            $unitId = $sessionUnit->id ?? $sessionUnit->tb2_id ?? null;
+            if ($unitId) {
+                return [
+                    'id' => (int) $unitId,
+                    'name' => (string) ($sessionUnit->name ?? $sessionUnit->tb2_nome ?? ''),
+                ];
+            }
         }
 
         $user = $request->user();

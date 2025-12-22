@@ -15,10 +15,12 @@ class ProductDiscard extends Model
     protected $fillable = [
         'product_id',
         'user_id',
+        'unit_id',
         'quantity',
     ];
 
     protected $casts = [
+        'unit_id' => 'integer',
         'quantity' => 'float',
     ];
 
@@ -30,5 +32,10 @@ class ProductDiscard extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function unit(): BelongsTo
+    {
+        return $this->belongsTo(Unidade::class, 'unit_id', 'tb2_id');
     }
 }

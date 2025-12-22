@@ -280,32 +280,33 @@ export default function SalesToday({
                                     Selecione uma forma de pagamento para listar as vendas.
                                 </p>
                             </div>
-                            <div className="flex flex-wrap gap-2">
-                                {chartData.map((item) => (
-                                    <button
-                                        type="button"
-                                        key={item.type}
-                                        onClick={() => setSelectedType(item.type)}
-                                        className={`rounded-full px-4 py-2 text-sm font-semibold text-white shadow ${
-                                            selectedType === item.type
-                                                ? 'ring-2 ring-offset-2 ring-offset-gray-50 dark:ring-offset-gray-800'
-                                                : 'opacity-70'
-                                        }`}
-                                        style={{ backgroundColor: item.color }}
-                                    >
-                                        {item.label}
-                                    </button>
-                                ))}
+                            <div className="flex flex-wrap items-center gap-3">
+                                <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-indigo-700 shadow-sm dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide">
+                                        Total em {selectedMeta.label}
+                                    </p>
+                                    <p className="text-sm font-bold">
+                                        {formatCurrency(selectedTotal)}
+                                    </p>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {chartData.map((item) => (
+                                        <button
+                                            type="button"
+                                            key={item.type}
+                                            onClick={() => setSelectedType(item.type)}
+                                            className={`rounded-full px-4 py-2 text-sm font-semibold text-white shadow ${
+                                                selectedType === item.type
+                                                    ? 'ring-2 ring-offset-2 ring-offset-gray-50 dark:ring-offset-gray-800'
+                                                    : 'opacity-70'
+                                            }`}
+                                            style={{ backgroundColor: item.color }}
+                                        >
+                                            {item.label}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
-
-                        <div className="mt-6 rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/40">
-                            <p className="text-sm font-medium text-gray-600 dark:text-gray-200">
-                                Total em {selectedMeta.label}
-                            </p>
-                            <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                                {formatCurrency(selectedTotal)}
-                            </p>
                         </div>
 
                         <div className="mt-6 overflow-x-auto">

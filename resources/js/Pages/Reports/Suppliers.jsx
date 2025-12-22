@@ -22,7 +22,7 @@ export default function SuppliersReport({
         unit_id:
             selectedUnitId !== null && selectedUnitId !== undefined
                 ? String(selectedUnitId)
-                : '',
+                : 'all',
     });
 
     const handleSubmit = (event) => {
@@ -66,7 +66,7 @@ export default function SuppliersReport({
                                     onChange={(event) => setData('unit_id', event.target.value)}
                                     className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
                                 >
-                                    <option value="">Todas</option>
+                                    <option value="all">Todas</option>
                                     {filterUnits.map((filterUnit) => (
                                         <option key={filterUnit.id} value={filterUnit.id}>
                                             {filterUnit.name}

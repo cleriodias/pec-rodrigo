@@ -13,9 +13,21 @@ class ProductDiscardController extends Controller
 {
     public function index(Request $request): Response
     {
+        $activeUnit = $request->session()->get('active_unit');
+        $unitId = is_array($activeUnit)
+            ? ($activeUnit['id'] ?? $activeUnit['tb2_id'] ?? null)
+            : (is_object($activeUnit) ? ($activeUnit->id ?? $activeUnit->tb2_id ?? null) : null);
+        $unitId = $unitId ?? $request->user()->tb2_id;
+
         $recent = ProductDiscard::query()
             ->with('product:tb1_id,tb1_nome,tb1_codbar')
             ->where('user_id', $request->user()->id)
+            ->when($unitId, function ($query) use ($unitId) {
+                $query->where(function ($subQuery) use ($unitId) {
+                    $subQuery->where('unit_id', $unitId)
+                        ->orWhereNull('unit_id');
+                });
+            })
             ->orderByDesc('created_at')
             ->limit(15)
             ->get()
@@ -54,6 +66,12 @@ class ProductDiscardController extends Controller
             ],
         ]);
 
+        $activeUnit = $request->session()->get('active_unit');
+        $unitId = is_array($activeUnit)
+            ? ($activeUnit['id'] ?? $activeUnit['tb2_id'] ?? null)
+            : (is_object($activeUnit) ? ($activeUnit->id ?? $activeUnit->tb2_id ?? null) : null);
+        $unitId = $unitId ?? $request->user()->tb2_id;
+
         $product = Produto::findOrFail($data['product_id']);
 
         if ((int) $product->tb1_tipo !== 1) {
@@ -67,6 +85,7 @@ class ProductDiscardController extends Controller
         ProductDiscard::create([
             'product_id' => $product->tb1_id,
             'user_id' => $request->user()->id,
+            'unit_id' => $unitId,
             'quantity' => $data['quantity'],
         ]);
 

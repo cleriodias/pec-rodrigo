@@ -26,7 +26,7 @@ export default function SalesPeriod({
         unit_id:
             selectedUnitId !== null && selectedUnitId !== undefined
                 ? String(selectedUnitId)
-                : '',
+                : 'all',
     });
 
     const handleSubmit = (event) => {
@@ -125,7 +125,7 @@ export default function SalesPeriod({
                                     onChange={(event) => setData('unit_id', event.target.value)}
                                     className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-gray-800 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
                                 >
-                                    <option value="">Todas</option>
+                                    <option value="all">Todas</option>
                                     {filterUnits.map((filterUnit) => (
                                         <option key={filterUnit.id} value={filterUnit.id}>
                                             {filterUnit.name}
@@ -210,9 +210,19 @@ export default function SalesPeriod({
                     </div>
 
                     <div className="rounded-2xl bg-white p-6 shadow dark:bg-gray-800">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                            Totais diarios
-                        </h3>
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                                Totais diarios
+                            </h3>
+                            <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-indigo-700 shadow-sm dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200">
+                                <p className="text-[10px] font-semibold uppercase tracking-wide">
+                                    Total do periodo
+                                </p>
+                                <p className="text-sm font-bold">
+                                    {formatCurrency(totalSum)}
+                                </p>
+                            </div>
+                        </div>
                         <div className="mt-4 overflow-x-auto">
                             {dailyTotals.length === 0 ? (
                                 <p className="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-300">
