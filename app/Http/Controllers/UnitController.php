@@ -105,6 +105,10 @@ class UnitController extends Controller
 
     private function validateUnit(Request $request): array
     {
+        $request->merge([
+            'tb2_localizacao' => $this->normalizeMapUrl($request->input('tb2_localizacao')),
+        ]);
+
         return $request->validate(
             [
                 'tb2_nome' => 'required|string|max:255',
@@ -124,5 +128,20 @@ class UnitController extends Controller
                 'tb2_localizacao.url' => 'O link de localiza\u00E7\u00E3o deve ser uma URL v\u00E1lida.',
             ]
         );
+    }
+
+    private function normalizeMapUrl(?string $value): string
+    {
+        $value = trim((string) $value);
+
+        if ($value === '') {
+            return $value;
+        }
+
+        if (preg_match('/<iframe[^>]+src=["\']([^"\']+)["\']/i', $value, $matches)) {
+            return $matches[1];
+        }
+
+        return $value;
     }
 }

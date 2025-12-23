@@ -113,12 +113,15 @@ export default function UnitEdit({ auth, unit }) {
                                     <label htmlFor="tb2_localizacao" className="block text-sm font-medium text-gray-700">Link Google Maps</label>
                                     <input
                                         id="tb2_localizacao"
-                                        type="url"
-                                        placeholder="https://maps.google.com/..."
+                                        type="text"
+                                        placeholder="https://www.google.com/maps/... ou <iframe ...>"
                                         value={data.tb2_localizacao}
                                         onChange={(e) => setData('tb2_localizacao', e.target.value)}
                                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                                     />
+                                    <p className="mt-1 text-xs text-gray-500">
+                                        Use um link completo do Google Maps (https://www.google.com/maps/...) ou cole o iframe de embed.
+                                    </p>
                                     {errors.tb2_localizacao && <span className="text-red-600">{errors.tb2_localizacao}</span>}
                                 </div>
                             </div>

@@ -27,6 +27,53 @@ export default function Welcome({ units = [], flash = {} }) {
             ? 'Cadastro recebido. Voce recebera informacoes de produtos feitos na hora.'
             : '');
     const showNewsletterForm = showWhatsappForm || Boolean(errors.name || errors.phone || successText);
+    const getMapEmbedUrl = (value) => {
+        if (!value) {
+            return null;
+        }
+
+        try {
+            const url = new URL(value);
+            const host = url.hostname.replace(/^www\./, '');
+            const isGoogleHost =
+                host === 'google.com' || host.endsWith('.google.com') || host === 'maps.google.com';
+
+            if (!isGoogleHost) {
+                return null;
+            }
+
+            if (url.pathname.includes('/maps/embed') || url.searchParams.get('output') === 'embed') {
+                return url.toString();
+            }
+
+            const query = url.searchParams.get('q') || url.searchParams.get('query');
+            if (query) {
+                return `https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`;
+            }
+
+            const placeMatch = url.pathname.match(/\/maps\/place\/([^/]+)/);
+            if (placeMatch) {
+                const place = placeMatch[1].replace(/\+/g, ' ');
+                return `https://www.google.com/maps?q=${encodeURIComponent(place)}&output=embed`;
+            }
+
+            const searchMatch = url.pathname.match(/\/maps\/search\/([^/]+)/);
+            if (searchMatch) {
+                const search = searchMatch[1].replace(/\+/g, ' ');
+                return `https://www.google.com/maps?q=${encodeURIComponent(search)}&output=embed`;
+            }
+
+            const coordsMatch = url.pathname.match(/\/maps\/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+            if (coordsMatch) {
+                const coords = `${coordsMatch[1]},${coordsMatch[2]}`;
+                return `https://www.google.com/maps?q=${encodeURIComponent(coords)}&output=embed`;
+            }
+        } catch (error) {
+            return null;
+        }
+
+        return null;
+    };
 
     const submitNewsletter = (event) => {
         event.preventDefault();
@@ -214,12 +261,6 @@ export default function Welcome({ units = [], flash = {} }) {
                                             </div>
                                         )}
                                     </div>
-                                    <div className="mt-6 rounded-2xl border border-white/60 bg-white/70 p-4 text-sm text-slate-600">
-                                        <p className="font-semibold text-slate-700">Faça-nos uma visita</p>
-                                        <p className="mt-2">
-                                            Temos {validUnits.length} unidades uma deve estar perto de voce.
-                                        </p>
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -229,54 +270,45 @@ export default function Welcome({ units = [], flash = {} }) {
                                 className="reveal-up flex flex-wrap items-end justify-between gap-4"
                                 style={{ animationDelay: '0.1s' }}
                             >
-                                <div>
-                                    <h2
-                                        className="text-2xl font-semibold text-slate-900"
-                                        style={{ fontFamily: "'Playfair Display', serif" }}
-                                    >
-                                        Unidades
-                                    </h2>
-                                    <p className="mt-2 text-sm text-slate-600">
-                                    </p>
-                                </div>
+
 
                             </div>
 
-                            <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                            <div className="mt-2 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                                 {validUnits.length ? (
-                                    validUnits.map((unit, index) => (
-                                        <div
-                                            key={unit.tb2_id}
-                                            className="reveal-up flex h-full flex-col rounded-3xl border border-white/70 bg-white/80 p-5 shadow-md transition hover:-translate-y-1 hover:shadow-lg"
-                                            style={{ animationDelay: `${Math.min(index * 0.06, 0.3)}s` }}
-                                        >
-                                            <div className="flex items-start justify-between gap-4">
-                                                <h3 className="text-lg font-semibold text-slate-900">
-                                                    {unit.tb2_nome}
-                                                </h3>
-                                                <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
-                                                    Unidade
-                                                </span>
-                                            </div>
-                                            <p className="mt-3 text-sm text-slate-600">{unit.tb2_endereco}</p>
-                                            <div className="mt-4 space-y-2 text-sm text-slate-500">
-                                                {unit.tb2_cep && <p>CEP: {unit.tb2_cep}</p>}
-                                                {unit.tb2_fone && <p>Telefone: {unit.tb2_fone}</p>}
-                                            </div>
-                                            <div className="mt-6 flex flex-wrap items-center gap-3">
-                                                {unit.tb2_localizacao && (
-                                                    <a
-                                                        href={unit.tb2_localizacao}
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        className="text-sm font-semibold text-rose-600 transition hover:text-rose-700"
-                                                    >
-                                                        Ver no mapa
-                                                    </a>
+                                    validUnits.map((unit, index) => {
+                                        const mapEmbedUrl = getMapEmbedUrl(unit.tb2_localizacao);
+
+                                        return (
+                                            <div
+                                                key={unit.tb2_id}
+                                                className="reveal-up flex h-full flex-col rounded-3xl border border-white/70 bg-white/80 p-5 shadow-md transition hover:-translate-y-1 hover:shadow-lg"
+                                                style={{ animationDelay: `${Math.min(index * 0.06, 0.3)}s` }}
+                                            >
+                                                <div className="flex items-start justify-between gap-4">
+                                                    <h3 className="text-lg font-semibold text-slate-900">
+                                                        {unit.tb2_nome}
+                                                    </h3>
+                                                    <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+                                                        {unit.tb2_id}
+                                                    </span>
+                                                </div>
+                                                {mapEmbedUrl && (
+                                                    <div className="mt-4 overflow-hidden rounded-2xl border border-white/70 bg-white/70">
+                                                        <iframe
+                                                            title={`Mapa da unidade ${unit.tb2_nome}`}
+                                                            src={mapEmbedUrl}
+                                                            loading="lazy"
+                                                            referrerPolicy="no-referrer-when-downgrade"
+                                                            className="h-40 w-full"
+                                                            style={{ border: 0 }}
+                                                            allowFullScreen
+                                                        />
+                                                    </div>
                                                 )}
                                             </div>
-                                        </div>
-                                    ))
+                                        );
+                                    })
                                 ) : (
                                     <div className="reveal-up col-span-full rounded-3xl border border-dashed border-rose-200 bg-white/80 p-10 text-center text-slate-600">
                                         <p className="text-base font-semibold text-slate-700">
