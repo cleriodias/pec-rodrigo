@@ -126,6 +126,12 @@ class SupplierPortalController extends Controller
                 ->with('error', 'Cotacao ainda nao foi aprovada.');
         }
 
+        if ($bid->invoiced_at) {
+            return redirect()
+                ->route('supplier.disputes')
+                ->with('error', 'Faturamento ja enviado. Nao e possivel alterar.');
+        }
+
         $data = $request->validate([
             'invoice_note' => ['nullable', 'string', 'max:500'],
             'invoice_file' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],

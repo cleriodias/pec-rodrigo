@@ -1,5 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
 
 const formatCurrency = (value) =>
@@ -140,14 +140,34 @@ export default function SalesToday({
     };
 
     const headerContent = (
-        <div>
-            <h2 className="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">
-                Vendas de hoje ({dateLabel})
-            </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-300">
-                Visao geral dos pagamentos registrados no dia, com destaque para cada forma de
-                pagamento.
-            </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <h2 className="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">
+                    Vendas de hoje ({dateLabel})
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-300">
+                    Visao geral dos pagamentos registrados no dia, com destaque para cada forma de
+                    pagamento.
+                </p>
+            </div>
+            <div className="flex items-center gap-2">
+                <Link
+                    href={route('reports.control')}
+                    className="inline-flex items-center justify-center rounded-xl border border-indigo-200 bg-indigo-50 p-2 text-indigo-700 shadow-sm transition hover:bg-indigo-100 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200"
+                    aria-label="Voltar: Controle financeiro"
+                    title="Voltar"
+                >
+                    <i className="bi bi-arrow-left" aria-hidden="true"></i>
+                </Link>
+                <Link
+                    href={route('reports.sales.detailed')}
+                    className="inline-flex items-center justify-center rounded-xl border border-indigo-200 bg-indigo-50 p-2 text-indigo-700 shadow-sm transition hover:bg-indigo-100 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200"
+                    aria-label="Avancar: Relatorio detalhado"
+                    title="Avancar"
+                >
+                    <i className="bi bi-arrow-right" aria-hidden="true"></i>
+                </Link>
+            </div>
         </div>
     );
 

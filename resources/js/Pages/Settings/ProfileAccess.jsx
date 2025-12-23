@@ -18,6 +18,7 @@ const MENU_OPTIONS = [
     { key: 'reports_refeicao', label: 'Relatorio Refeicao' },
     { key: 'reports_adiantamentos', label: 'Relatorio Adiantamentos' },
     { key: 'reports_fornecedores', label: 'Relatorio Fornecedores' },
+    { key: 'supplier_disputes', label: 'Disputas Fornecedor' },
     { key: 'reports_gastos', label: 'Relatorio Gastos' },
     { key: 'reports_descarte', label: 'Relatorio Descarte' },
     { key: 'salary_advances', label: 'Adiantamento' },

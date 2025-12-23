@@ -13,7 +13,7 @@ class UnitSwitchController extends Controller
     public function index(Request $request): Response
     {
         $user = $request->user();
-        $this->ensureMasterOriginal($user);
+        $this->ensureCanSwitchUnit($user);
 
         $units = $this->allowedUnits($user)
             ->map(fn (Unidade $unit) => [
@@ -29,7 +29,7 @@ class UnitSwitchController extends Controller
     public function update(Request $request): RedirectResponse
     {
         $user = $request->user();
-        $this->ensureMasterOriginal($user);
+        $this->ensureCanSwitchUnit($user);
 
         $validated = $request->validate([
             'unit_id' => ['required', 'integer'],
@@ -70,9 +70,11 @@ class UnitSwitchController extends Controller
             ->get(['tb2_id', 'tb2_nome', 'tb2_endereco', 'tb2_cnpj']);
     }
 
-    private function ensureMasterOriginal($user): void
+    private function ensureCanSwitchUnit($user): void
     {
-        if (! $user || (int) ($user->funcao_original ?? $user->funcao) !== 0) {
+        $roleOriginal = (int) ($user?->funcao_original ?? $user?->funcao ?? -1);
+
+        if (! $user || ! in_array($roleOriginal, [0, 1], true)) {
             abort(403);
         }
     }

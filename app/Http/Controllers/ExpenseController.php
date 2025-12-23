@@ -62,6 +62,7 @@ class ExpenseController extends Controller
 
         Expense::create(array_merge($data, [
             'unit_id' => $activeUnit['id'],
+            'user_id' => $request->user()->id,
         ]));
 
         return redirect()
@@ -87,7 +88,7 @@ class ExpenseController extends Controller
 
     private function ensureManager($user): void
     {
-        if (! $user || ! in_array((int) $user->funcao, [0, 1], true)) {
+        if (! $user || ! in_array((int) $user->funcao, [0, 1, 3], true)) {
             abort(403);
         }
     }

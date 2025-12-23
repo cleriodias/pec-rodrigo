@@ -30,6 +30,7 @@ const DEFAULT_MENU_KEYS = [
     'reports_refeicao',
     'reports_adiantamentos',
     'reports_fornecedores',
+    'supplier_disputes',
     'reports_gastos',
     'reports_descarte',
     'discard',
@@ -64,7 +65,8 @@ export default function AuthenticatedLayout({ header, headerClassName = '', chil
     const canSeeUsers = user && ([0, 1].includes(effectiveRole) || isMasterOriginal);
     const canSeeUnits = canSeeUsers;
     const canSeeReports = canSeeUnits;
-    const canSwitchUnit = user && isMasterOriginal;
+    const canSeeExpenses = user && (canSeeReports || effectiveRole === 3);
+    const canSwitchUnit = user && [0, 1].includes(originalRole);
     const canSwitchRole = user && isMasterOriginal;
     const hasLanchoneteRoute =
         typeof route === 'function' && route().has && route().has('lanchonete.terminal');
@@ -186,7 +188,7 @@ export default function AuthenticatedLayout({ header, headerClassName = '', chil
             },
             {
                 key: 'expenses',
-                visible: canSeeReports && hasMenuAccess('expenses'),
+                visible: canSeeExpenses && hasMenuAccess('expenses'),
                 node: (
                     <NavLink
                         href={route('expenses.index')}
@@ -286,29 +288,11 @@ export default function AuthenticatedLayout({ header, headerClassName = '', chil
                 ),
             },
             {
-                key: 'notices',
-                visible: isMasterOriginal && hasMenuAccess('notices'),
-                node: (
-                    <Dropdown.Link href={route('settings.notices')}>
-                        <MenuLabel icon="bi bi-megaphone" text="Avisos" />
-                    </Dropdown.Link>
-                ),
-            },
-            {
                 key: 'settings',
                 visible: isMasterOriginal && hasMenuAccess('settings'),
                 node: (
                     <Dropdown.Link href={route('settings.config')}>
                         <MenuLabel icon="bi bi-gear" text="Farrammentas" />
-                    </Dropdown.Link>
-                ),
-            },
-            {
-                key: 'salary_advances',
-                visible: canSeeReports && hasMenuAccess('salary_advances'),
-                node: (
-                    <Dropdown.Link href={route('salary-advances.index')}>
-                        <MenuLabel icon="bi bi-wallet2" text="Adiantamento" />
                     </Dropdown.Link>
                 ),
             },
@@ -356,6 +340,15 @@ export default function AuthenticatedLayout({ header, headerClassName = '', chil
                         </div>
 
                         <div className="hidden sm:ms-6 sm:flex sm:items-center">
+                            {canSwitchUnit && (
+                                <Link
+                                    href={route('reports.switch-unit')}
+                                    className="inline-flex items-center gap-2 rounded-full border border-gray-200 px-3 py-1 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-100 dark:border-gray-600 dark:text-gray-100"
+                                >
+                                    <i className="bi bi-arrow-left-right" aria-hidden="true"></i>
+                                    Trocar unidade
+                                </Link>
+                            )}
                             <div className="relative ms-3">
                                 <Dropdown>
                                     <Dropdown.Trigger>
@@ -470,6 +463,14 @@ export default function AuthenticatedLayout({ header, headerClassName = '', chil
 
                         <div className="mt-3 space-y-1">
                             <div>
+                                {canSwitchUnit && (
+                                    <ResponsiveNavLink
+                                        href={route('reports.switch-unit')}
+                                        active={route().current('reports.switch-unit')}
+                                    >
+                                        Trocar unidade
+                                    </ResponsiveNavLink>
+                                )}
                                 <ResponsiveNavLink
                                     href={route('profile.edit')}
                                     active={route().current('profile.edit')}

@@ -327,7 +327,7 @@ class SalesReportController extends Controller
         [$start, $end, $startDate, $endDate] = $this->resolveDateRange($request);
 
         $rows = Expense::query()
-            ->with(['supplier:id,name', 'unit:tb2_id,tb2_nome'])
+            ->with(['supplier:id,name', 'unit:tb2_id,tb2_nome', 'user:id,name'])
             ->whereBetween('expense_date', [$startDate, $endDate])
             ->when($filterUnitId, function ($query) use ($filterUnitId) {
                 $query->where('unit_id', $filterUnitId);
@@ -337,6 +337,7 @@ class SalesReportController extends Controller
                 'id',
                 'supplier_id',
                 'unit_id',
+                'user_id',
                 'expense_date',
                 'amount',
                 'notes',
@@ -347,6 +348,7 @@ class SalesReportController extends Controller
                     'expense_date' => $expense->expense_date?->toDateString(),
                     'supplier' => $expense->supplier?->name ?? '---',
                     'unit' => $expense->unit?->tb2_nome ?? '---',
+                    'user_name' => $expense->user?->name ?? '---',
                     'amount' => round((float) $expense->amount, 2),
                     'notes' => $expense->notes,
                 ];
@@ -883,6 +885,7 @@ class SalesReportController extends Controller
                 'tipo_pago',
                 'status_pago',
                 'status',
+                'id_unidade',
             ]);
 
         $userIds = $rows
@@ -895,6 +898,16 @@ class SalesReportController extends Controller
             ? User::whereIn('id', $userIds)->pluck('name', 'id')
             : collect();
 
+        $unitIds = $rows
+            ->pluck('id_unidade')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $units = $unitIds->isNotEmpty()
+            ? Unidade::whereIn('tb2_id', $unitIds)->pluck('tb2_nome', 'tb2_id')
+            : collect();
+
         $openComandas = [];
         $closedComandas = [];
 
@@ -905,12 +918,14 @@ class SalesReportController extends Controller
             $status = (int) ($first->status ?? 0);
             $lastUpdate = $items->max('data_hora');
             $lastUpdate = $lastUpdate ? Carbon::parse($lastUpdate)->toIso8601String() : null;
+            $unitName = $first?->id_unidade ? ($units[$first->id_unidade] ?? null) : null;
 
             $payload = [
                 'comanda' => (int) $comanda,
                 'status' => $status,
                 'payment_type' => $first->tipo_pago,
                 'status_paid' => (bool) $first->status_pago,
+                'unit_name' => $unitName,
                 'total' => round((float) $items->sum('valor_total'), 2),
                 'quantity' => (int) $items->sum('quantidade'),
                 'updated_at' => $lastUpdate,

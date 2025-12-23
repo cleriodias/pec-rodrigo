@@ -140,6 +140,7 @@ export default function Disputes({ supplier, bids = [] }) {
                                         const totalCost = quantity * unitCost;
                                         const isApproved = Boolean(bid.is_approved);
                                         const hasInvoice = Boolean(bid.invoiced_at);
+                                        const isInvoiceLocked = hasInvoice;
 
                                         return (
                                             <Fragment key={bid.id}>
@@ -215,7 +216,8 @@ export default function Disputes({ supplier, bids = [] }) {
                                                                                     [bid.id]: event.target.value,
                                                                                 }))
                                                                             }
-                                                                            className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                                            disabled={isInvoiceLocked}
+                                                                            className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:bg-gray-100"
                                                                             placeholder="Detalhes do faturamento"
                                                                         />
                                                                     </div>
@@ -232,7 +234,8 @@ export default function Disputes({ supplier, bids = [] }) {
                                                                                     [bid.id]: event.target.files?.[0] ?? null,
                                                                                 }))
                                                                             }
-                                                                            className="mt-1 w-full text-sm"
+                                                                            disabled={isInvoiceLocked}
+                                                                            className="mt-1 w-full text-sm disabled:opacity-60"
                                                                         />
                                                                         {hasInvoice && (
                                                                             <p className="mt-1 text-xs text-gray-600">
@@ -245,10 +248,10 @@ export default function Disputes({ supplier, bids = [] }) {
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => handleInvoice(bid.id)}
-                                                                        disabled={uploadingId === bid.id}
+                                                                        disabled={uploadingId === bid.id || isInvoiceLocked}
                                                                         className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-indigo-700 disabled:opacity-50"
                                                                     >
-                                                                        Faturar
+                                                                        {hasInvoice ? 'Faturado' : 'Faturar'}
                                                                     </button>
                                                                 </div>
                                                             </div>

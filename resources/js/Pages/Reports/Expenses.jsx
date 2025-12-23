@@ -152,6 +152,9 @@ export default function ExpensesReport({
                                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
                                                 Unidade
                                             </th>
+                                            <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
+                                                Usuario
+                                            </th>
                                             <th className="px-3 py-2 text-right font-medium text-gray-600 dark:text-gray-300">
                                                 Valor
                                             </th>
@@ -171,6 +174,9 @@ export default function ExpensesReport({
                                                 </td>
                                                 <td className="px-3 py-2 text-gray-700 dark:text-gray-200">
                                                     {row.unit ?? '--'}
+                                                </td>
+                                                <td className="px-3 py-2 text-gray-700 dark:text-gray-200">
+                                                    {row.user_name ?? '--'}
                                                 </td>
                                                 <td className="px-3 py-2 text-right font-semibold text-gray-900 dark:text-gray-100">
                                                     {formatCurrency(row.amount)}

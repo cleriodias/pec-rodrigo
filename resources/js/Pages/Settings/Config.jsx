@@ -54,9 +54,9 @@ export default function Config({ auth }) {
             href: route('settings.suppliers'),
         },
         {
-            label: 'Cadastro de Gastos',
+            label: 'Relatorio Gastos',
             icon: 'bi-receipt',
-            href: route('expenses.index'),
+            href: route('reports.gastos'),
         },
         {
             label: 'Disputa de Vendas',

@@ -348,7 +348,7 @@ class UserController extends Controller
 
     public function resetPassword(Request $request, User $user)
     {
-        $newPassword = str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT);
+        $newPassword = str_pad((string) random_int(0, 9999), 4, '0', STR_PAD_LEFT);
 
         $user->forceFill([
             'password' => $newPassword,

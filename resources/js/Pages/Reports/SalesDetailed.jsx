@@ -1,5 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 
 const formatCurrency = (value) =>
@@ -50,16 +50,36 @@ export default function SalesDetailed({
     };
 
     const headerContent = (
-        <div>
-            <h2 className="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">
-                Relatorio detalhado
-            </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-300">
-                Filtre um dia e visualize todas as vendas e itens registrados.
-            </p>
-            <p className="text-sm text-gray-500 dark:text-gray-300">
-                Unidade atual: {unit?.name ?? '---'}.
-            </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <h2 className="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">
+                    Relatorio detalhado
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-300">
+                    Filtre um dia e visualize todas as vendas e itens registrados.
+                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-300">
+                    Unidade atual: {unit?.name ?? '---'}.
+                </p>
+            </div>
+            <div className="flex items-center gap-2">
+                <Link
+                    href={route('reports.sales.today')}
+                    className="inline-flex items-center justify-center rounded-xl border border-indigo-200 bg-indigo-50 p-2 text-indigo-700 shadow-sm transition hover:bg-indigo-100 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200"
+                    aria-label="Voltar: Vendas de hoje"
+                    title="Voltar"
+                >
+                    <i className="bi bi-arrow-left" aria-hidden="true"></i>
+                </Link>
+                <Link
+                    href={route('reports.lanchonete')}
+                    className="inline-flex items-center justify-center rounded-xl border border-indigo-200 bg-indigo-50 p-2 text-indigo-700 shadow-sm transition hover:bg-indigo-100 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200"
+                    aria-label="Avancar: Relatorio Lanchonete"
+                    title="Avancar"
+                >
+                    <i className="bi bi-arrow-right" aria-hidden="true"></i>
+                </Link>
+            </div>
         </div>
     );
 

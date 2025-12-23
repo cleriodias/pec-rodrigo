@@ -1,5 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
 
 const formatCurrency = (value) =>
     Number(value ?? 0).toLocaleString('pt-BR', {
@@ -18,7 +18,26 @@ const formatDateTime = (value) => {
     });
 };
 
-const ComandaCard = ({ data, statusLabel }) => (
+const paymentTypeLabels = {
+    dinheiro: 'Dinheiro',
+    maquina: 'Cartao',
+    cartao: 'Cartao',
+    vale: 'Vale',
+    refeicao: 'Refeicao',
+    faturar: 'Faturar',
+};
+
+const formatPaymentType = (value) => {
+    if (!value) {
+        return '--';
+    }
+
+    const key = String(value).toLowerCase();
+
+    return paymentTypeLabels[key] ?? value;
+};
+
+const ComandaCard = ({ data, statusLabel, showPaymentType = false }) => (
     <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -30,7 +49,14 @@ const ComandaCard = ({ data, statusLabel }) => (
                 </span>
             </div>
             <div className="text-right text-sm text-gray-500 dark:text-gray-300">
-                <div>Total: {formatCurrency(data.total)}</div>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                    <span>Total: {formatCurrency(data.total)}</span>
+                    {showPaymentType ? (
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600 dark:bg-gray-700 dark:text-gray-200">
+                            {formatPaymentType(data.payment_type)}
+                        </span>
+                    ) : null}
+                </div>
                 <div>Atualizado: {formatDateTime(data.updated_at)}</div>
             </div>
         </div>
@@ -41,17 +67,20 @@ const ComandaCard = ({ data, statusLabel }) => (
                         <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
                             Produto
                         </th>
+                        <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
+                            Unidade
+                        </th>
                         <th className="px-3 py-2 text-center font-medium text-gray-600 dark:text-gray-300">
                             Qtde
                         </th>
                         <th className="px-3 py-2 text-right font-medium text-gray-600 dark:text-gray-300">
-                            UnitA?rio
+                            Unitário
                         </th>
                         <th className="px-3 py-2 text-right font-medium text-gray-600 dark:text-gray-300">
                             Total
                         </th>
                         <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
-                            LanA?ado por
+                            Lançado por
                         </th>
                         <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
                             Caixa
@@ -63,6 +92,9 @@ const ComandaCard = ({ data, statusLabel }) => (
                         <tr key={item.id}>
                             <td className="px-3 py-2 text-gray-800 dark:text-gray-100">
                                 {item.name}
+                            </td>
+                            <td className="px-3 py-2 text-gray-700 dark:text-gray-200">
+                                {data.unit_name ?? '--'}
                             </td>
                             <td className="px-3 py-2 text-center text-gray-700 dark:text-gray-200">
                                 {item.quantity}
@@ -87,7 +119,7 @@ const ComandaCard = ({ data, statusLabel }) => (
     </div>
 );
 
-const ComandaSection = ({ title, items, emptyMessage, statusLabel }) => (
+const ComandaSection = ({ title, items, emptyMessage, statusLabel, showPaymentType = false }) => (
     <div className="rounded-2xl bg-white p-6 shadow dark:bg-gray-800">
         <div className="flex flex-wrap items-center justify-between gap-3">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
@@ -102,7 +134,12 @@ const ComandaSection = ({ title, items, emptyMessage, statusLabel }) => (
         ) : (
             <div className="mt-4 space-y-4">
                 {items.map((item) => (
-                    <ComandaCard key={`${item.comanda}-${item.status}`} data={item} statusLabel={statusLabel} />
+                    <ComandaCard
+                        key={`${item.comanda}-${item.status}`}
+                        data={item}
+                        statusLabel={statusLabel}
+                        showPaymentType={showPaymentType}
+                    />
                 ))}
             </div>
         )}
@@ -135,19 +172,39 @@ export default function LanchoneteReport({
         });
     };
 
+    const headerContent = (
+        <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <h2 className="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">
+                    Relatorio Lanchonete
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-300">
+                    Unidade atual: {unit?.name ?? '---'}.
+                </p>
+            </div>
+            <div className="flex items-center gap-2">
+                    <Link
+                        href={route('reports.sales.detailed')}
+                        className="inline-flex items-center justify-center rounded-xl border border-indigo-200 bg-indigo-50 p-2 text-indigo-700 shadow-sm transition hover:bg-indigo-100 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200"
+                        aria-label="Voltar: Relatorio detalhado"
+                        title="Voltar"
+                    >
+                        <i className="bi bi-arrow-left" aria-hidden="true"></i>
+                    </Link>
+                    <Link
+                        href={route('reports.sales.period')}
+                        className="inline-flex items-center justify-center rounded-xl border border-indigo-200 bg-indigo-50 p-2 text-indigo-700 shadow-sm transition hover:bg-indigo-100 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200"
+                        aria-label="Avancar: Vendas por periodo"
+                        title="Avancar"
+                    >
+                        <i className="bi bi-arrow-right" aria-hidden="true"></i>
+                    </Link>
+            </div>
+        </div>
+    );
+
     return (
-        <AuthenticatedLayout
-            header={
-                <div>
-                    <h2 className="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">
-                        RelatA?rio Lanchonete
-                    </h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-300">
-                        Unidade atual: {unit?.name ?? '---'}.
-                    </p>
-                </div>
-            }
-        >
+        <AuthenticatedLayout header={headerContent}>
             <Head title="RelatA?rio Lanchonete" />
 
             <div className="py-10">
@@ -205,6 +262,7 @@ export default function LanchoneteReport({
                         items={closedComandas}
                         statusLabel="Fechada"
                         emptyMessage="Nenhuma comanda finalizada para esta unidade."
+                        showPaymentType
                     />
                 </div>
             </div>
