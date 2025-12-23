@@ -70,11 +70,13 @@ class AuthenticatedSessionController extends Controller
             ]);
         }
 
-        $selectedUnit = Unidade::select('tb2_id', 'tb2_nome')->findOrFail($unitId);
+        $selectedUnit = Unidade::select('tb2_id', 'tb2_nome', 'tb2_endereco', 'tb2_cnpj')->findOrFail($unitId);
 
         $request->session()->put('active_unit', [
             'id' => $selectedUnit->tb2_id,
             'name' => $selectedUnit->tb2_nome,
+            'address' => $selectedUnit->tb2_endereco,
+            'cnpj' => $selectedUnit->tb2_cnpj,
         ]);
 
         if ($user->funcao_original === null) {

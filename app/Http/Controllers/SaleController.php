@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CashierClosure;
 use App\Models\Produto;
+use App\Models\Unidade;
 use App\Models\User;
 use App\Models\Venda;
 use App\Models\VendaPagamento;
@@ -92,6 +93,29 @@ class SaleController extends Controller
             throw ValidationException::withMessages([
                 'unit' => 'Selecione uma unidade para registrar as vendas.',
             ]);
+        }
+
+        $unitId = is_array($unit)
+            ? ($unit['id'] ?? $unit['tb2_id'] ?? null)
+            : (is_object($unit) ? ($unit->id ?? $unit->tb2_id ?? null) : null);
+        $unitId = $unitId ?? ($user?->tb2_id);
+        $unitName = is_array($unit)
+            ? ($unit['name'] ?? $unit['tb2_nome'] ?? null)
+            : (is_object($unit) ? ($unit->name ?? $unit->tb2_nome ?? null) : null);
+        $unitAddress = is_array($unit)
+            ? ($unit['address'] ?? $unit['tb2_endereco'] ?? null)
+            : (is_object($unit) ? ($unit->address ?? $unit->tb2_endereco ?? null) : null);
+        $unitCnpj = is_array($unit)
+            ? ($unit['cnpj'] ?? $unit['tb2_cnpj'] ?? null)
+            : (is_object($unit) ? ($unit->cnpj ?? $unit->tb2_cnpj ?? null) : null);
+
+        if ($unitId && (! $unitName || ! $unitAddress || ! $unitCnpj)) {
+            $unitRecord = Unidade::select('tb2_id', 'tb2_nome', 'tb2_endereco', 'tb2_cnpj')->find($unitId);
+            if ($unitRecord) {
+                $unitName = $unitName ?? $unitRecord->tb2_nome;
+                $unitAddress = $unitAddress ?? $unitRecord->tb2_endereco;
+                $unitCnpj = $unitCnpj ?? $unitRecord->tb2_cnpj;
+            }
         }
 
         $validated = $request->validate([
@@ -405,7 +429,7 @@ class SaleController extends Controller
                     'id_user_caixa' => $user->id,
                     'id_user_vale' => $valeUserId,
                     'id_lanc' => $user->id,
-                    'id_unidade' => $unit['id'] ?? $user->tb2_id,
+                    'id_unidade' => $unitId,
                     'tipo_pago' => $finalPaymentType,
                     'status_pago' => $isPaid,
                     'status' => 1,
@@ -423,7 +447,7 @@ class SaleController extends Controller
                     'data_hora' => $dateTime,
                     'id_user_caixa' => $user->id,
                     'id_user_vale' => $valeUserId,
-                    'id_unidade' => $unit['id'] ?? $user->tb2_id,
+                    'id_unidade' => $unitId,
                     'tipo_pago' => $finalPaymentType,
                     'status_pago' => $isPaid,
                     'status' => 1,
@@ -439,7 +463,9 @@ class SaleController extends Controller
                 'tipo_pago' => $finalPaymentType,
                 'status_pago' => $isPaid,
                 'cashier_name' => $user->name,
-                'unit_name' => $unit['name'] ?? null,
+                'unit_name' => $unitName,
+                'unit_address' => $unitAddress,
+                'unit_cnpj' => $unitCnpj,
                 'vale_user_name' => $valeUserName,
                 'vale_type' => $isValePayment ? $selectedValeType : null,
                 'payment' => [

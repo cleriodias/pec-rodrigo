@@ -45,6 +45,8 @@ class UnitSwitchController extends Controller
         $request->session()->put('active_unit', [
             'id' => $unit->tb2_id,
             'name' => $unit->tb2_nome,
+            'address' => $unit->tb2_endereco,
+            'cnpj' => $unit->tb2_cnpj,
         ]);
 
         return redirect()->route('dashboard')->with('success', 'Unidade alterada com sucesso!');
@@ -65,7 +67,7 @@ class UnitSwitchController extends Controller
 
         return Unidade::whereIn('tb2_id', $unitIds->unique())
             ->orderBy('tb2_nome')
-            ->get(['tb2_id', 'tb2_nome']);
+            ->get(['tb2_id', 'tb2_nome', 'tb2_endereco', 'tb2_cnpj']);
     }
 
     private function ensureMasterOriginal($user): void

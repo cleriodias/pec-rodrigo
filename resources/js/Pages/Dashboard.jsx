@@ -77,9 +77,12 @@ export default function Dashboard() {
     const effectiveRole = Number(auth?.user?.funcao ?? -1);
     const csrfTokenProp = pageProps?.csrf_token ?? '';
     const activeUnitName = auth?.unit?.name ?? '';
+    const activeUnitAddress = auth?.unit?.address ?? auth?.unit?.tb2_endereco ?? '';
+    const activeUnitCnpj = auth?.unit?.cnpj ?? auth?.unit?.tb2_cnpj ?? '';
 
     const [texto, setTexto] = useState('');
     const inputRef = useRef(null);
+    const inputIdleTimeoutRef = useRef(null);
     const [suggestions, setSuggestions] = useState([]);
     const [hideSuggestions, setHideSuggestions] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -708,10 +711,58 @@ export default function Dashboard() {
         (isNumericInput || hasMinChars || lastManualSearch) &&
         (!isNumericInput || suggestions.length > 0 || loading || error);
 
+    const clearInputIdleTimeout = useCallback(() => {
+        if (inputIdleTimeoutRef.current) {
+            clearTimeout(inputIdleTimeoutRef.current);
+            inputIdleTimeoutRef.current = null;
+        }
+    }, []);
+
+    const scheduleInputReset = useCallback(
+        (value) => {
+            clearInputIdleTimeout();
+
+            if (typeof window === 'undefined' || typeof document === 'undefined') {
+                return;
+            }
+
+            const trimmedValue = String(value ?? '').trim();
+
+            if (!trimmedValue) {
+                return;
+            }
+
+            if (!numericRegex.test(trimmedValue)) {
+                return;
+            }
+
+            inputIdleTimeoutRef.current = window.setTimeout(() => {
+                if (!inputRef.current) {
+                    return;
+                }
+                setTexto('');
+                setLastManualSearch(false);
+                setHideSuggestions(false);
+                requestAnimationFrame(() => {
+                    inputRef.current?.focus();
+                });
+            }, 2000);
+        },
+        [clearInputIdleTimeout],
+    );
+
+    useEffect(() => {
+        return () => {
+            clearInputIdleTimeout();
+        };
+    }, [clearInputIdleTimeout]);
+
     const handleInputChange = (event) => {
-        setTexto(event.target.value);
+        const nextValue = event.target.value;
+        setTexto(nextValue);
         setLastManualSearch(false);
         setHideSuggestions(false);
+        scheduleInputReset(nextValue);
     };
 
     const handleKeyDown = (event) => {
@@ -808,8 +859,24 @@ export default function Dashboard() {
             .post(route('sales.store'), payload)
             .then((response) => {
                 const data = response.data;
+                const unitFromAuth = auth?.unit ?? {};
+                const unitName =
+                    data.sale.unit_name ?? unitFromAuth.name ?? '';
+                const unitAddress =
+                    data.sale.unit_address ??
+                    unitFromAuth.address ??
+                    unitFromAuth.tb2_endereco ??
+                    '';
+                const unitCnpj =
+                    data.sale.unit_cnpj ??
+                    unitFromAuth.cnpj ??
+                    unitFromAuth.tb2_cnpj ??
+                    '';
                 setReceiptData({
                     ...data.sale,
+                    unit_name: unitName,
+                    unit_address: unitAddress,
+                    unit_cnpj: unitCnpj,
                     payment_label: paymentLabels[data.sale.tipo_pago] ?? data.sale.tipo_pago,
                 });
                 setShowReceipt(true);
@@ -970,6 +1037,16 @@ export default function Dashboard() {
             return;
         }
 
+        const receiptUnitName =
+            receiptData.unit_name || activeUnitName || 'Registro de venda';
+        const receiptUnitAddress =
+            receiptData.unit_address || activeUnitAddress;
+        const receiptUnitCnpj = receiptData.unit_cnpj || activeUnitCnpj;
+        const unitInfoHtml = `
+                    ${receiptUnitAddress ? `<p>Endereco: ${receiptUnitAddress}</p>` : ''}
+                    ${receiptUnitCnpj ? `<p>CNPJ: ${receiptUnitCnpj}</p>` : ''}
+                `;
+
         const itemsHtml = (receiptData.items || [])
             .map(
                 (item) => `
@@ -1019,7 +1096,8 @@ export default function Dashboard() {
                     </style>
                 </head>
                 <body>
-                    <h1>${activeUnitName || 'Registro de venda'}</h1>
+                    <h1>${receiptUnitName}</h1>
+                    ${unitInfoHtml}
                     <p>Caixa: ${receiptData.cashier_name}</p>
                     ${
                         receiptData.vale_user_name
@@ -1148,6 +1226,7 @@ export default function Dashboard() {
                         onKeyDown={handleKeyDown}
                         placeholder="Digite nome, codigo ou ID"
                         aria-label="Buscar produto"
+                        autoComplete="off"
                         className="block w-full rounded-2xl border-2 border-indigo-300 bg-white px-4 py-4 text-xl text-gray-900 shadow focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-200 disabled:opacity-60 dark:bg-gray-700 dark:text-gray-100"
                         disabled={addingItem || saleLoading || isSalesBlocked}
                     />
@@ -1338,7 +1417,6 @@ export default function Dashboard() {
                                     </div>
                                     {items.length === 0 ? (
                                         <p className="mt-4 text-sm text-gray-600 dark:text-gray-300">
-                                            Nenhum item adicionado. Informe o ID e pressione Enter ou selecione na lista.
                                         </p>
                                     ) : (
                                         <div className="mt-4 overflow-x-auto">
@@ -1435,7 +1513,6 @@ export default function Dashboard() {
 
                                     <div className="mt-6 border-t border-gray-100 pt-4 dark:border-gray-700">
                                         <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                                            Selecione o tipo de pagamento
                                         </p>
                                     </div>
                                     <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -1511,36 +1588,47 @@ export default function Dashboard() {
                                     )}
 
                                     {cashInputVisible && (
-                                        <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 p-4 shadow dark:border-green-500/40 dark:bg-green-900/20">
-                                            <label className="text-sm font-medium text-gray-700 dark:text-gray-100">
-                                                Valor recebido em dinheiro
-                                            </label>
-                                            <input
-                                                type="number"
-                                                ref={cashInputRef}
-                                                min="0"
-                                                step="0.01"
-                                                value={cashValue}
-                                                onChange={handleCashValueChange}
-                                                onKeyDown={handleCashInputKeyDown}
-                                                disabled={saleLoading}
-                                                className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-2 text-lg text-gray-900 focus:border-green-600 focus:outline-none focus:ring-2 focus:ring-green-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-                                                placeholder="Ex.: 50.00"
-                                            />
-                                            <div className="mt-3 flex flex-wrap items-center justify-between text-sm text-gray-700 dark:text-gray-100">
-                                                <span>Troco:</span>
-                                                <span className="font-semibold">{formatCurrency(cashChange)}</span>
+                                        <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 shadow dark:border-green-500/40 dark:bg-green-900/20">
+                                            <div className="grid gap-4 divide-y divide-green-200 p-4 sm:grid-cols-[1.15fr_0.85fr] sm:divide-y-0 sm:divide-x dark:divide-green-500/30">
+                                                <div className="pr-0 sm:pr-2">
+                                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-100">
+                                                        Valor recebido em dinheiro
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        ref={cashInputRef}
+                                                        min="0"
+                                                        step="0.01"
+                                                        value={cashValue}
+                                                        onChange={handleCashValueChange}
+                                                        onKeyDown={handleCashInputKeyDown}
+                                                        disabled={saleLoading}
+                                                        className="mt-2 w-full rounded-xl border border-green-300 bg-white px-4 py-2 text-lg text-gray-900 focus:border-green-600 focus:outline-none focus:ring-2 focus:ring-green-400 dark:border-green-500/40 dark:bg-gray-700 dark:text-gray-100"
+                                                        placeholder="Ex.: 50.00"
+                                                    />
+                                                    {cashCardComplement > 0 && (
+                                                        <p className="mt-2 text-xs text-amber-700 dark:text-amber-200">
+                                                            Restante no cartao: {formatCurrency(cashCardComplement)}
+                                                        </p>
+                                                    )}
+                                                    <p className="mt-2 text-xs text-gray-600 dark:text-gray-300">
+                                                        Informe o valor recebido e pressione Enter para finalizar.
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center justify-center pt-4 sm:pt-0 sm:pl-4">
+                                                    <div className="text-center">
+                                                        <p className="text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-200">
+                                                            Troco
+                                                        </p>
+                                                        <p className="mt-2 text-3xl font-bold text-green-700 dark:text-green-100">
+                                                            {formatCurrency(cashChange)}
+                                                        </p>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            {cashCardComplement > 0 && (
-                                                <p className="mt-2 text-xs text-amber-700 dark:text-amber-200">
-                                                    Restante no cartão: {formatCurrency(cashCardComplement)}
-                                                </p>
-                                            )}
-                                            <p className="mt-2 text-xs text-gray-600 dark:text-gray-300">
-                                                Informe o valor recebido e pressione Enter para finalizar.
-                                            </p>
                                         </div>
                                     )}
+
                                 </div>
 
                                 {valePickerVisible && (
