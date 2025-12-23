@@ -9,6 +9,11 @@ export default function Config({ auth }) {
             href: route('settings.menu'),
         },
         {
+            label: 'Avisos',
+            icon: 'bi-megaphone',
+            href: route('settings.notices'),
+        },
+        {
             label: 'Relatorios',
             icon: 'bi-clipboard-data',
             href: route('reports.index'),

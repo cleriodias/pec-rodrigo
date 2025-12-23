@@ -45,6 +45,7 @@ const SECTIONS = [
         title: 'Ferramentas',
         items: [
             { label: 'Farrammentas', icon: 'bi-gear', href: routeTo('settings.config') },
+            { label: 'Avisos', icon: 'bi-megaphone', href: routeTo('settings.notices') },
             { label: 'Permissoes de Menu', icon: 'bi-gear', href: routeTo('settings.profile-access') },
             { label: 'Organizar Menu', icon: 'bi-list-ol', href: routeTo('settings.menu-order') },
             { label: 'Trocar Unidade', icon: 'bi-arrow-left-right', href: routeTo('reports.switch-unit') },

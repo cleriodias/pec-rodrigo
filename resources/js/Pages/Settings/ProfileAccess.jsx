@@ -22,6 +22,7 @@ const MENU_OPTIONS = [
     { key: 'reports_descarte', label: 'Relatorio Descarte' },
     { key: 'salary_advances', label: 'Adiantamento' },
     { key: 'expenses', label: 'Gastos' },
+    { key: 'notices', label: 'Avisos' },
     { key: 'discard', label: 'Descarte' },
     { key: 'switch_unit', label: 'Trocar Unidade' },
     { key: 'switch_role', label: 'Trocar Funcao' },

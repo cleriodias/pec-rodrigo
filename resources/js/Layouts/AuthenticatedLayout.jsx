@@ -37,6 +37,7 @@ const DEFAULT_MENU_KEYS = [
     'switch_role',
     'salary_advances',
     'expenses',
+    'notices',
     'settings',
     'lanchonete_terminal',
 ];
@@ -281,6 +282,15 @@ export default function AuthenticatedLayout({ header, headerClassName = '', chil
                 node: (
                     <Dropdown.Link href={route('reports.lanchonete')}>
                         <MenuLabel icon="bi bi-cup-hot" text="Relatório Lanchonete" />
+                    </Dropdown.Link>
+                ),
+            },
+            {
+                key: 'notices',
+                visible: isMasterOriginal && hasMenuAccess('notices'),
+                node: (
+                    <Dropdown.Link href={route('settings.notices')}>
+                        <MenuLabel icon="bi bi-megaphone" text="Avisos" />
                     </Dropdown.Link>
                 ),
             },

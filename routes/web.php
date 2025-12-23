@@ -6,6 +6,8 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductDiscardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\LanchoneteTerminalController;
+use App\Http\Controllers\NoticeController;
+use App\Http\Controllers\NewsletterSubscriptionController;
 use App\Http\Controllers\RoleSwitchController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\SalesDisputeController;
@@ -16,6 +18,7 @@ use App\Http\Controllers\SupplierPortalController;
 use App\Http\Controllers\UnitController;
 use App\Http\Controllers\UnitSwitchController;
 use App\Http\Controllers\UserController;
+use App\Models\Unidade;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -26,8 +29,19 @@ Route::get('/', function () {
         'canRegister' => Route::has('register'),
         'laravelVersion' => Application::VERSION,
         'phpVersion' => PHP_VERSION,
+        'units' => Unidade::orderBy('tb2_nome')->get([
+            'tb2_id',
+            'tb2_nome',
+            'tb2_endereco',
+            'tb2_cep',
+            'tb2_fone',
+            'tb2_localizacao',
+        ]),
     ]);
 });
+
+Route::post('/newsletter', [NewsletterSubscriptionController::class, 'store'])
+    ->name('newsletter.store');
 
 
 Route::get('/dashboard', function () {
@@ -81,6 +95,10 @@ Route::middleware('auth')->group(function () {
 
         return Inertia::render('Settings/MenuOrder');
     })->name('settings.menu-order');
+    Route::get('/settings/avisos', [NoticeController::class, 'index'])
+        ->name('settings.notices');
+    Route::post('/settings/avisos', [NoticeController::class, 'store'])
+        ->name('settings.notices.store');
     Route::get('/settings/suppliers', [SupplierController::class, 'index'])
         ->name('settings.suppliers');
     Route::post('/settings/suppliers', [SupplierController::class, 'store'])

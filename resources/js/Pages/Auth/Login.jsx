@@ -113,7 +113,7 @@ export default function Login({ status, canResetPassword, units = [] }) {
                                     key={unit.tb2_id}
                                     disabled={processing}
                                     onClick={() => handleUnitLogin(unit.tb2_id)}
-                                    className="rounded-md border border-indigo-500 px-4 py-2 text-sm font-semibold text-indigo-600 transition duration-150 ease-in-out hover:bg-indigo-500 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 dark:border-indigo-400 dark:text-indigo-200 dark:hover:bg-indigo-400 dark:hover:text-gray-900"
+                                    className="whitespace-nowrap rounded-md border border-indigo-500 px-4 py-2 text-sm font-semibold text-indigo-600 transition duration-150 ease-in-out hover:bg-indigo-500 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 dark:border-indigo-400 dark:text-indigo-200 dark:hover:bg-indigo-400 dark:hover:text-gray-900"
                                 >
                                     {unit.tb2_nome}
                                 </button>
