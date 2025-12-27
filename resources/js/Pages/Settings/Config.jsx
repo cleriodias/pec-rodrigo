@@ -49,6 +49,11 @@ export default function Config({ auth }) {
             href: route('settings.menu-order'),
         },
         {
+            label: 'Banco de dados',
+            icon: 'bi-database',
+            href: route('settings.database'),
+        },
+        {
             label: 'Fornecedores',
             icon: 'bi-truck',
             href: route('settings.suppliers'),

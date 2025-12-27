@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CashierClosureController;
+use App\Http\Controllers\DatabaseToolsController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductDiscardController;
@@ -95,6 +96,10 @@ Route::middleware('auth')->group(function () {
 
         return Inertia::render('Settings/MenuOrder');
     })->name('settings.menu-order');
+    Route::get('/settings/database', [DatabaseToolsController::class, 'index'])
+        ->name('settings.database');
+    Route::post('/settings/database', [DatabaseToolsController::class, 'run'])
+        ->name('settings.database.run');
     Route::get('/settings/avisos', [NoticeController::class, 'index'])
         ->name('settings.notices');
     Route::post('/settings/avisos', [NoticeController::class, 'store'])

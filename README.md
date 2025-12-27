@@ -9,6 +9,22 @@ Código-fonte das lives sobre [Laravel e React](https://www.youtube.com/watch?v=
 
 ## Como rodar o projeto baixado
 
+
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+source ~/.bashrc
+nvm install 20
+nvm use 20
+nvm alias default 20
+
+Vai até a pasta do projeto:
+npm install
+source ~/.bashrc
+node -v
+npm -v
+npm run build
+
+
+
 Duplicar o arquivo ".env.example" e renomear para ".env".<br>
 Alterar no arquivo ".env" as credencias do banco de dados.<br>
 
@@ -17,9 +33,22 @@ Utilizar o servidor fake durante o desenvolvimento: https://mailtrap.io<br>
 Servidor Iagente: https://login.iagente.com.br/solicitacao-conta-smtp/origin/celke<br>
 Configurar DNS da Iagente: https://celke.com.br/artigo/como-configurar-o-dns-da-iagente-na-vps-da-hostinger
 
+# Instalation (`https://king.host/wiki/artigo/como-instalar-o-laravel-em-seu-site`)
+1. install composer:
+  - curl -sS https://getcomposer.org/installer | php
+  - php composer.phar install --no-dev --optimize-autoloader
+
+
+
+2. install laravel:
+  - php -d memory_limit=1024M composer.phar create-project --prefer-dist laravel/laravel --prefer-dist www/
+  - export PATH="$PATH:$HOME/.composer/vendor/bin"
+
+
 Instalar as dependências do PHP.
 ```
-composer install
+php composer.phar install - kinghost
+composer install - local
 ```
 
 Instalar as dependências do Node.js.
@@ -34,8 +63,19 @@ php artisan key:generate
 
 Executar as migration para criar a base de dados e as tabela.
 ```
-php artisan migrate
+php artisan migrate 
+
+esse comando esta retirando o acesso a pasta www (para recuperar o acesso execute o comando abaixo via ssh na pasta rai)
+chmod 777 www
 ```
+//Psy Shell v0.12.4 (PHP 8.2.29 — cli) by Justin Hileman
+
+find /www -type d -exec chmod 755 {} \;
+find /www -type f -exec chmod 644 {} \;
+chmod -R 775 /home/SEUUSER/www/meuprojeto/storage /home/SEUUSER/www/meuprojeto/bootstrap/cache
+
+php artisan tinker
+
 
 Cadastrar registro de teste.
 ```
@@ -163,7 +203,7 @@ Endereço da hospedagem. Ganhe 20% de desconto adicional na
 
 Criar chave SSH (chave pública e privada).
 ```
-ssh-keygen -t rsa -b 4096 -C "seu-email@exemplo.com"
+ssh-keygen -t rsa -b 4096 -C "cleriodias@gmail.com"
 ```
 ```
 ssh-keygen -t rsa -b 4096 -C "cesar@celke.com.br"
