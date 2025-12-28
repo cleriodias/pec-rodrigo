@@ -217,10 +217,7 @@ export default function CashDiscrepancies({
                                                 Referencia
                                             </th>
                                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
-                                               Responsavel
-                                            </th>
-                                            <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
-                                                Unidade
+                                               Caixa / Unid.
                                             </th>
                                             <th className="px-3 py-2 text-right font-medium text-gray-600 dark:text-gray-300">
                                                 Discrepancia
@@ -252,10 +249,7 @@ export default function CashDiscrepancies({
                                                         {formatDate(record.closed_date)}
                                                     </td>
                                                     <td className="px-3 py-2 text-gray-800 dark:text-gray-100">
-                                                        {record.cashier_name}
-                                                    </td>
-                                                    <td className="px-3 py-2 text-gray-700 dark:text-gray-200">
-                                                        {record.unit_name ?? '---'}
+                                                        {record.cashier_name}: {record.unit_name ?? '---'}
                                                     </td>
                                                     <td className={`px-3 py-2 text-right font-semibold ${discrepancyClass}`}>
                                                         {formatCurrency(record.discrepancy)}
