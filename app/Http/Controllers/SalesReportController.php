@@ -48,6 +48,13 @@ class SalesReportController extends Controller
                 'route' => 'reports.cash.closure',
             ],
             [
+                'key' => 'cash-discrepancies',
+                'label' => 'Discrepancias de caixa',
+                'description' => 'Fechamentos com diferencas entre sistema e fechamento.',
+                'icon' => 'bi-exclamation-triangle',
+                'route' => 'reports.cash.discrepancies',
+            ],
+            [
                 'key' => 'sales-today',
                 'label' => 'Vendas hoje',
                 'description' => 'Total do dia e formas de pagamento.',
@@ -703,6 +710,205 @@ class SalesReportController extends Controller
             'selectedUnitId' => $filterUnitId,
             'selectedUnit' => $selectedUnit,
             'discardDetails' => $discardDetails,
+        ]);
+    }
+
+    public function cashDiscrepancies(Request $request): Response
+    {
+        $this->ensureManager($request);
+        $user = $request->user();
+        $availableUnits = $this->availableUnits($user);
+
+        $requestedUnitId = $request->query('unit_id');
+        $filterUnitId = $requestedUnitId !== null && $requestedUnitId !== '' && $requestedUnitId !== 'all'
+            ? (int) $requestedUnitId
+            : null;
+
+        if ($filterUnitId && ! $availableUnits->contains(fn ($unit) => $unit['id'] === $filterUnitId)) {
+            $filterUnitId = null;
+        }
+
+        $dateInput = $request->query('date');
+        $date = $this->parseDate($dateInput, 'Y-m-d', Carbon::today());
+        $start = $date->copy()->startOfDay();
+        $end = $date->copy()->endOfDay();
+        $dateValue = $date->format('Y-m-d');
+        $referenceDate = $date->toDateString();
+
+        $requestedCashierId = $request->query('cashier_id');
+        $filterCashierId = $requestedCashierId !== null && $requestedCashierId !== '' && $requestedCashierId !== 'all'
+            ? (int) $requestedCashierId
+            : null;
+
+        $allowedUnitIds = $availableUnits->pluck('id')->filter()->values();
+
+        $closureBaseQuery = CashierClosure::query()
+            ->whereDate('closed_date', $referenceDate);
+
+        if ($allowedUnitIds->isNotEmpty()) {
+            $closureBaseQuery->where(function ($query) use ($allowedUnitIds) {
+                $query->whereIn('unit_id', $allowedUnitIds)
+                    ->orWhereNull('unit_id');
+            });
+        }
+
+        if ($filterUnitId) {
+            $closureBaseQuery->where(function ($query) use ($filterUnitId) {
+                $query->whereNull('unit_id')
+                    ->orWhere('unit_id', $filterUnitId);
+            });
+        }
+
+        $cashierIds = (clone $closureBaseQuery)
+            ->pluck('user_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $cashiers = $cashierIds->isNotEmpty()
+            ? User::whereIn('id', $cashierIds)->orderBy('name')->get(['id', 'name'])->keyBy('id')
+            : collect();
+
+        $cashierOptions = $cashiers
+            ->map(fn (User $cashier) => ['id' => $cashier->id, 'name' => $cashier->name])
+            ->values();
+
+        $closureQuery = clone $closureBaseQuery;
+        if ($filterCashierId) {
+            $closureQuery->where('user_id', $filterCashierId);
+        }
+
+        $closures = $closureQuery->get([
+            'id',
+            'user_id',
+            'unit_id',
+            'unit_name',
+            'cash_amount',
+            'card_amount',
+            'closed_date',
+            'closed_at',
+        ]);
+
+        $applySaleFilters = function ($query) use ($filterUnitId, $filterCashierId, $allowedUnitIds) {
+            if ($filterUnitId) {
+                $query->where('id_unidade', $filterUnitId);
+            } elseif ($allowedUnitIds->isNotEmpty()) {
+                $query->whereIn('id_unidade', $allowedUnitIds);
+            }
+
+            if ($filterCashierId) {
+                $query->where('id_user_caixa', $filterCashierId);
+            }
+        };
+
+        $paymentsQuery = VendaPagamento::query()
+            ->whereBetween('created_at', [$start, $end])
+            ->with(['vendas' => function ($query) use ($applySaleFilters) {
+                $query->select('tb3_id', 'tb4_id', 'id_user_caixa', 'id_unidade')
+                    ->orderBy('tb3_id');
+                $applySaleFilters($query);
+            }]);
+
+        $paymentsQuery->whereHas('vendas', function ($query) use ($applySaleFilters) {
+            $applySaleFilters($query);
+        });
+
+        $payments = $paymentsQuery->get([
+            'tb4_id',
+            'valor_total',
+            'tipo_pagamento',
+            'valor_pago',
+            'troco',
+            'dois_pgto',
+            'created_at',
+        ]);
+
+        $baseTotals = [
+            'dinheiro' => 0.0,
+            'maquina' => 0.0,
+            'vale' => 0.0,
+            'refeicao' => 0.0,
+            'faturar' => 0.0,
+        ];
+
+        $groupedTotals = [];
+
+        foreach ($payments as $payment) {
+            $firstSale = optional($payment->vendas->first());
+            $cashierId = $firstSale?->id_user_caixa;
+            $unitId = $firstSale?->id_unidade;
+
+            if (! $cashierId) {
+                continue;
+            }
+
+            $groupKey = $cashierId . '-' . ($unitId ?? 'none');
+
+            if (! isset($groupedTotals[$groupKey])) {
+                $groupedTotals[$groupKey] = [
+                    'cashier_id' => $cashierId,
+                    'unit_id' => $unitId,
+                    'totals' => $baseTotals,
+                ];
+            }
+
+            foreach ($this->breakdownPayment($payment) as $type => $amount) {
+                $groupedTotals[$groupKey]['totals'][$type] += $amount;
+            }
+        }
+
+        $unitNameMap = $availableUnits
+            ->mapWithKeys(fn ($unit) => [$unit['id'] => $unit['name']])
+            ->all();
+
+        $records = $closures
+            ->map(function (CashierClosure $closure) use ($groupedTotals, $cashiers, $unitNameMap, $baseTotals) {
+                $unitId = $closure->unit_id;
+                $groupKey = $closure->user_id . '-' . ($unitId ?? 'none');
+                $systemTotals = $groupedTotals[$groupKey]['totals'] ?? $baseTotals;
+
+                $cashSystem = $systemTotals['dinheiro'] ?? 0.0;
+                $cardSystem = $systemTotals['maquina'] ?? 0.0;
+                $systemTotal = $cashSystem + $cardSystem;
+
+                $cashClosure = (float) $closure->cash_amount;
+                $cardClosure = (float) $closure->card_amount;
+                $closureTotal = $cashClosure + $cardClosure;
+
+                $discrepancy = round($systemTotal - $closureTotal, 2);
+
+                $totalsRounded = array_map(fn ($value) => round((float) $value, 2), $systemTotals);
+
+                return [
+                    'id' => $closure->id,
+                    'cashier_id' => $closure->user_id,
+                    'cashier_name' => optional($cashiers->get($closure->user_id))->name
+                        ?? 'Caixa #' . $closure->user_id,
+                    'unit_id' => $unitId,
+                    'unit_name' => $closure->unit_name
+                        ?? ($unitId ? ($unitNameMap[$unitId] ?? ('Unidade #' . $unitId)) : '---'),
+                    'closed_date' => $closure->closed_date?->toDateString(),
+                    'closed_at' => optional($closure->closed_at)->toIso8601String(),
+                    'discrepancy' => $discrepancy,
+                    'totals' => $totalsRounded,
+                    'closure' => [
+                        'cash_amount' => round($cashClosure, 2),
+                        'card_amount' => round($cardClosure, 2),
+                        'total_amount' => round($closureTotal, 2),
+                    ],
+                ];
+            })
+            ->filter(fn (array $record) => abs($record['discrepancy']) >= 0.01)
+            ->sortByDesc(fn (array $record) => abs($record['discrepancy']))
+            ->values();
+
+        return Inertia::render('Reports/CashDiscrepancies', [
+            'records' => $records,
+            'dateValue' => $dateValue,
+            'filterUnits' => $availableUnits->values(),
+            'cashiers' => $cashierOptions,
+            'selectedUnitId' => $filterUnitId,
+            'selectedCashierId' => $filterCashierId,
         ]);
     }
 

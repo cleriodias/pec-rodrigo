@@ -29,6 +29,7 @@ const SECTIONS = [
             { label: 'Relatorios', icon: 'bi-clipboard-data', href: routeTo('reports.index') },
             { label: 'Controle Financeiro', icon: 'bi-graph-up-arrow', href: routeTo('reports.control') },
             { label: 'Fechamento de Caixa', icon: 'bi-clipboard-data', href: routeTo('reports.cash.closure') },
+            { label: 'Discrepancias de Caixa', icon: 'bi-exclamation-triangle', href: routeTo('reports.cash.discrepancies') },
             { label: 'Vendas Hoje', icon: 'bi-calendar-day', href: routeTo('reports.sales.today') },
             { label: 'Vendas Periodo', icon: 'bi-calendar-range', href: routeTo('reports.sales.period') },
             { label: 'Relatorio Detalhado', icon: 'bi-card-checklist', href: routeTo('reports.sales.detailed') },

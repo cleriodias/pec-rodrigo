@@ -17,6 +17,13 @@ const fallbackReports = [
         route: 'reports.cash.closure',
     },
     {
+        key: 'cash-discrepancies',
+        label: 'Discrepancias de caixa',
+        description: 'Fechamentos com diferencas entre sistema e fechamento.',
+        icon: 'bi-exclamation-triangle',
+        route: 'reports.cash.discrepancies',
+    },
+    {
         key: 'sales-today',
         label: 'Vendas hoje',
         description: 'Total do dia e formas de pagamento.',
