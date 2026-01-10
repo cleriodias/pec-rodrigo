@@ -169,7 +169,7 @@ jobs:
           echo "Tamanho da resposta: $(wc -c < "$settings_body") bytes"
           echo "Primeiros bytes:"
           head -c 200 "$settings_body" || true
-          python - <<'PY'
+          python - "$settings_body" <<'PY'
           import json
           import sys
           import pathlib
@@ -215,7 +215,7 @@ jobs:
           echo "Tamanho da resposta: $(wc -c < "$items_body") bytes"
           echo "Primeiros bytes:"
           head -c 200 "$items_body" || true
-          python - <<'PY'
+          python - "$items_body" <<'PY'
           import json
           import sys
           import pathlib
