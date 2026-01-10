@@ -102,6 +102,11 @@ jobs:
               f.write(f"password={pwd}\n")
           PY
 
+      - name: Mask publish credentials
+        run: |
+          echo "::add-mask::${{ steps.publish-profile.outputs.user }}"
+          echo "::add-mask::${{ steps.publish-profile.outputs.password }}"
+
       - name: Deploy via Kudu ZipDeploy (clean)
         env:
           PUBLISH_URL: ${{ steps.publish-profile.outputs.publish_url }}
@@ -144,3 +149,57 @@ jobs:
           echo "Timeout aguardando deploy."
           echo "$status_json"
           exit 1
+
+      - name: Check WEBSITE_RUN_FROM_PACKAGE
+        env:
+          PUBLISH_URL: ${{ steps.publish-profile.outputs.publish_url }}
+          PUBLISH_USER: ${{ steps.publish-profile.outputs.user }}
+          PUBLISH_PASSWORD: ${{ steps.publish-profile.outputs.password }}
+        run: |
+          set -euo pipefail
+          settings_json=$(curl -f -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
+            -H "Accept: application/json" \
+            "https://$PUBLISH_URL/api/settings")
+          python - <<'PY'
+          import json
+          import sys
+
+          data = json.load(sys.stdin)
+          val = data.get("WEBSITE_RUN_FROM_PACKAGE", "")
+          if not val:
+              print("WEBSITE_RUN_FROM_PACKAGE: empty")
+          elif val == "1":
+              print("WEBSITE_RUN_FROM_PACKAGE: 1")
+          elif val.lower().startswith("http"):
+              print("WEBSITE_RUN_FROM_PACKAGE: url")
+          else:
+              print("WEBSITE_RUN_FROM_PACKAGE: set")
+          PY
+          <<< "$settings_json"
+
+      - name: Verify wwwroot contents
+        env:
+          PUBLISH_URL: ${{ steps.publish-profile.outputs.publish_url }}
+          PUBLISH_USER: ${{ steps.publish-profile.outputs.user }}
+          PUBLISH_PASSWORD: ${{ steps.publish-profile.outputs.password }}
+        run: |
+          set -euo pipefail
+          items_json=$(curl -f -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
+            -H "Accept: application/json" \
+            "https://$PUBLISH_URL/api/vfs/site/wwwroot/")
+          python - <<'PY'
+          import json
+          import sys
+
+          data = json.load(sys.stdin)
+          names = sorted([
+              item.get("name")
+              for item in data
+              if isinstance(item, dict) and item.get("name")
+          ])
+          print("wwwroot:", ", ".join(names))
+          if "index.php" not in names:
+              print("index.php not found in wwwroot.")
+              sys.exit(1)
+          PY
+          <<< "$items_json"
