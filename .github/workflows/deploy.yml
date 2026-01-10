@@ -194,7 +194,6 @@ jobs:
           else:
               print("WEBSITE_RUN_FROM_PACKAGE: set")
           PY
-          "$settings_body"
 
       - name: Verify wwwroot contents
         env:
@@ -240,4 +239,3 @@ jobs:
               print("index.php not found in wwwroot.")
               sys.exit(1)
           PY
-          "$items_body"
