@@ -9,7 +9,6 @@ on:
 env:
   APP_ENV: production
   APP_DEBUG: 'false'
-  NODE_ENV: production
 
 jobs:
   build-and-deploy:
@@ -36,10 +35,10 @@ jobs:
           cache: 'npm'
 
       - name: Install Node packages
-        run: npm ci
+        run: NODE_ENV=development npm ci
 
       - name: Build frontend assets
-        run: npm run build
+        run: NODE_ENV=production npm run build
 
       - name: Prepare Laravel cache
         run: |
