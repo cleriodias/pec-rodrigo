@@ -62,15 +62,15 @@ jobs:
           sed -i "s#__DIR__.'/../storage#__DIR__.'/app/storage#g" artifacts/staging/index.php
           sed -i "s#__DIR__.'/../vendor/#__DIR__.'/app/vendor/#g" artifacts/staging/index.php
           sed -i "s#__DIR__.'/../bootstrap/#__DIR__.'/app/bootstrap/#g" artifacts/staging/index.php
-          (cd artifacts/staging && zip -r ../app.zip .)
 
       - name: Debug package contents
         run: |
           ls -la artifacts/staging
-          unzip -l artifacts/app.zip | head -n 50
+          ls -la artifacts/staging/index.php
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v2
         with:
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          package: artifacts/app.zip
+          package: artifacts/staging
+          clean: true
