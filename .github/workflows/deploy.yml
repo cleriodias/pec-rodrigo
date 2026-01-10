@@ -40,6 +40,9 @@ jobs:
       - name: Build frontend assets
         run: NODE_ENV=production npm run build
 
+      - name: Prepare Laravel environment
+        run: cp .env.example .env
+
       - name: Prepare Laravel cache
         run: |
           php artisan key:generate --force
