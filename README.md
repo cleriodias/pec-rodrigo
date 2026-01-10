@@ -469,3 +469,13 @@ sudo apt remove nodejs
 https://learn.microsoft.com/en-us/cli/azure/install-azure-cli-windows?view=azure-cli-latest&pivots=msi
 # deploy
 https://learn.microsoft.com/en-us/azure/app-service/quickstart-php?tabs=cli&pivots=platform-linux
+
+# GitHub action deploy
+1. to Enable authentication to to `Configuration`→ `SCM Basic Auth Publishing Credentials` and enable it.
+2. Restart app
+3. Refresh the page
+4. Download publish profile in application `Overview` menu
+5. Go to `GitHub` → `Settings` → `Secrets and variables` → `Actions` → `New repository secret`
+  Name: AZURE_WEBAPP_PUBLISH_PROFILE
+  Value: cole o conteúdo inteiro do arquivo PublishSettings.
+6. Run the workflow again.
