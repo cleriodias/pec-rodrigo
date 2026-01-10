@@ -239,3 +239,63 @@ jobs:
               print("index.php not found in wwwroot.")
               sys.exit(1)
           PY
+
+      - name: Check SitePackages
+        env:
+          PUBLISH_URL: ${{ steps.publish-profile.outputs.publish_url }}
+          PUBLISH_USER: ${{ steps.publish-profile.outputs.user }}
+          PUBLISH_PASSWORD: ${{ steps.publish-profile.outputs.password }}
+        run: |
+          set -euo pipefail
+          response_headers=$(mktemp)
+          packages_body=$(mktemp)
+          curl -sS --compressed -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
+            -D "$response_headers" \
+            -H "Accept: application/json" \
+            "https://$PUBLISH_URL/api/vfs/site/data/SitePackages/" \
+            -o "$packages_body"
+          echo "Status da API /api/vfs/site/data/SitePackages/:"
+          head -n 5 "$response_headers"
+          echo "Tamanho da resposta: $(wc -c < "$packages_body") bytes"
+          echo "Primeiros bytes:"
+          head -c 200 "$packages_body" || true
+          python - "$packages_body" <<'PY'
+          import json
+          import sys
+          import pathlib
+
+          raw = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").strip()
+          if not raw:
+              print("Resposta vazia de /api/vfs/site/data/SitePackages/.")
+              sys.exit(0)
+          try:
+              data = json.loads(raw)
+          except json.JSONDecodeError:
+              print("Resposta nao JSON de /api/vfs/site/data/SitePackages/:")
+              print(raw[:500])
+              sys.exit(0)
+          names = sorted([
+              item.get("name")
+              for item in data
+              if isinstance(item, dict) and item.get("name")
+          ])
+          print("SitePackages:", ", ".join(names))
+          PY
+
+      - name: Read packagename.txt
+        env:
+          PUBLISH_URL: ${{ steps.publish-profile.outputs.publish_url }}
+          PUBLISH_USER: ${{ steps.publish-profile.outputs.user }}
+          PUBLISH_PASSWORD: ${{ steps.publish-profile.outputs.password }}
+        run: |
+          set -euo pipefail
+          response_headers=$(mktemp)
+          package_name_body=$(mktemp)
+          curl -sS --compressed -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
+            -D "$response_headers" \
+            "https://$PUBLISH_URL/api/vfs/site/data/SitePackages/packagename.txt" \
+            -o "$package_name_body" || true
+          echo "Status da API /api/vfs/site/data/SitePackages/packagename.txt:"
+          head -n 5 "$response_headers"
+          echo "Conteudo de packagename.txt:"
+          cat "$package_name_body" || true
