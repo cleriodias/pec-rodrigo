@@ -6,6 +6,10 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  id-token: write
+  contents: read
+
 env:
   AZURE_RESOURCE_GROUP: rg-pec-rodrigo
   AZURE_WEBAPP_NAME: PEC83
