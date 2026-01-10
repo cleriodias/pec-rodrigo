@@ -197,14 +197,27 @@ jobs:
           PUBLISH_PASSWORD: ${{ steps.publish-profile.outputs.password }}
         run: |
           set -euo pipefail
-          items_json=$(curl -f -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
+          response_headers=$(mktemp)
+          items_json=$(curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
+            -D "$response_headers" \
             -H "Accept: application/json" \
             "https://$PUBLISH_URL/api/vfs/site/wwwroot/")
+          echo "Status da API /api/vfs/site/wwwroot/:"
+          head -n 5 "$response_headers"
           python - <<'PY'
           import json
           import sys
 
-          data = json.load(sys.stdin)
+          raw = sys.stdin.read().strip()
+          if not raw:
+              print("Resposta vazia de /api/vfs/site/wwwroot/.")
+              sys.exit(0)
+          try:
+              data = json.loads(raw)
+          except json.JSONDecodeError:
+              print("Resposta nao JSON de /api/vfs/site/wwwroot/:")
+              print(raw[:500])
+              sys.exit(0)
           names = sorted([
               item.get("name")
               for item in data
