@@ -7,8 +7,9 @@ on:
   workflow_dispatch:
 
 env:
-  APP_ENV: production
-  APP_DEBUG: 'false'
+  AZURE_RESOURCE_GROUP: rg-pec-rodrigo
+  AZURE_WEBAPP_NAME: PEC83
+  AZURE_APP_SERVICE_PLAN_ID: /subscriptions/51242591-9d16-401e-91da-fd5b6083c135/resourceGroups/rg-pec-rodrigo/providers/Microsoft.Web/serverfarms/sp-rodrigo-pec
 
 jobs:
   build-and-deploy:
@@ -18,6 +19,22 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Provision App Service (Bicep)
+        run: |
+          az deployment group create \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --template-file infra/main.bicep \
+            --parameters appName="$AZURE_WEBAPP_NAME" \
+                         location="Brazil South" \
+                         appServicePlanId="$AZURE_APP_SERVICE_PLAN_ID"
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -40,7 +57,7 @@ jobs:
       - name: Build frontend assets
         run: NODE_ENV=production npm run build
 
-      - name: Prepare deployment package (Linux App Service root)
+      - name: Prepare deployment package
         run: |
           rm -rf artifacts
           mkdir -p artifacts/staging
@@ -55,247 +72,20 @@ jobs:
           ln -s app/storage/app/public artifacts/staging/storage
           (cd artifacts/staging && zip -r ../app.zip .)
 
-      - name: Debug package contents
+      - name: Disable Run From Package
         run: |
-          ls -la artifacts/staging
-          ls -la artifacts/staging/index.php
-          ls -la artifacts/staging/storage
-          unzip -l artifacts/app.zip | head -n 50
+          az webapp config appsettings set \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --settings WEBSITE_RUN_FROM_PACKAGE=0
 
-      - name: Parse publish profile
-        id: publish-profile
-        env:
-          PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+      - name: Deploy ZIP
         run: |
-          python - <<'PY'
-          import os
-          import xml.etree.ElementTree as ET
+          az webapp deploy \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --src-path artifacts/app.zip \
+            --type zip
 
-          data = os.environ.get("PUBLISH_PROFILE", "")
-          if not data.strip():
-              raise SystemExit("Missing publish profile secret.")
-
-          root = ET.fromstring(data)
-          profiles = root.findall(".//publishProfile")
-          if not profiles:
-              raise SystemExit("No publishProfile found.")
-
-          prof = None
-          for p in profiles:
-              if p.get("publishMethod") == "ZipDeploy":
-                  prof = p
-                  break
-          if prof is None:
-              prof = profiles[0]
-
-          publish_url = prof.get("publishUrl")
-          user = prof.get("userName")
-          pwd = prof.get("userPWD")
-          if not publish_url or not user or not pwd:
-              raise SystemExit("publish profile missing required fields.")
-
-          publish_url = publish_url.replace("https://", "").replace("http://", "")
-
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
-              f.write(f"publish_url={publish_url}\n")
-              f.write(f"user={user}\n")
-              f.write(f"password={pwd}\n")
-          PY
-
-      - name: Mask publish credentials
-        run: |
-          echo "::add-mask::${{ steps.publish-profile.outputs.user }}"
-          echo "::add-mask::${{ steps.publish-profile.outputs.password }}"
-
-      - name: Deploy via Kudu ZipDeploy (clean)
-        env:
-          PUBLISH_URL: ${{ steps.publish-profile.outputs.publish_url }}
-          PUBLISH_USER: ${{ steps.publish-profile.outputs.user }}
-          PUBLISH_PASSWORD: ${{ steps.publish-profile.outputs.password }}
-        run: |
-          set -euo pipefail
-          response_headers=$(mktemp)
-          curl -f -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
-            -D "$response_headers" \
-            -X POST -T artifacts/app.zip \
-            "https://$PUBLISH_URL/api/zipdeploy?isAsync=true&clean=true" \
-            -o /dev/null
-          deploy_url=$(grep -i "^Location:" "$response_headers" | awk '{print $2}' | tr -d '\r')
-          if [ -z "$deploy_url" ]; then
-            echo "Nao foi possivel obter o Location do deploy."
-            cat "$response_headers"
-            exit 1
-          fi
-          echo "Deploy URL: $deploy_url"
-          for i in {1..60}; do
-            status_json=$(curl -f -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" "$deploy_url")
-            status=$(python -c "import json,sys; print(json.load(sys.stdin).get('status'))" <<< "$status_json")
-            if [ "$status" = "4" ]; then
-              echo "Deploy concluido."
-              exit 0
-            fi
-            if [ "$status" = "3" ]; then
-              echo "Deploy falhou."
-              echo "$status_json"
-              log_url=$(python -c "import json,sys; print(json.load(sys.stdin).get('log_url'))" <<< "$status_json")
-              if [ -n "$log_url" ] && [ "$log_url" != "None" ]; then
-                echo "Logs do deploy:"
-                curl -f -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" "$log_url"
-              fi
-              exit 1
-            fi
-            sleep 5
-          done
-          echo "Timeout aguardando deploy."
-          echo "$status_json"
-          exit 1
-
-      - name: Check WEBSITE_RUN_FROM_PACKAGE
-        env:
-          PUBLISH_URL: ${{ steps.publish-profile.outputs.publish_url }}
-          PUBLISH_USER: ${{ steps.publish-profile.outputs.user }}
-          PUBLISH_PASSWORD: ${{ steps.publish-profile.outputs.password }}
-        run: |
-          set -euo pipefail
-          response_headers=$(mktemp)
-          settings_body=$(mktemp)
-          curl -sS --compressed -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
-            -D "$response_headers" \
-            -H "Accept: application/json" \
-            "https://$PUBLISH_URL/api/settings" \
-            -o "$settings_body"
-          echo "Status da API /api/settings:"
-          head -n 5 "$response_headers"
-          echo "Tamanho da resposta: $(wc -c < "$settings_body") bytes"
-          echo "Primeiros bytes:"
-          head -c 200 "$settings_body" || true
-          python - "$settings_body" <<'PY'
-          import json
-          import sys
-          import pathlib
-
-          raw = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").strip()
-          if not raw:
-              print("Resposta vazia de /api/settings.")
-              sys.exit(0)
-          try:
-              data = json.loads(raw)
-          except json.JSONDecodeError:
-              print("Resposta nao JSON de /api/settings:")
-              print(raw[:500])
-              sys.exit(0)
-          val = data.get("WEBSITE_RUN_FROM_PACKAGE", "")
-          if not val:
-              print("WEBSITE_RUN_FROM_PACKAGE: empty")
-          elif val == "1":
-              print("WEBSITE_RUN_FROM_PACKAGE: 1")
-          elif val.lower().startswith("http"):
-              print("WEBSITE_RUN_FROM_PACKAGE: url")
-          else:
-              print("WEBSITE_RUN_FROM_PACKAGE: set")
-          PY
-
-      - name: Verify wwwroot contents
-        env:
-          PUBLISH_URL: ${{ steps.publish-profile.outputs.publish_url }}
-          PUBLISH_USER: ${{ steps.publish-profile.outputs.user }}
-          PUBLISH_PASSWORD: ${{ steps.publish-profile.outputs.password }}
-        run: |
-          set -euo pipefail
-          response_headers=$(mktemp)
-          items_body=$(mktemp)
-          curl -sS --compressed -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
-            -D "$response_headers" \
-            -H "Accept: application/json" \
-            "https://$PUBLISH_URL/api/vfs/site/wwwroot/" \
-            -o "$items_body"
-          echo "Status da API /api/vfs/site/wwwroot/:"
-          head -n 5 "$response_headers"
-          echo "Tamanho da resposta: $(wc -c < "$items_body") bytes"
-          echo "Primeiros bytes:"
-          head -c 200 "$items_body" || true
-          python - "$items_body" <<'PY'
-          import json
-          import sys
-          import pathlib
-
-          raw = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").strip()
-          if not raw:
-              print("Resposta vazia de /api/vfs/site/wwwroot/.")
-              sys.exit(0)
-          try:
-              data = json.loads(raw)
-          except json.JSONDecodeError:
-              print("Resposta nao JSON de /api/vfs/site/wwwroot/:")
-              print(raw[:500])
-              sys.exit(0)
-          names = sorted([
-              item.get("name")
-              for item in data
-              if isinstance(item, dict) and item.get("name")
-          ])
-          print("wwwroot:", ", ".join(names))
-          if "index.php" not in names:
-              print("index.php not found in wwwroot.")
-              sys.exit(1)
-          PY
-
-      - name: Check SitePackages
-        env:
-          PUBLISH_URL: ${{ steps.publish-profile.outputs.publish_url }}
-          PUBLISH_USER: ${{ steps.publish-profile.outputs.user }}
-          PUBLISH_PASSWORD: ${{ steps.publish-profile.outputs.password }}
-        run: |
-          set -euo pipefail
-          response_headers=$(mktemp)
-          packages_body=$(mktemp)
-          curl -sS --compressed -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
-            -D "$response_headers" \
-            -H "Accept: application/json" \
-            "https://$PUBLISH_URL/api/vfs/site/data/SitePackages/" \
-            -o "$packages_body"
-          echo "Status da API /api/vfs/site/data/SitePackages/:"
-          head -n 5 "$response_headers"
-          echo "Tamanho da resposta: $(wc -c < "$packages_body") bytes"
-          echo "Primeiros bytes:"
-          head -c 200 "$packages_body" || true
-          python - "$packages_body" <<'PY'
-          import json
-          import sys
-          import pathlib
-
-          raw = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").strip()
-          if not raw:
-              print("Resposta vazia de /api/vfs/site/data/SitePackages/.")
-              sys.exit(0)
-          try:
-              data = json.loads(raw)
-          except json.JSONDecodeError:
-              print("Resposta nao JSON de /api/vfs/site/data/SitePackages/:")
-              print(raw[:500])
-              sys.exit(0)
-          names = sorted([
-              item.get("name")
-              for item in data
-              if isinstance(item, dict) and item.get("name")
-          ])
-          print("SitePackages:", ", ".join(names))
-          PY
-
-      - name: Read packagename.txt
-        env:
-          PUBLISH_URL: ${{ steps.publish-profile.outputs.publish_url }}
-          PUBLISH_USER: ${{ steps.publish-profile.outputs.user }}
-          PUBLISH_PASSWORD: ${{ steps.publish-profile.outputs.password }}
-        run: |
-          set -euo pipefail
-          response_headers=$(mktemp)
-          package_name_body=$(mktemp)
-          curl -sS --compressed -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
-            -D "$response_headers" \
-            "https://$PUBLISH_URL/api/vfs/site/data/SitePackages/packagename.txt" \
-            -o "$package_name_body" || true
-          echo "Status da API /api/vfs/site/data/SitePackages/packagename.txt:"
-          head -n 5 "$response_headers"
-          echo "Conteudo de packagename.txt:"
-          cat "$package_name_body" || true
+      - name: Restart Web App
+        run: az webapp restart --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME"
