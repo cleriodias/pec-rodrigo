@@ -158,17 +158,23 @@ jobs:
         run: |
           set -euo pipefail
           response_headers=$(mktemp)
-          settings_json=$(curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
+          settings_body=$(mktemp)
+          curl -sS --compressed -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
             -D "$response_headers" \
             -H "Accept: application/json" \
-            "https://$PUBLISH_URL/api/settings")
+            "https://$PUBLISH_URL/api/settings" \
+            -o "$settings_body"
           echo "Status da API /api/settings:"
           head -n 5 "$response_headers"
+          echo "Tamanho da resposta: $(wc -c < "$settings_body") bytes"
+          echo "Primeiros bytes:"
+          head -c 200 "$settings_body" || true
           python - <<'PY'
           import json
           import sys
+          import pathlib
 
-          raw = sys.stdin.read().strip()
+          raw = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").strip()
           if not raw:
               print("Resposta vazia de /api/settings.")
               sys.exit(0)
@@ -188,7 +194,7 @@ jobs:
           else:
               print("WEBSITE_RUN_FROM_PACKAGE: set")
           PY
-          <<< "$settings_json"
+          "$settings_body"
 
       - name: Verify wwwroot contents
         env:
@@ -198,17 +204,23 @@ jobs:
         run: |
           set -euo pipefail
           response_headers=$(mktemp)
-          items_json=$(curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
+          items_body=$(mktemp)
+          curl -sS --compressed -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
             -D "$response_headers" \
             -H "Accept: application/json" \
-            "https://$PUBLISH_URL/api/vfs/site/wwwroot/")
+            "https://$PUBLISH_URL/api/vfs/site/wwwroot/" \
+            -o "$items_body"
           echo "Status da API /api/vfs/site/wwwroot/:"
           head -n 5 "$response_headers"
+          echo "Tamanho da resposta: $(wc -c < "$items_body") bytes"
+          echo "Primeiros bytes:"
+          head -c 200 "$items_body" || true
           python - <<'PY'
           import json
           import sys
+          import pathlib
 
-          raw = sys.stdin.read().strip()
+          raw = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").strip()
           if not raw:
               print("Resposta vazia de /api/vfs/site/wwwroot/.")
               sys.exit(0)
@@ -228,4 +240,4 @@ jobs:
               print("index.php not found in wwwroot.")
               sys.exit(1)
           PY
-          <<< "$items_json"
+          "$items_body"
