@@ -1,6 +1,6 @@
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Modal from '@/Components/Modal';
-import { Head, router } from '@inertiajs/react';
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { Head, Link, router } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
 
 const paymentColumns = [
@@ -247,14 +247,14 @@ export default function CashClosure({
     const filterCard = (
         <div className="rounded-2xl bg-white p-6 shadow">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="flex-1">
-                    <div className="mt-3">
+                <div className="">
+                    <div className="mt-0">
                         <input
                             id="closure-date"
                             type="date"
                             value={dateInput}
                             onChange={(event) => handleDateChange(event.target.value)}
-                            className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-3 text-gray-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                            className="mt-2 w-50 rounded-xl border border-gray-300 px-3 py-3 text-gray-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                         />
                     </div>
                 </div>
@@ -413,19 +413,39 @@ export default function CashClosure({
         </div>
     );
 
+    const discrepancyParams = {};
+    if (dateInput) {
+        discrepancyParams.date = dateInput;
+    }
+    if (unitFilter !== null && unitFilter !== undefined) {
+        discrepancyParams.unit_id = unitFilter;
+    }
+
+    const headerContent = (
+        <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <h2 className="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">
+                    Fechamento de CAIXA
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-300">
+                    Totais de venda por atendente organizados por forma de pagamento.
+                </p>
+            </div>
+            <div className="flex items-center gap-2">
+                <Link
+                    href={route('reports.cash.discrepancies', discrepancyParams)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 shadow-sm transition hover:bg-indigo-100 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200"
+                    aria-label="Atalho para fechamentos com discrepancia"
+                >
+                    <i className="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                    <span>Fechamentos com discrepancia</span>
+                </Link>
+            </div>
+        </div>
+    );
+
     return (
-        <AuthenticatedLayout
-            header={
-                <div>
-                    <h2 className="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">
-                        Fechamento de CAIXA
-                    </h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-300">
-                        Totais de venda por atendente organizados por forma de pagamento.
-                    </p>
-                </div>
-            }
-        >
+        <AuthenticatedLayout header={headerContent}>
             <Head title="Fechamento de CAIXA" />
 
             <div className="py-12">
