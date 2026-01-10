@@ -463,3 +463,9 @@ Remover o Node.js.
 ```
 sudo apt remove nodejs
 ```
+
+
+# Install azure CLI
+https://learn.microsoft.com/en-us/cli/azure/install-azure-cli-windows?view=azure-cli-latest&pivots=msi
+# deploy
+https://learn.microsoft.com/en-us/azure/app-service/quickstart-php?tabs=cli&pivots=platform-linux
