@@ -1,0 +1,61 @@
+name: Deploy to Azure Web App
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  APP_ENV: production
+  APP_DEBUG: 'false'
+  NODE_ENV: production
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, bcmath, openssl, pdo_mysql, tokenizer, xml, ctype, json
+
+      - name: Install Composer dependencies
+        run: composer install --no-dev --prefer-dist --optimize-autoloader
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Node packages
+        run: npm ci
+
+      - name: Build frontend assets
+        run: npm run build
+
+      - name: Prepare Laravel cache
+        run: |
+          php artisan key:generate --force
+          php artisan storage:link
+          php artisan config:cache
+          php artisan route:cache
+          php artisan view:cache
+
+      - name: Zip artifact
+        run: |
+          mkdir -p artifacts
+          zip -r artifacts/app.zip . -x "node_modules/*" "storage/logs/*" "vendor/bin/*"
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v2
+        with:
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: artifacts/app.zip
