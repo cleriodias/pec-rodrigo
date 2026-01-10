@@ -40,37 +40,92 @@ jobs:
       - name: Build frontend assets
         run: NODE_ENV=production npm run build
 
-      - name: Prepare Laravel environment
-        run: cp .env.example .env
-
-      - name: Prepare Laravel cache
-        run: |
-          php artisan key:generate --force
-          php artisan storage:link
-          php artisan config:cache
-          php artisan route:cache
-          php artisan view:cache
-
       - name: Prepare deployment package (Linux App Service root)
         run: |
           rm -rf artifacts
           mkdir -p artifacts/staging
-          rsync -a --exclude node_modules --exclude storage/logs --exclude vendor/bin --exclude artifacts --exclude .git --exclude .github ./ artifacts/staging/app/
+          rsync -a --exclude node_modules --exclude storage/logs --exclude vendor/bin --exclude artifacts --exclude .git --exclude .github --exclude .env ./ artifacts/staging/app/
           rsync -a public/ artifacts/staging/
           cp public/index.php artifacts/staging/index.php
           rm -f artifacts/staging/hostingstart.html
           sed -i "s#__DIR__.'/../storage#__DIR__.'/app/storage#g" artifacts/staging/index.php
           sed -i "s#__DIR__.'/../vendor/#__DIR__.'/app/vendor/#g" artifacts/staging/index.php
           sed -i "s#__DIR__.'/../bootstrap/#__DIR__.'/app/bootstrap/#g" artifacts/staging/index.php
+          rm -rf artifacts/staging/storage
+          ln -s app/storage/app/public artifacts/staging/storage
+          (cd artifacts/staging && zip -r ../app.zip .)
 
       - name: Debug package contents
         run: |
           ls -la artifacts/staging
           ls -la artifacts/staging/index.php
+          ls -la artifacts/staging/storage
+          unzip -l artifacts/app.zip | head -n 50
 
-      - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v2
-        with:
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          package: artifacts/staging
-          clean: true
+      - name: Parse publish profile
+        id: publish-profile
+        env:
+          PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        run: |
+          python - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+
+          data = os.environ.get("PUBLISH_PROFILE", "")
+          if not data.strip():
+              raise SystemExit("Missing publish profile secret.")
+
+          root = ET.fromstring(data)
+          profiles = root.findall(".//publishProfile")
+          if not profiles:
+              raise SystemExit("No publishProfile found.")
+
+          prof = None
+          for p in profiles:
+              if p.get("publishMethod") == "ZipDeploy":
+                  prof = p
+                  break
+          if prof is None:
+              prof = profiles[0]
+
+          publish_url = prof.get("publishUrl")
+          user = prof.get("userName")
+          pwd = prof.get("userPWD")
+          if not publish_url or not user or not pwd:
+              raise SystemExit("publish profile missing required fields.")
+
+          publish_url = publish_url.replace("https://", "").replace("http://", "")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write(f"publish_url={publish_url}\n")
+              f.write(f"user={user}\n")
+              f.write(f"password={pwd}\n")
+          PY
+
+      - name: Deploy via Kudu ZipDeploy (clean)
+        env:
+          PUBLISH_URL: ${{ steps.publish-profile.outputs.publish_url }}
+          PUBLISH_USER: ${{ steps.publish-profile.outputs.user }}
+          PUBLISH_PASSWORD: ${{ steps.publish-profile.outputs.password }}
+        run: |
+          set -euo pipefail
+          curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
+            -X POST -T artifacts/app.zip \
+            "https://$PUBLISH_URL/api/zipdeploy?isAsync=true&clean=true"
+          for i in {1..60}; do
+            status_json=$(curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" "https://$PUBLISH_URL/api/deployments/latest")
+            status=$(python -c "import json,sys; print(json.load(sys.stdin).get('status'))" <<< "$status_json")
+            if [ "$status" = "4" ]; then
+              echo "Deploy concluido."
+              exit 0
+            fi
+            if [ "$status" = "3" ]; then
+              echo "Deploy falhou."
+              echo "$status_json"
+              exit 1
+            fi
+            sleep 5
+          done
+          echo "Timeout aguardando deploy."
+          echo "$status_json"
+          exit 1
