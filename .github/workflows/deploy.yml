@@ -187,19 +187,7 @@ jobs:
                 sleep 5
                 continue
               fi
-              status_line=$(python - <<'PY' <<< "$status_json"
-import json
-import sys
-
-try:
-    data = json.load(sys.stdin)
-except Exception:
-    sys.exit(1)
-status = data.get("status")
-status_text = data.get("status_text", "")
-print(f"{status}|{status_text}")
-PY
-              ) || status_line=""
+              status_line=$(python -c "import json,sys; data=json.load(sys.stdin); print(str(data.get('status'))+'|'+str(data.get('status_text','')))" <<< "$status_json" 2>/dev/null) || status_line=""
               if [ -z "$status_line" ]; then
                 echo "Status atual: resposta invalida do Kudu. Aguardando..."
                 echo "Primeiros bytes: $(echo "$status_json" | head -c 200)"
@@ -216,17 +204,7 @@ PY
               if [ "$status" = "3" ]; then
                 echo "Deploy falhou."
                 echo "$status_json"
-                log_url=$(python - <<'PY' <<< "$status_json"
-import json
-import sys
-
-try:
-    data = json.load(sys.stdin)
-except Exception:
-    sys.exit(1)
-print(data.get("log_url", ""))
-PY
-                ) || log_url=""
+                log_url=$(python -c "import json,sys; data=json.load(sys.stdin); print(data.get('log_url',''))" <<< "$status_json" 2>/dev/null) || log_url=""
                 if [ -n "$log_url" ] && [ "$log_url" != "None" ]; then
                   echo "Logs do deploy:"
                   curl -f -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" "$log_url" || true
