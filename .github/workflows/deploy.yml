@@ -163,7 +163,8 @@ jobs:
           base="https://${AZURE_WEBAPP_NAME}.scm.azurewebsites.net"
           for attempt in 1 2 3; do
             response_headers=$(mktemp)
-            curl -f -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
+            curl -f -sS --connect-timeout 10 --max-time 60 \
+              -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
               -D "$response_headers" \
               -X POST -T artifacts/app.zip \
               "$base/api/zipdeploy?isAsync=true" \
@@ -176,8 +177,11 @@ jobs:
             fi
             echo "Deploy URL: $deploy_url (tentativa $attempt)"
             for i in {1..120}; do
-              status_json=$(curl -f -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" "$deploy_url")
+              status_json=$(curl -f -sS --connect-timeout 10 --max-time 30 \
+                -u "$PUBLISH_USER:$PUBLISH_PASSWORD" "$deploy_url")
               status=$(python -c "import json,sys; print(json.load(sys.stdin).get('status'))" <<< "$status_json")
+              status_text=$(python -c "import json,sys; print(json.load(sys.stdin).get('status_text'))" <<< "$status_json")
+              echo "Status atual: $status - $status_text"
               if [ "$status" = "4" ]; then
                 echo "Deploy concluido."
                 exit 0
