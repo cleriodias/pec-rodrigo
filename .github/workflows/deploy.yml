@@ -33,12 +33,21 @@ jobs:
 
       - name: Provision App Service (Bicep)
         run: |
-          az deployment group create \
+          outputs=$(az deployment group create \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --template-file infra/main.bicep \
             --parameters appName="$AZURE_WEBAPP_NAME" \
                          location="Brazil South" \
-                         appServicePlanId="$AZURE_APP_SERVICE_PLAN_ID"
+                         appServicePlanId="$AZURE_APP_SERVICE_PLAN_ID" \
+            --query properties.outputs -o json)
+          storage_account=$(python -c "import json,sys; print(json.load(sys.stdin).get('storageAccountName', {}).get('value', ''))" <<< "$outputs" 2>/dev/null) || storage_account=""
+          storage_container=$(python -c "import json,sys; print(json.load(sys.stdin).get('storageContainerName', {}).get('value', ''))" <<< "$outputs" 2>/dev/null) || storage_container=""
+          if [ -z "$storage_account" ] || [ -z "$storage_container" ]; then
+            echo "Nao foi possivel obter os outputs do Bicep."
+            exit 1
+          fi
+          echo "STORAGE_ACCOUNT_NAME=$storage_account" >> "$GITHUB_ENV"
+          echo "STORAGE_CONTAINER_NAME=$storage_container" >> "$GITHUB_ENV"
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -99,132 +108,56 @@ jobs:
           (require_once __DIR__.'/app/bootstrap/app.php')
               ->handleRequest(Request::capture());
           PHP
+          rm -rf artifacts/staging/app/storage
+          ln -s /home/site/storage artifacts/staging/app/storage
           rm -rf artifacts/staging/storage
-          ln -s app/storage/app/public artifacts/staging/storage
-          mkdir -p artifacts/staging/app/storage/logs
+          ln -s /home/site/storage/app/public artifacts/staging/storage
           (cd artifacts/staging && zip -r ../app.zip .)
 
-      - name: Fetch Kudu publishing credentials
+      - name: Upload package to Storage
         run: |
-          publish_user=$(az webapp deployment list-publishing-credentials \
+          blob_name="app-${GITHUB_RUN_ID}.zip"
+          account_key=$(az storage account keys list \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --name "$AZURE_WEBAPP_NAME" \
-            --query publishingUserName -o tsv)
-          publish_password=$(az webapp deployment list-publishing-credentials \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --name "$AZURE_WEBAPP_NAME" \
-            --query publishingPassword -o tsv)
-          if [ -z "$publish_user" ] || [ -z "$publish_password" ]; then
-            echo "Nao foi possivel obter as credenciais de publicacao."
+            --account-name "$STORAGE_ACCOUNT_NAME" \
+            --query "[0].value" -o tsv)
+          if [ -z "$account_key" ]; then
+            echo "Nao foi possivel obter a key da storage account."
             exit 1
           fi
-          echo "::add-mask::$publish_user"
-          echo "::add-mask::$publish_password"
-          {
-            echo "PUBLISH_USER=$publish_user"
-            echo "PUBLISH_PASSWORD=$publish_password"
-          } >> "$GITHUB_ENV"
+          echo "::add-mask::$account_key"
+          az storage container create \
+            --account-name "$STORAGE_ACCOUNT_NAME" \
+            --account-key "$account_key" \
+            --name "$STORAGE_CONTAINER_NAME" \
+            --public-access off
+          az storage blob upload \
+            --account-name "$STORAGE_ACCOUNT_NAME" \
+            --account-key "$account_key" \
+            --container-name "$STORAGE_CONTAINER_NAME" \
+            --name "$blob_name" \
+            --file artifacts/app.zip \
+            --overwrite true
+          expiry=$(date -u -d "+30 days" "+%Y-%m-%dT%H:%MZ")
+          sas=$(az storage blob generate-sas \
+            --account-name "$STORAGE_ACCOUNT_NAME" \
+            --account-key "$account_key" \
+            --container-name "$STORAGE_CONTAINER_NAME" \
+            --name "$blob_name" \
+            --permissions r \
+            --expiry "$expiry" \
+            -o tsv)
+          if [ -z "$sas" ]; then
+            echo "Nao foi possivel gerar o SAS."
+            exit 1
+          fi
+          echo "::add-mask::$sas"
+          package_url="https://${STORAGE_ACCOUNT_NAME}.blob.core.windows.net/${STORAGE_CONTAINER_NAME}/${blob_name}?${sas}"
+          echo "PACKAGE_URL=$package_url" >> "$GITHUB_ENV"
 
-      - name: Clean stale cache on Web App
-        run: |
-          base="https://${AZURE_WEBAPP_NAME}.scm.azurewebsites.net"
-          for file in config.php routes.php routes-v7.php routes-v8.php events.php; do
-            curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
-              -X DELETE "$base/api/vfs/site/wwwroot/bootstrap/cache/$file" || true
-            curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
-              -X DELETE "$base/api/vfs/site/wwwroot/app/bootstrap/cache/$file" || true
-          done
-          curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
-            -X DELETE "$base/api/vfs/site/wwwroot/.env" || true
-          curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
-            -X DELETE "$base/api/vfs/site/wwwroot/app/.env" || true
-          curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
-            -X DELETE "$base/api/vfs/site/wwwroot/.env.example" || true
-          curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
-            -X DELETE "$base/api/vfs/site/wwwroot/app/.env.example" || true
-          curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
-            -X DELETE "$base/api/vfs/site/wwwroot/storage/logs?recursive=true" || true
-          curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
-            -X DELETE "$base/api/vfs/site/wwwroot/app/storage/logs?recursive=true" || true
-          curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
-            -X DELETE "$base/api/vfs/site/wwwroot/hostingstart.html" || true
-
-      - name: Disable Run From Package
+      - name: Configure Run From Package
         run: |
           az webapp config appsettings set \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --name "$AZURE_WEBAPP_NAME" \
-            --settings WEBSITE_RUN_FROM_PACKAGE=0 WEBSITE_DOCUMENT_ROOT=/home/site/wwwroot
-          sleep 15
-
-      - name: Deploy ZIP (Kudu)
-        run: |
-          set -euo pipefail
-          base="https://${AZURE_WEBAPP_NAME}.scm.azurewebsites.net"
-          for attempt in 1 2 3; do
-            response_headers=$(mktemp)
-            curl -f -sS --connect-timeout 10 --max-time 60 \
-              -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
-              -D "$response_headers" \
-              -X POST -T artifacts/app.zip \
-              "$base/api/zipdeploy?isAsync=true" \
-              -o /dev/null
-            deploy_url=$(grep -i "^Location:" "$response_headers" | awk '{print $2}' | tr -d '\r')
-            if [ -z "$deploy_url" ]; then
-              echo "Nao foi possivel obter o Location do deploy."
-              cat "$response_headers"
-              exit 1
-            fi
-            echo "Deploy URL: $deploy_url (tentativa $attempt)"
-            for i in {1..120}; do
-              set +e
-              status_json=$(curl -f -sS --connect-timeout 10 --max-time 30 \
-                -u "$PUBLISH_USER:$PUBLISH_PASSWORD" "$deploy_url")
-              curl_exit=$?
-              set -e
-              if [ $curl_exit -ne 0 ]; then
-                echo "Status atual: erro ao consultar ($curl_exit). Aguardando..."
-                sleep 5
-                continue
-              fi
-              status_line=$(python -c "import json,sys; data=json.load(sys.stdin); print(str(data.get('status'))+'|'+str(data.get('status_text','')))" <<< "$status_json" 2>/dev/null) || status_line=""
-              if [ -z "$status_line" ]; then
-                echo "Status atual: resposta invalida do Kudu. Aguardando..."
-                echo "Primeiros bytes: $(echo "$status_json" | head -c 200)"
-                sleep 5
-                continue
-              fi
-              status="${status_line%%|*}"
-              status_text="${status_line#*|}"
-              echo "Status atual: $status - $status_text"
-              if [ "$status" = "4" ]; then
-                echo "Deploy concluido."
-                exit 0
-              fi
-              if [ "$status" = "3" ]; then
-                echo "Deploy falhou."
-                echo "$status_json"
-                log_url=$(python -c "import json,sys; data=json.load(sys.stdin); print(data.get('log_url',''))" <<< "$status_json" 2>/dev/null) || log_url=""
-                if [ -n "$log_url" ] && [ "$log_url" != "None" ]; then
-                  echo "Logs do deploy:"
-                  curl -f -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" "$log_url" || true
-                fi
-                if echo "$status_json" | grep -qi "SCM container restart" && [ "$attempt" -lt 3 ]; then
-                  echo "SCM reiniciou. Aguardando para tentar novamente..."
-                  sleep 20
-                  break
-                fi
-                exit 1
-              fi
-              sleep 5
-            done
-            if [ "$attempt" -lt 3 ]; then
-              echo "Timeout aguardando deploy. Tentando novamente..."
-              sleep 20
-              continue
-            fi
-            echo "Timeout aguardando deploy."
-            echo "$status_json"
-            exit 1
-          done
-          exit 1
+            --settings WEBSITE_RUN_FROM_PACKAGE="$PACKAGE_URL" WEBSITE_DOCUMENT_ROOT=/home/site/wwwroot WEBSITES_ENABLE_APP_SERVICE_STORAGE=true
