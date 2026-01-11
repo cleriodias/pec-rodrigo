@@ -71,9 +71,38 @@ jobs:
       - name: Prepare deployment package
         run: |
           rm -rf artifacts
-          mkdir -p artifacts
-          zip -r artifacts/app.zip . \
-            -x "node_modules/*" "storage/logs/*" "vendor/bin/*" ".git/*" ".github/*" ".env"
+          mkdir -p artifacts/staging
+          rsync -a public/ artifacts/staging/
+          mkdir -p artifacts/staging/app
+          rsync -a . artifacts/staging/app \
+            --exclude ".git" \
+            --exclude ".github" \
+            --exclude "artifacts" \
+            --exclude "node_modules" \
+            --exclude ".env" \
+            --exclude "public" \
+            --exclude "storage/logs" \
+            --exclude "vendor/bin"
+          cat > artifacts/staging/index.php <<'PHP'
+          <?php
+
+          use Illuminate\Http\Request;
+
+          define('LARAVEL_START', microtime(true));
+
+          if (file_exists($maintenance = __DIR__.'/app/storage/framework/maintenance.php')) {
+              require $maintenance;
+          }
+
+          require __DIR__.'/app/vendor/autoload.php';
+
+          (require_once __DIR__.'/app/bootstrap/app.php')
+              ->handleRequest(Request::capture());
+          PHP
+          rm -rf artifacts/staging/storage
+          ln -s app/storage/app/public artifacts/staging/storage
+          mkdir -p artifacts/staging/app/storage/logs
+          (cd artifacts/staging && zip -r ../app.zip .)
 
       - name: Fetch Kudu publishing credentials
         run: |
@@ -102,13 +131,21 @@ jobs:
           for file in config.php routes.php routes-v7.php routes-v8.php events.php; do
             curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
               -X DELETE "$base/api/vfs/site/wwwroot/bootstrap/cache/$file" || true
+            curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
+              -X DELETE "$base/api/vfs/site/wwwroot/app/bootstrap/cache/$file" || true
           done
           curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
             -X DELETE "$base/api/vfs/site/wwwroot/.env" || true
           curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
+            -X DELETE "$base/api/vfs/site/wwwroot/app/.env" || true
+          curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
             -X DELETE "$base/api/vfs/site/wwwroot/.env.example" || true
           curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
-            -X DELETE "$base/api/vfs/site/wwwroot/storage/logs/?recursive=true" || true
+            -X DELETE "$base/api/vfs/site/wwwroot/app/.env.example" || true
+          curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
+            -X DELETE "$base/api/vfs/site/wwwroot/storage/logs?recursive=true" || true
+          curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
+            -X DELETE "$base/api/vfs/site/wwwroot/app/storage/logs?recursive=true" || true
           curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
             -X DELETE "$base/api/vfs/site/wwwroot/hostingstart.html" || true
 
@@ -117,7 +154,7 @@ jobs:
           az webapp config appsettings set \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --name "$AZURE_WEBAPP_NAME" \
-            --settings WEBSITE_RUN_FROM_PACKAGE=0 WEBSITE_DOCUMENT_ROOT=/home/site/wwwroot/public
+            --settings WEBSITE_RUN_FROM_PACKAGE=0 WEBSITE_DOCUMENT_ROOT=/home/site/wwwroot
 
       - name: Deploy ZIP
         run: |
