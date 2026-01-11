@@ -61,12 +61,53 @@ jobs:
       - name: Build frontend assets
         run: NODE_ENV=production npm run build
 
+      - name: Remove cached Laravel files
+        run: |
+          rm -f bootstrap/cache/config.php
+          rm -f bootstrap/cache/routes.php
+          rm -f bootstrap/cache/routes-*.php
+          rm -f bootstrap/cache/events.php
+
       - name: Prepare deployment package
         run: |
           rm -rf artifacts
           mkdir -p artifacts
           zip -r artifacts/app.zip . \
             -x "node_modules/*" "storage/logs/*" "vendor/bin/*" ".git/*" ".github/*" ".env"
+
+      - name: Fetch Kudu publishing credentials
+        run: |
+          creds_json=$(az webapp deployment list-publishing-credentials \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME")
+          publish_user=$(python - <<'PY' <<< "$creds_json"
+          import json,sys
+          data = json.load(sys.stdin)
+          print(data.get("publishingUserName", ""))
+          PY
+          )
+          publish_password=$(python - <<'PY' <<< "$creds_json"
+          import json,sys
+          data = json.load(sys.stdin)
+          print(data.get("publishingPassword", ""))
+          PY
+          )
+          echo "::add-mask::$publish_user"
+          echo "::add-mask::$publish_password"
+          {
+            echo "PUBLISH_USER=$publish_user"
+            echo "PUBLISH_PASSWORD=$publish_password"
+          } >> "$GITHUB_ENV"
+
+      - name: Clean stale cache on Web App
+        run: |
+          base="https://${AZURE_WEBAPP_NAME}.scm.azurewebsites.net"
+          for file in config.php routes.php routes-v7.php routes-v8.php events.php; do
+            curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
+              -X DELETE "$base/api/vfs/site/wwwroot/bootstrap/cache/$file" || true
+          done
+          curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
+            -X DELETE "$base/api/vfs/site/wwwroot/hostingstart.html" || true
 
       - name: Disable Run From Package
         run: |
