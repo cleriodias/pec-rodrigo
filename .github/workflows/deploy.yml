@@ -81,7 +81,7 @@ jobs:
           az webapp config appsettings set \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --name "$AZURE_WEBAPP_NAME" \
-            --settings WEBSITE_RUN_FROM_PACKAGE=0
+            --settings WEBSITE_RUN_FROM_PACKAGE=0 WEBSITE_DOCUMENT_ROOT=/home/site/wwwroot/public
 
       - name: Deploy ZIP
         run: |

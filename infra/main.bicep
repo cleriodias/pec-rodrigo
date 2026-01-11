@@ -20,6 +20,24 @@ resource webApp 'Microsoft.Web/sites@2024-11-01' = {
   }
 }
 
+resource webAppConfig 'Microsoft.Web/sites/config@2024-11-01' = {
+  parent: webApp
+  name: 'web'
+  properties: {
+    linuxFxVersion: 'PHP|8.2'
+    appSettings: [
+      {
+        name: 'WEBSITE_DOCUMENT_ROOT'
+        value: '/home/site/wwwroot/public'
+      }
+      {
+        name: 'WEBSITE_RUN_FROM_PACKAGE'
+        value: '0'
+      }
+    ]
+  }
+}
+
 resource webAppFtp 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2024-11-01' = {
   parent: webApp
   name: 'ftp'
