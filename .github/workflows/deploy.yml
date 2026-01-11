@@ -77,21 +77,18 @@ jobs:
 
       - name: Fetch Kudu publishing credentials
         run: |
-          creds_json=$(az webapp deployment list-publishing-credentials \
+          publish_user=$(az webapp deployment list-publishing-credentials \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --name "$AZURE_WEBAPP_NAME")
-          publish_user=$(python - <<'PY' <<< "$creds_json"
-          import json,sys
-          data = json.load(sys.stdin)
-          print(data.get("publishingUserName", ""))
-          PY
-          )
-          publish_password=$(python - <<'PY' <<< "$creds_json"
-          import json,sys
-          data = json.load(sys.stdin)
-          print(data.get("publishingPassword", ""))
-          PY
-          )
+            --name "$AZURE_WEBAPP_NAME" \
+            --query publishingUserName -o tsv)
+          publish_password=$(az webapp deployment list-publishing-credentials \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --query publishingPassword -o tsv)
+          if [ -z "$publish_user" ] || [ -z "$publish_password" ]; then
+            echo "Nao foi possivel obter as credenciais de publicacao."
+            exit 1
+          fi
           echo "::add-mask::$publish_user"
           echo "::add-mask::$publish_password"
           {
