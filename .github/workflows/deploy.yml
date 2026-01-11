@@ -104,6 +104,12 @@ jobs:
               -X DELETE "$base/api/vfs/site/wwwroot/bootstrap/cache/$file" || true
           done
           curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
+            -X DELETE "$base/api/vfs/site/wwwroot/.env" || true
+          curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
+            -X DELETE "$base/api/vfs/site/wwwroot/.env.example" || true
+          curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
+            -X DELETE "$base/api/vfs/site/wwwroot/storage/logs/?recursive=true" || true
+          curl -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
             -X DELETE "$base/api/vfs/site/wwwroot/hostingstart.html" || true
 
       - name: Disable Run From Package
