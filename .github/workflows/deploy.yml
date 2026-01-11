@@ -64,17 +64,9 @@ jobs:
       - name: Prepare deployment package
         run: |
           rm -rf artifacts
-          mkdir -p artifacts/staging
-          rsync -a --exclude node_modules --exclude storage/logs --exclude vendor/bin --exclude artifacts --exclude .git --exclude .github --exclude .env ./ artifacts/staging/app/
-          rsync -a public/ artifacts/staging/
-          cp public/index.php artifacts/staging/index.php
-          rm -f artifacts/staging/hostingstart.html
-          sed -i "s#__DIR__.'/../storage#__DIR__.'/app/storage#g" artifacts/staging/index.php
-          sed -i "s#__DIR__.'/../vendor/#__DIR__.'/app/vendor/#g" artifacts/staging/index.php
-          sed -i "s#__DIR__.'/../bootstrap/#__DIR__.'/app/bootstrap/#g" artifacts/staging/index.php
-          rm -rf artifacts/staging/storage
-          ln -s app/storage/app/public artifacts/staging/storage
-          (cd artifacts/staging && zip -r ../app.zip .)
+          mkdir -p artifacts
+          zip -r artifacts/app.zip . \
+            -x "node_modules/*" "storage/logs/*" "vendor/bin/*" ".git/*" ".github/*" ".env"
 
       - name: Disable Run From Package
         run: |
