@@ -155,46 +155,57 @@ jobs:
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --name "$AZURE_WEBAPP_NAME" \
             --settings WEBSITE_RUN_FROM_PACKAGE=0 WEBSITE_DOCUMENT_ROOT=/home/site/wwwroot
+          sleep 15
 
       - name: Deploy ZIP (Kudu)
         run: |
           set -euo pipefail
           base="https://${AZURE_WEBAPP_NAME}.scm.azurewebsites.net"
-          response_headers=$(mktemp)
-          curl -f -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
-            -D "$response_headers" \
-            -X POST -T artifacts/app.zip \
-            "$base/api/zipdeploy?isAsync=true" \
-            -o /dev/null
-          deploy_url=$(grep -i "^Location:" "$response_headers" | awk '{print $2}' | tr -d '\r')
-          if [ -z "$deploy_url" ]; then
-            echo "Nao foi possivel obter o Location do deploy."
-            cat "$response_headers"
-            exit 1
-          fi
-          echo "Deploy URL: $deploy_url"
-          for i in {1..120}; do
-            status_json=$(curl -f -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" "$deploy_url")
-            status=$(python -c "import json,sys; print(json.load(sys.stdin).get('status'))" <<< "$status_json")
-            if [ "$status" = "4" ]; then
-              echo "Deploy concluido."
-              exit 0
-            fi
-            if [ "$status" = "3" ]; then
-              echo "Deploy falhou."
-              echo "$status_json"
-              log_url=$(python -c "import json,sys; print(json.load(sys.stdin).get('log_url'))" <<< "$status_json")
-              if [ -n "$log_url" ] && [ "$log_url" != "None" ]; then
-                echo "Logs do deploy:"
-                curl -f -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" "$log_url"
-              fi
+          for attempt in 1 2 3; do
+            response_headers=$(mktemp)
+            curl -f -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" \
+              -D "$response_headers" \
+              -X POST -T artifacts/app.zip \
+              "$base/api/zipdeploy?isAsync=true" \
+              -o /dev/null
+            deploy_url=$(grep -i "^Location:" "$response_headers" | awk '{print $2}' | tr -d '\r')
+            if [ -z "$deploy_url" ]; then
+              echo "Nao foi possivel obter o Location do deploy."
+              cat "$response_headers"
               exit 1
             fi
-            sleep 5
+            echo "Deploy URL: $deploy_url (tentativa $attempt)"
+            for i in {1..120}; do
+              status_json=$(curl -f -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" "$deploy_url")
+              status=$(python -c "import json,sys; print(json.load(sys.stdin).get('status'))" <<< "$status_json")
+              if [ "$status" = "4" ]; then
+                echo "Deploy concluido."
+                exit 0
+              fi
+              if [ "$status" = "3" ]; then
+                echo "Deploy falhou."
+                echo "$status_json"
+                log_url=$(python -c "import json,sys; print(json.load(sys.stdin).get('log_url'))" <<< "$status_json")
+                if [ -n "$log_url" ] && [ "$log_url" != "None" ]; then
+                  echo "Logs do deploy:"
+                  curl -f -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" "$log_url"
+                fi
+                if echo "$status_json" | grep -qi "SCM container restart" && [ "$attempt" -lt 3 ]; then
+                  echo "SCM reiniciou. Aguardando para tentar novamente..."
+                  sleep 20
+                  break
+                fi
+                exit 1
+              fi
+              sleep 5
+            done
+            if [ "$attempt" -lt 3 ]; then
+              echo "Timeout aguardando deploy. Tentando novamente..."
+              sleep 20
+              continue
+            fi
+            echo "Timeout aguardando deploy."
+            echo "$status_json"
+            exit 1
           done
-          echo "Timeout aguardando deploy."
-          echo "$status_json"
           exit 1
-
-      - name: Restart Web App
-        run: az webapp restart --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME"
