@@ -177,10 +177,37 @@ jobs:
             fi
             echo "Deploy URL: $deploy_url (tentativa $attempt)"
             for i in {1..120}; do
+              set +e
               status_json=$(curl -f -sS --connect-timeout 10 --max-time 30 \
                 -u "$PUBLISH_USER:$PUBLISH_PASSWORD" "$deploy_url")
-              status=$(python -c "import json,sys; print(json.load(sys.stdin).get('status'))" <<< "$status_json")
-              status_text=$(python -c "import json,sys; print(json.load(sys.stdin).get('status_text'))" <<< "$status_json")
+              curl_exit=$?
+              set -e
+              if [ $curl_exit -ne 0 ]; then
+                echo "Status atual: erro ao consultar ($curl_exit). Aguardando..."
+                sleep 5
+                continue
+              fi
+              status_line=$(python - <<'PY' <<< "$status_json"
+import json
+import sys
+
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(1)
+status = data.get("status")
+status_text = data.get("status_text", "")
+print(f"{status}|{status_text}")
+PY
+              ) || status_line=""
+              if [ -z "$status_line" ]; then
+                echo "Status atual: resposta invalida do Kudu. Aguardando..."
+                echo "Primeiros bytes: $(echo "$status_json" | head -c 200)"
+                sleep 5
+                continue
+              fi
+              status="${status_line%%|*}"
+              status_text="${status_line#*|}"
               echo "Status atual: $status - $status_text"
               if [ "$status" = "4" ]; then
                 echo "Deploy concluido."
@@ -189,10 +216,20 @@ jobs:
               if [ "$status" = "3" ]; then
                 echo "Deploy falhou."
                 echo "$status_json"
-                log_url=$(python -c "import json,sys; print(json.load(sys.stdin).get('log_url'))" <<< "$status_json")
+                log_url=$(python - <<'PY' <<< "$status_json"
+import json
+import sys
+
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(1)
+print(data.get("log_url", ""))
+PY
+                ) || log_url=""
                 if [ -n "$log_url" ] && [ "$log_url" != "None" ]; then
                   echo "Logs do deploy:"
-                  curl -f -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" "$log_url"
+                  curl -f -sS -u "$PUBLISH_USER:$PUBLISH_PASSWORD" "$log_url" || true
                 fi
                 if echo "$status_json" | grep -qi "SCM container restart" && [ "$attempt" -lt 3 ]; then
                   echo "SCM reiniciou. Aguardando para tentar novamente..."
