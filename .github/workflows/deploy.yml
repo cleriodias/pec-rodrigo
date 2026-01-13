@@ -81,37 +81,18 @@ jobs:
         run: |
           rm -rf artifacts
           mkdir -p artifacts/staging
-          rsync -a public/ artifacts/staging/
-          mkdir -p artifacts/staging/app
-          rsync -a . artifacts/staging/app \
+          rsync -a . artifacts/staging \
             --exclude ".git" \
             --exclude ".github" \
             --exclude "artifacts" \
             --exclude "node_modules" \
             --exclude ".env" \
-            --exclude "public" \
             --exclude "storage/logs" \
             --exclude "vendor/bin"
-          cat > artifacts/staging/index.php <<'PHP'
-          <?php
-
-          use Illuminate\Http\Request;
-
-          define('LARAVEL_START', microtime(true));
-
-          if (file_exists($maintenance = __DIR__.'/app/storage/framework/maintenance.php')) {
-              require $maintenance;
-          }
-
-          require __DIR__.'/app/vendor/autoload.php';
-
-          (require_once __DIR__.'/app/bootstrap/app.php')
-              ->handleRequest(Request::capture());
-          PHP
-          rm -rf artifacts/staging/app/storage
-          ln -s /home/site/storage artifacts/staging/app/storage
           rm -rf artifacts/staging/storage
-          ln -s /home/site/storage/app/public artifacts/staging/storage
+          ln -s /home/site/storage artifacts/staging/storage
+          rm -rf artifacts/staging/public/storage
+          ln -s /home/site/storage/app/public artifacts/staging/public/storage
           (cd artifacts/staging && zip -r ../app.zip .)
 
       - name: Upload package to Storage
@@ -160,4 +141,4 @@ jobs:
           az webapp config appsettings set \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --name "$AZURE_WEBAPP_NAME" \
-            --settings WEBSITE_RUN_FROM_PACKAGE="$PACKAGE_URL" WEBSITE_DOCUMENT_ROOT=/home/site/wwwroot WEBSITES_ENABLE_APP_SERVICE_STORAGE=true
+            --settings WEBSITE_RUN_FROM_PACKAGE="$PACKAGE_URL" WEBSITE_DOCUMENT_ROOT=/home/site/wwwroot/public WEBSITES_ENABLE_APP_SERVICE_STORAGE=true
