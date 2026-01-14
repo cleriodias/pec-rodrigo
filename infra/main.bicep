@@ -69,7 +69,7 @@ resource webAppConfig 'Microsoft.Web/sites/config@2024-11-01' = {
       }
       {
         name: 'APP_STORAGE'
-        value: '/home/site/storage'
+        value: '/home/site/wwwroot/storage'
       }
     ]
   }

@@ -85,8 +85,8 @@ jobs:
               APP_ENV=production \
               APP_DEBUG=false \
               APP_URL="$APP_URL" \
-              LOG_CHANNEL=stderr \
-              LOG_LEVEL=info \
+              LOG_CHANNEL=single \
+              LOG_LEVEL=debug \
               SESSION_DRIVER=file \
               CACHE_STORE=file \
               QUEUE_CONNECTION=sync \
@@ -143,8 +143,6 @@ jobs:
             --exclude ".env" \
             --exclude "storage/logs" \
             --exclude "vendor/bin"
-          rm -rf artifacts/staging/storage
-          ln -s /home/site/storage artifacts/staging/storage
           rm -rf artifacts/staging/public/storage
           ln -s /home/site/storage/app/public artifacts/staging/public/storage
           (cd artifacts/staging && zip -r ../app.zip .)
