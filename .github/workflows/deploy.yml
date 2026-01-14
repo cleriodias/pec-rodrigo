@@ -148,7 +148,7 @@ jobs:
           az webapp log config \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --name "$AZURE_WEBAPP_NAME" \
-            --application-logging true \
+            --application-logging filesystem \
             --web-server-logging filesystem \
             --detailed-error-messages true \
             --failed-request-tracing true
