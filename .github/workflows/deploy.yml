@@ -32,6 +32,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Provision App Service (Bicep)
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           az deployment group create \
             --resource-group "$AZURE_RESOURCE_GROUP" \
@@ -41,6 +42,7 @@ jobs:
                          appServicePlanId="$AZURE_APP_SERVICE_PLAN_ID"
 
       - name: Enable App Service logging
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           az webapp log config \
             --resource-group "$AZURE_RESOURCE_GROUP" \
@@ -49,6 +51,10 @@ jobs:
             --web-server-logging filesystem \
             --detailed-error-messages true \
             --failed-request-tracing true
+
+      - name: Wait for App Service to settle
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: sleep 60
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
