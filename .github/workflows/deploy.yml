@@ -33,21 +33,12 @@ jobs:
 
       - name: Provision App Service (Bicep)
         run: |
-          outputs=$(az deployment group create \
+          az deployment group create \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --template-file infra/main.bicep \
             --parameters appName="$AZURE_WEBAPP_NAME" \
                          location="Brazil South" \
-                         appServicePlanId="$AZURE_APP_SERVICE_PLAN_ID" \
-            --query properties.outputs -o json)
-          storage_account=$(python -c "import json,sys; print(json.load(sys.stdin).get('storageAccountName', {}).get('value', ''))" <<< "$outputs" 2>/dev/null) || storage_account=""
-          storage_container=$(python -c "import json,sys; print(json.load(sys.stdin).get('storageContainerName', {}).get('value', ''))" <<< "$outputs" 2>/dev/null) || storage_container=""
-          if [ -z "$storage_account" ] || [ -z "$storage_container" ]; then
-            echo "Nao foi possivel obter os outputs do Bicep."
-            exit 1
-          fi
-          echo "STORAGE_ACCOUNT_NAME=$storage_account" >> "$GITHUB_ENV"
-          echo "STORAGE_CONTAINER_NAME=$storage_container" >> "$GITHUB_ENV"
+                         appServicePlanId="$AZURE_APP_SERVICE_PLAN_ID"
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -95,53 +86,20 @@ jobs:
           ln -s /home/site/storage/app/public artifacts/staging/public/storage
           (cd artifacts/staging && zip -r ../app.zip .)
 
-      - name: Upload package to Storage
-        run: |
-          blob_name="app-${GITHUB_RUN_ID}.zip"
-          account_key=$(az storage account keys list \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --account-name "$STORAGE_ACCOUNT_NAME" \
-            --query "[0].value" -o tsv)
-          if [ -z "$account_key" ]; then
-            echo "Nao foi possivel obter a key da storage account."
-            exit 1
-          fi
-          echo "::add-mask::$account_key"
-          az storage container create \
-            --account-name "$STORAGE_ACCOUNT_NAME" \
-            --account-key "$account_key" \
-            --name "$STORAGE_CONTAINER_NAME" \
-            --public-access off
-          az storage blob upload \
-            --account-name "$STORAGE_ACCOUNT_NAME" \
-            --account-key "$account_key" \
-            --container-name "$STORAGE_CONTAINER_NAME" \
-            --name "$blob_name" \
-            --file artifacts/app.zip \
-            --overwrite true
-          expiry=$(date -u -d "+30 days" "+%Y-%m-%dT%H:%MZ")
-          sas=$(az storage blob generate-sas \
-            --account-name "$STORAGE_ACCOUNT_NAME" \
-            --account-key "$account_key" \
-            --container-name "$STORAGE_CONTAINER_NAME" \
-            --name "$blob_name" \
-            --permissions r \
-            --expiry "$expiry" \
-            -o tsv)
-          if [ -z "$sas" ]; then
-            echo "Nao foi possivel gerar o SAS."
-            exit 1
-          fi
-          echo "::add-mask::$sas"
-          package_url="https://${STORAGE_ACCOUNT_NAME}.blob.core.windows.net/${STORAGE_CONTAINER_NAME}/${blob_name}?${sas}"
-          echo "PACKAGE_URL=$package_url" >> "$GITHUB_ENV"
-
-      - name: Configure Run From Package
+      - name: Configure App Service settings
         run: |
           az webapp config appsettings set \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --name "$AZURE_WEBAPP_NAME" \
-            --settings WEBSITE_RUN_FROM_PACKAGE="$PACKAGE_URL" WEBSITE_DOCUMENT_ROOT=/home/site/wwwroot/public WEBSITES_ENABLE_APP_SERVICE_STORAGE=true
+            --settings WEBSITE_RUN_FROM_PACKAGE=0 WEBSITE_DOCUMENT_ROOT=/home/site/wwwroot/public WEBSITES_ENABLE_APP_SERVICE_STORAGE=true APP_STORAGE=/home/site/storage
+
+      - name: Deploy package (Zip Deploy)
+        run: |
+          az webapp deploy \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --type zip \
+            --src-path artifacts/app.zip
 
       - name: Enable App Service logging
         run: |
