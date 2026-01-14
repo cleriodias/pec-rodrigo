@@ -52,6 +52,53 @@ jobs:
             --detailed-error-messages true \
             --failed-request-tracing true
 
+      - name: Configure App Service environment
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          APP_KEY: ${{ secrets.LARAVEL_APP_KEY }}
+          APP_URL: ${{ secrets.APP_URL }}
+          DB_CONNECTION: ${{ secrets.DB_CONNECTION }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_DATABASE: ${{ secrets.DB_DATABASE }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          if [ -z "$APP_KEY" ]; then
+            echo "Secret LARAVEL_APP_KEY nao configurada."
+            exit 1
+          fi
+          if [ -z "$DB_CONNECTION" ] || [ -z "$DB_HOST" ] || [ -z "$DB_DATABASE" ] || [ -z "$DB_USERNAME" ]; then
+            echo "Secrets de banco incompletas (DB_CONNECTION, DB_HOST, DB_DATABASE, DB_USERNAME)."
+            exit 1
+          fi
+          if [ -z "$APP_URL" ]; then
+            APP_URL="https://${AZURE_WEBAPP_NAME}.azurewebsites.net"
+          fi
+          if [ -z "$DB_PORT" ]; then
+            DB_PORT="3306"
+          fi
+          az webapp config appsettings set \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --settings \
+              APP_ENV=production \
+              APP_DEBUG=false \
+              APP_URL="$APP_URL" \
+              LOG_CHANNEL=stderr \
+              LOG_LEVEL=info \
+              SESSION_DRIVER=file \
+              CACHE_STORE=file \
+              QUEUE_CONNECTION=sync \
+              APP_KEY="$APP_KEY" \
+              DB_CONNECTION="$DB_CONNECTION" \
+              DB_HOST="$DB_HOST" \
+              DB_PORT="$DB_PORT" \
+              DB_DATABASE="$DB_DATABASE" \
+              DB_USERNAME="$DB_USERNAME" \
+              DB_PASSWORD="$DB_PASSWORD" \
+            --output none
+
       - name: Wait for App Service to settle
         if: ${{ github.event_name == 'workflow_dispatch' }}
         run: sleep 60
