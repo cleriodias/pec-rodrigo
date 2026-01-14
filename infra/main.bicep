@@ -60,8 +60,16 @@ resource webAppConfig 'Microsoft.Web/sites/config@2024-11-01' = {
         value: '/home/site/wwwroot/public'
       }
       {
+        name: 'WEBSITE_RUN_FROM_PACKAGE'
+        value: '0'
+      }
+      {
         name: 'WEBSITES_ENABLE_APP_SERVICE_STORAGE'
         value: 'true'
+      }
+      {
+        name: 'APP_STORAGE'
+        value: '/home/site/storage'
       }
     ]
   }

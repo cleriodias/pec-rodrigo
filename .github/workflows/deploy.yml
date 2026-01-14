@@ -40,6 +40,16 @@ jobs:
                          location="Brazil South" \
                          appServicePlanId="$AZURE_APP_SERVICE_PLAN_ID"
 
+      - name: Enable App Service logging
+        run: |
+          az webapp log config \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --application-logging filesystem \
+            --web-server-logging filesystem \
+            --detailed-error-messages true \
+            --failed-request-tracing true
+
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
@@ -86,13 +96,6 @@ jobs:
           ln -s /home/site/storage/app/public artifacts/staging/public/storage
           (cd artifacts/staging && zip -r ../app.zip .)
 
-      - name: Configure App Service settings
-        run: |
-          az webapp config appsettings set \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --name "$AZURE_WEBAPP_NAME" \
-            --settings WEBSITE_RUN_FROM_PACKAGE=0 WEBSITE_DOCUMENT_ROOT=/home/site/wwwroot/public WEBSITES_ENABLE_APP_SERVICE_STORAGE=true APP_STORAGE=/home/site/storage
-
       - name: Deploy package (Zip Deploy)
         run: |
           az webapp deploy \
@@ -100,13 +103,3 @@ jobs:
             --name "$AZURE_WEBAPP_NAME" \
             --type zip \
             --src-path artifacts/app.zip
-
-      - name: Enable App Service logging
-        run: |
-          az webapp log config \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --name "$AZURE_WEBAPP_NAME" \
-            --application-logging filesystem \
-            --web-server-logging filesystem \
-            --detailed-error-messages true \
-            --failed-request-tracing true
