@@ -53,7 +53,6 @@ jobs:
             --failed-request-tracing true
 
       - name: Configure App Service environment
-        if: ${{ github.event_name == 'workflow_dispatch' }}
         env:
           APP_KEY: ${{ secrets.LARAVEL_APP_KEY }}
           APP_URL: ${{ secrets.APP_URL }}
@@ -90,6 +89,7 @@ jobs:
               SESSION_DRIVER=file \
               CACHE_STORE=file \
               QUEUE_CONNECTION=sync \
+              APP_STORAGE="/home/site/storage" \
               APP_KEY="$APP_KEY" \
               DB_CONNECTION="$DB_CONNECTION" \
               DB_HOST="$DB_HOST" \
@@ -144,7 +144,8 @@ jobs:
             --exclude "storage/logs" \
             --exclude "vendor/bin"
           rm -rf artifacts/staging/public/storage
-          ln -s /home/site/storage/app/public artifacts/staging/public/storage
+          mkdir -p artifacts/staging/public/storage
+          touch artifacts/staging/public/storage/.gitkeep
           (cd artifacts/staging && zip -r ../app.zip .)
 
       - name: Deploy package (Zip Deploy)
