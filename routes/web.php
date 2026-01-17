@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BoletoController;
 use App\Http\Controllers\CashierClosureController;
 use App\Http\Controllers\DatabaseToolsController;
 use App\Http\Controllers\ExpenseController;
@@ -176,6 +177,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/expenses', [ExpenseController::class, 'index'])->name('expenses.index');
     Route::post('/expenses', [ExpenseController::class, 'store'])->name('expenses.store');
     Route::delete('/expenses/{expense}', [ExpenseController::class, 'destroy'])->name('expenses.destroy');
+    Route::get('/boletos', [BoletoController::class, 'index'])->name('boletos.index');
+    Route::post('/boletos', [BoletoController::class, 'store'])->name('boletos.store');
+    Route::put('/boletos/{boleto}/pay', [BoletoController::class, 'pay'])->name('boletos.pay');
     Route::get('/cashier/close', [CashierClosureController::class, 'index'])->name('cashier.close');
     Route::post('/cashier/close', [CashierClosureController::class, 'store'])->name('cashier.close.store');
 

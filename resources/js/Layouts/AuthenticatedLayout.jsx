@@ -19,6 +19,7 @@ const DEFAULT_MENU_KEYS = [
     'users',
     'units',
     'products',
+    'boletos',
     'cashier_close',
     'reports_control',
     'reports_cash',
@@ -66,6 +67,7 @@ export default function AuthenticatedLayout({ header, headerClassName = '', chil
     const canSeeUnits = canSeeUsers;
     const canSeeReports = canSeeUnits;
     const canSeeExpenses = user && (canSeeReports || effectiveRole === 3);
+    const canAccessBoletos = user && ([0, 3].includes(effectiveRole) || isMasterOriginal);
     const canSwitchUnit = user && [0, 1].includes(originalRole);
     const canSwitchRole = user && isMasterOriginal;
     const hasLanchoneteRoute =
@@ -183,6 +185,18 @@ export default function AuthenticatedLayout({ header, headerClassName = '', chil
                         active={route().current('products.*')}
                     >
                         <MenuLabel icon="bi bi-box-seam" text="Produtos" />
+                    </NavLink>
+                ),
+            },
+            {
+                key: 'boletos',
+                visible: canAccessBoletos && hasMenuAccess('boletos'),
+                node: (
+                    <NavLink
+                        href={route('boletos.index')}
+                        active={route().current('boletos.index')}
+                    >
+                        <MenuLabel icon="bi bi-card-text" text="Boletos" />
                     </NavLink>
                 ),
             },
