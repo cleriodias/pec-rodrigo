@@ -32,22 +32,77 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Provision App Service (Bicep)
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
-          outputs=$(az deployment group create \
+          az deployment group create \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --template-file infra/main.bicep \
             --parameters appName="$AZURE_WEBAPP_NAME" \
                          location="Brazil South" \
-                         appServicePlanId="$AZURE_APP_SERVICE_PLAN_ID" \
-            --query properties.outputs -o json)
-          storage_account=$(python -c "import json,sys; print(json.load(sys.stdin).get('storageAccountName', {}).get('value', ''))" <<< "$outputs" 2>/dev/null) || storage_account=""
-          storage_container=$(python -c "import json,sys; print(json.load(sys.stdin).get('storageContainerName', {}).get('value', ''))" <<< "$outputs" 2>/dev/null) || storage_container=""
-          if [ -z "$storage_account" ] || [ -z "$storage_container" ]; then
-            echo "Nao foi possivel obter os outputs do Bicep."
+                         appServicePlanId="$AZURE_APP_SERVICE_PLAN_ID"
+
+      - name: Enable App Service logging
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          az webapp log config \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --application-logging filesystem \
+            --web-server-logging filesystem \
+            --detailed-error-messages true \
+            --failed-request-tracing true
+
+      - name: Configure App Service environment
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          APP_KEY: ${{ secrets.LARAVEL_APP_KEY }}
+          APP_URL: ${{ secrets.APP_URL }}
+          DB_CONNECTION: ${{ secrets.DB_CONNECTION }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_DATABASE: ${{ secrets.DB_DATABASE }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          if [ -z "$APP_KEY" ]; then
+            echo "Secret LARAVEL_APP_KEY nao configurada."
             exit 1
           fi
-          echo "STORAGE_ACCOUNT_NAME=$storage_account" >> "$GITHUB_ENV"
-          echo "STORAGE_CONTAINER_NAME=$storage_container" >> "$GITHUB_ENV"
+          if [ -z "$DB_CONNECTION" ] || [ -z "$DB_HOST" ] || [ -z "$DB_DATABASE" ] || [ -z "$DB_USERNAME" ]; then
+            echo "Secrets de banco incompletas (DB_CONNECTION, DB_HOST, DB_DATABASE, DB_USERNAME)."
+            exit 1
+          fi
+          if [ -z "$APP_URL" ]; then
+            APP_URL="https://${AZURE_WEBAPP_NAME}.azurewebsites.net"
+          fi
+          if [ -z "$DB_PORT" ]; then
+            DB_PORT="3306"
+          fi
+          az webapp config appsettings set \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --settings \
+              APP_ENV=production \
+              APP_DEBUG=false \
+              APP_URL="$APP_URL" \
+              LOG_CHANNEL=single \
+              LOG_LEVEL=debug \
+              SESSION_DRIVER=file \
+              CACHE_STORE=file \
+              QUEUE_CONNECTION=sync \
+              APP_STORAGE="/home/site/storage" \
+              APP_KEY="$APP_KEY" \
+              DB_CONNECTION="$DB_CONNECTION" \
+              DB_HOST="$DB_HOST" \
+              DB_PORT="$DB_PORT" \
+              DB_DATABASE="$DB_DATABASE" \
+              DB_USERNAME="$DB_USERNAME" \
+              DB_PASSWORD="$DB_PASSWORD" \
+            --output none
+
+      - name: Wait for App Service to settle
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: sleep 90
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -81,83 +136,38 @@ jobs:
         run: |
           rm -rf artifacts
           mkdir -p artifacts/staging
-          rsync -a public/ artifacts/staging/
-          mkdir -p artifacts/staging/app
-          rsync -a . artifacts/staging/app \
+          rsync -a . artifacts/staging \
             --exclude ".git" \
             --exclude ".github" \
             --exclude "artifacts" \
             --exclude "node_modules" \
             --exclude ".env" \
-            --exclude "public" \
             --exclude "storage/logs" \
             --exclude "vendor/bin"
-          cat > artifacts/staging/index.php <<'PHP'
-          <?php
-
-          use Illuminate\Http\Request;
-
-          define('LARAVEL_START', microtime(true));
-
-          if (file_exists($maintenance = __DIR__.'/app/storage/framework/maintenance.php')) {
-              require $maintenance;
-          }
-
-          require __DIR__.'/app/vendor/autoload.php';
-
-          (require_once __DIR__.'/app/bootstrap/app.php')
-              ->handleRequest(Request::capture());
-          PHP
-          rm -rf artifacts/staging/app/storage
-          ln -s /home/site/storage artifacts/staging/app/storage
-          rm -rf artifacts/staging/storage
-          ln -s /home/site/storage/app/public artifacts/staging/storage
+          rm -rf artifacts/staging/public/storage
+          mkdir -p artifacts/staging/public/storage
+          touch artifacts/staging/public/storage/.gitkeep
           (cd artifacts/staging && zip -r ../app.zip .)
 
-      - name: Upload package to Storage
+      - name: Deploy package (Zip Deploy)
         run: |
-          blob_name="app-${GITHUB_RUN_ID}.zip"
-          account_key=$(az storage account keys list \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --account-name "$STORAGE_ACCOUNT_NAME" \
-            --query "[0].value" -o tsv)
-          if [ -z "$account_key" ]; then
-            echo "Nao foi possivel obter a key da storage account."
-            exit 1
-          fi
-          echo "::add-mask::$account_key"
-          az storage container create \
-            --account-name "$STORAGE_ACCOUNT_NAME" \
-            --account-key "$account_key" \
-            --name "$STORAGE_CONTAINER_NAME" \
-            --public-access off
-          az storage blob upload \
-            --account-name "$STORAGE_ACCOUNT_NAME" \
-            --account-key "$account_key" \
-            --container-name "$STORAGE_CONTAINER_NAME" \
-            --name "$blob_name" \
-            --file artifacts/app.zip \
-            --overwrite true
-          expiry=$(date -u -d "+30 days" "+%Y-%m-%dT%H:%MZ")
-          sas=$(az storage blob generate-sas \
-            --account-name "$STORAGE_ACCOUNT_NAME" \
-            --account-key "$account_key" \
-            --container-name "$STORAGE_CONTAINER_NAME" \
-            --name "$blob_name" \
-            --permissions r \
-            --expiry "$expiry" \
-            -o tsv)
-          if [ -z "$sas" ]; then
-            echo "Nao foi possivel gerar o SAS."
-            exit 1
-          fi
-          echo "::add-mask::$sas"
-          package_url="https://${STORAGE_ACCOUNT_NAME}.blob.core.windows.net/${STORAGE_CONTAINER_NAME}/${blob_name}?${sas}"
-          echo "PACKAGE_URL=$package_url" >> "$GITHUB_ENV"
-
-      - name: Configure Run From Package
-        run: |
-          az webapp config appsettings set \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --name "$AZURE_WEBAPP_NAME" \
-            --settings WEBSITE_RUN_FROM_PACKAGE="$PACKAGE_URL" WEBSITE_DOCUMENT_ROOT=/home/site/wwwroot WEBSITES_ENABLE_APP_SERVICE_STORAGE=true
+          max_attempts=5
+          delay=20
+          for attempt in $(seq 1 $max_attempts); do
+            echo "Deploy attempt $attempt of $max_attempts"
+            if az webapp deploy \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --name "$AZURE_WEBAPP_NAME" \
+              --type zip \
+              --src-path artifacts/app.zip; then
+              echo "Deploy succeeded"
+              exit 0
+            fi
+            if [ "$attempt" -lt "$max_attempts" ]; then
+              echo "Deploy failed. Waiting ${delay}s before retry..."
+              sleep "$delay"
+              delay=$((delay * 2))
+            fi
+          done
+          echo "Deploy failed after $max_attempts attempts."
+          exit 1
