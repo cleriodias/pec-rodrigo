@@ -16,14 +16,30 @@ nvm install 20
 nvm use 20
 nvm alias default 20
 
-Vai até a pasta do projeto:
+## Comandos de build
+
+### Preparar o ambiente Node.js
+- `npm install` (instala as dependencias listadas em `package.json`)
+- `node -v` e `npm -v` (confirme as versoes apos configurar o Node)
+- `npx vite --version` (confere se o Vite esta disponivel)
+
+### Gerar a build
+- `npm run build`
+
+Se o Vite nao estiver presente ou o build falhar, reinstale os modulos e repita o build:
+```
 npm install
-source ~/.bashrc
-node -v
-npm -v
+npx vite --version
 npm run build
+rm -rf node_modules
+```
 
-
+### Verificacao e correcoes
+```
+npm audit
+npm audit fix
+npm install nome-da-dependencia@latest
+```
 
 Duplicar o arquivo ".env.example" e renomear para ".env".<br>
 Alterar no arquivo ".env" as credencias do banco de dados.<br>
@@ -206,7 +222,7 @@ Criar chave SSH (chave pública e privada).
 ssh-keygen -t rsa -b 4096 -C "cleriodias@gmail.com"
 ```
 ```
-ssh-keygen -t rsa -b 4096 -C "cesar@celke.com.br"
+ssh-keygen -t rsa -b 4096 -C "cleriodias@gmail.com"
 ```
 
 Local que é criado a chave pública.
@@ -214,7 +230,7 @@ Local que é criado a chave pública.
 C:\Users\SeuUsuario\.ssh\
 ```
 ```
-C:\Users\cesar/.ssh/
+C:\Users\pec/.ssh/
 ```
 
 Exibir o conteúdo da chave pública.
@@ -249,7 +265,7 @@ rm -rf /home/user/htdocs/srv566492.hstgr.cloud/{*,.*}
 
 Gerar a chave SSH no servidor.
 ```
-ssh-keygen -t rsa -b 4096 -C "cesar@celke.com.br"
+ssh-keygen -t rsa -b 4096 -C "cleriodias@gmail.com"
 ```
 
 Imprimir a chave pública gerada.
@@ -307,7 +323,7 @@ Ctrl + X para sair.<br>
 
 Alterar o valor das variaveis de ambiente.
 ```
-APP_NAME=Celke
+APP_NAME=pec
 APP_ENV=production
 APP_KEY=
 APP_DEBUG=false
@@ -320,9 +336,9 @@ Comentar as variaveis de conexão.
 # DB_CONNECTION=mysql
 # DB_HOST=127.0.0.1
 # DB_PORT=3306
-# DB_DATABASE=celke
-# DB_USERNAME=root
-# DB_PASSWORD=
+# DB_DATABASE=paoecafe83
+# DB_USERNAME=paoecafe83
+# DB_PASSWORD=1qaz2ws3e
 ```
 
 Alterar para armazenar as sessões no arquivo "file".
@@ -405,9 +421,9 @@ Alterar no arquivo .env as credenciais do banco de dados.<br>
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_DATABASE=nome-da-base-de-dados
-DB_USERNAME=usuario-do-banco-de-dados
-DB_PASSWORD=senha-do-banco-de-dados
+DB_DATABASE=paoecafe83
+DB_USERNAME=paoecafe83
+DB_PASSWORD=1qaz2ws3e
 ```
 
 Alterar para armazenar as sessões no arquivo "file".
