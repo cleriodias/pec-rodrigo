@@ -1,0 +1,2 @@
+2026-01-11T02:33:49  Startup Request, url: /api/vfs/site/wwwroot/bootstrap/cache/config.php, method: DELETE, type: request, pid: 769,1,7, ScmType: None
+2026-01-11T02:33:50    Outgoing response, type: response, statusCode: 404, statusText: NotFound

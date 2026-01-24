@@ -1,0 +1,9 @@
+<step title="Incoming Request" date="2026-01-11T02:52:43.348" instance="aa3938" url="/api/deployments/latest?deployer=Push-Deployer&amp;time=2026-01-11_02-49-33Z" method="GET" type="request" pid="778,1,18" Accept="*/*" Host="pec83.scm.azurewebsites.net" User-Agent="curl/8.5.0" Authorization="Bas..." X-ARR-LOG-ID="50fab435-6b89-4408-9ddf-c89d0665f71a" CLIENT-IP="20.102.223.194:29728" X-SITE-DEPLOYMENT-ID="PEC83" WAS-DEFAULT-HOSTNAME="pec83.scm.azurewebsites.net" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/api/deployments/latest?deployer=Push-Deployer&amp;time=2026-01-11_02-49-33Z" X-Client-IP="20.102.223.194" X-Client-Port="29728" >
+  <step title="Cleanup Xml Logs" date="2026-01-11T02:52:43.358" /><!-- duration: 19ms -->
+  <step title="DeploymentService.GetResult" date="2026-01-11T02:52:43.398" >
+    <step title="DeploymentService.GetLatestDeployment" date="2026-01-11T02:52:43.418" >
+      <step title="DeploymentManager.GetResults" date="2026-01-11T02:52:43.430" /><!-- duration: 390ms -->
+    </step><!-- duration: 422ms -->
+  </step><!-- duration: 444ms -->
+  <step title="Outgoing response" date="2026-01-11T02:52:43.850" type="response" statusCode="202" statusText="Accepted" /><!-- duration: 26ms -->
+</step><!-- duration: 538ms -->

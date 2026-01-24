@@ -1,0 +1,173 @@
+2026-01-24T13:03:04.3230870Z 127.0.0.1 -  24/Jan/2026:13:03:02 +0000 "GET /index.php" 500
+2026-01-24T13:05:44.5595435Z 127.0.0.1 -  24/Jan/2026:13:05:44 +0000 "HEAD /index.php" 500
+2026-01-24T13:05:50.8922241Z 127.0.0.1 -  24/Jan/2026:13:05:50 +0000 "GET /index.php" 500
+2026-01-24T13:48:39.6077098Z 127.0.0.1 -  24/Jan/2026:13:48:38 +0000 "GET /index.php" 500
+2026-01-24T13:55:38.8750376Z 127.0.0.1 -  24/Jan/2026:13:55:38 +0000 "GET /index.php" 500
+2026-01-24T13:56:55.9018246Z 127.0.0.1 -  24/Jan/2026:13:56:54 +0000 "GET /index.php" 500
+2026-01-24T14:22:39.5185534Z    _____                               
+2026-01-24T14:22:39.5187385Z   /  _  \ __________ _________   ____  
+2026-01-24T14:22:39.5187441Z  /  /_\  \\___   /  |  \_  __ \_/ __ \ 
+2026-01-24T14:22:39.5187464Z /    |    \/    /|  |  /|  | \/\  ___/ 
+2026-01-24T14:22:39.5187487Z \____|__  /_____ \____/ |__|    \___  >
+2026-01-24T14:22:39.5187519Z         \/      \/                  \/ 
+2026-01-24T14:22:39.5187569Z A P P   S E R V I C E   O N   L I N U X
+2026-01-24T14:22:39.5187590Z 
+2026-01-24T14:22:39.5187617Z Documentation : http://aka.ms/webapp-linux
+2026-01-24T14:22:39.5187643Z PHP quickstart: https://aka.ms/php-qs
+2026-01-24T14:22:39.5187665Z PHP version   : 8.2.29
+2026-01-24T14:22:39.5187687Z Instance Name : lw0sdlwk0000PM
+2026-01-24T14:22:39.5187717Z Instance Id   : 57cd1b9bb672ec20a6552173796364458f0573917736609f30f0dcf32f0463a8
+2026-01-24T14:22:39.5187754Z 
+2026-01-24T14:22:39.5187777Z Note: Any data outside '/home' is not persisted
+2026-01-24T14:22:44.0346704Z Starting OpenBSD Secure Shell server: sshd.
+2026-01-24T14:22:44.1373871Z WEBSITES_INCLUDE_CLOUD_CERTS is not set to true.
+2026-01-24T14:22:44.3661049Z Updating certificates in /etc/ssl/certs...
+2026-01-24T14:23:25.3087601Z rehash: warning: skipping duplicate certificate in azl_SSL.com_TLS_ECC_Root_CA_2022.pem
+2026-01-24T14:23:25.3379707Z rehash: warning: skipping duplicate certificate in azl_Sectigo_Public_Server_Authentication_Root_R46.pem
+2026-01-24T14:23:25.3386521Z rehash: warning: skipping duplicate certificate in azl_Sectigo_Public_Server_Authentication_Root_E46.pem
+2026-01-24T14:23:25.3686985Z rehash: warning: skipping duplicate certificate in azl_SSL.com_TLS_RSA_Root_CA_2022.pem
+2026-01-24T14:23:25.4100603Z 4 added, 0 removed; done.
+2026-01-24T14:23:25.4180817Z Running hooks in /etc/ca-certificates/update.d...
+2026-01-24T14:23:25.4303205Z done.
+2026-01-24T14:23:25.4580962Z CA certificates copied and updated successfully.
+2026-01-24T14:23:25.4589862Z Running oryx create-script -appPath /home/site/wwwroot -output /opt/startup/startup.sh     -bindPort 8080 -startupCommand 'php-fpm;'
+2026-01-24T14:23:25.6788450Z Could not find build manifest file at '/home/site/wwwroot/oryx-manifest.toml'
+2026-01-24T14:23:25.6795728Z Could not find operation ID in manifest. Generating an operation id...
+2026-01-24T14:23:25.6805142Z Build Operation ID: a6aa3ca6-9462-4509-a015-f1e598623448
+2026-01-24T14:23:27.4541709Z Writing output script to '/opt/startup/startup.sh'
+2026-01-24T14:23:28.3816481Z Starting nginx: nginx.
+2026-01-24T14:23:28.9620299Z [24-Jan-2026 14:23:28] NOTICE: fpm is running, pid 2090
+2026-01-24T14:23:28.9721877Z [24-Jan-2026 14:23:28] NOTICE: ready to handle connections
+2026-01-24T14:23:43.2835689Z 127.0.0.1 -  24/Jan/2026:14:23:33 +0000 "GET /index.php" 500
+2026-01-24T14:24:30.3706651Z 127.0.0.1 -  24/Jan/2026:14:24:30 +0000 "GET /index.php" 500
+2026-01-24T14:27:48.7587315Z 127.0.0.1 -  24/Jan/2026:14:27:48 +0000 "GET /index.php" 500
+2026-01-24T14:31:45.9438433Z    _____                               
+2026-01-24T14:31:45.9440440Z   /  _  \ __________ _________   ____  
+2026-01-24T14:31:45.9440547Z  /  /_\  \\___   /  |  \_  __ \_/ __ \ 
+2026-01-24T14:31:45.9440571Z /    |    \/    /|  |  /|  | \/\  ___/ 
+2026-01-24T14:31:45.9440593Z \____|__  /_____ \____/ |__|    \___  >
+2026-01-24T14:31:45.9440622Z         \/      \/                  \/ 
+2026-01-24T14:31:45.9440646Z A P P   S E R V I C E   O N   L I N U X
+2026-01-24T14:31:45.9440666Z 
+2026-01-24T14:31:45.9440694Z Documentation : http://aka.ms/webapp-linux
+2026-01-24T14:31:45.9440739Z PHP quickstart: https://aka.ms/php-qs
+2026-01-24T14:31:45.9440763Z PHP version   : 8.2.29
+2026-01-24T14:31:45.9440786Z Instance Name : lw0sdlwk0000PM
+2026-01-24T14:31:45.9440819Z Instance Id   : 57cd1b9bb672ec20a6552173796364458f0573917736609f30f0dcf32f0463a8
+2026-01-24T14:31:45.9440840Z 
+2026-01-24T14:31:45.9440863Z Note: Any data outside '/home' is not persisted
+2026-01-24T14:31:50.1781784Z Starting OpenBSD Secure Shell server: sshd.
+2026-01-24T14:31:50.2104916Z WEBSITES_INCLUDE_CLOUD_CERTS is not set to true.
+2026-01-24T14:31:50.3284384Z Updating certificates in /etc/ssl/certs...
+2026-01-24T14:31:52.3998247Z 127.0.0.1 -  24/Jan/2026:14:31:49 +0000 "GET /index.php" 500
+2026-01-24T14:32:59.9304564Z    _____                               
+2026-01-24T14:32:59.9590457Z   /  _  \ __________ _________   ____  
+2026-01-24T14:32:59.9590635Z  /  /_\  \\___   /  |  \_  __ \_/ __ \ 
+2026-01-24T14:32:59.9590662Z /    |    \/    /|  |  /|  | \/\  ___/ 
+2026-01-24T14:32:59.9590685Z \____|__  /_____ \____/ |__|    \___  >
+2026-01-24T14:32:59.9590714Z         \/      \/                  \/ 
+2026-01-24T14:32:59.9590816Z A P P   S E R V I C E   O N   L I N U X
+2026-01-24T14:32:59.9590838Z 
+2026-01-24T14:32:59.9590865Z Documentation : http://aka.ms/webapp-linux
+2026-01-24T14:32:59.9590889Z PHP quickstart: https://aka.ms/php-qs
+2026-01-24T14:32:59.9590916Z PHP version   : 8.2.29
+2026-01-24T14:32:59.9590939Z Instance Name : lw0sdlwk0000PM
+2026-01-24T14:32:59.9590991Z Instance Id   : 57cd1b9bb672ec20a6552173796364458f0573917736609f30f0dcf32f0463a8
+2026-01-24T14:32:59.9591014Z 
+2026-01-24T14:32:59.9591036Z Note: Any data outside '/home' is not persisted
+2026-01-24T14:33:02.5316222Z Starting OpenBSD Secure Shell server: sshd.
+2026-01-24T14:33:02.5614208Z WEBSITES_INCLUDE_CLOUD_CERTS is not set to true.
+2026-01-24T14:33:02.6126788Z Updating certificates in /etc/ssl/certs...
+2026-01-24T14:33:25.5769533Z rehash: warning: skipping duplicate certificate in azl_SSL.com_TLS_ECC_Root_CA_2022.pem
+2026-01-24T14:33:25.5878962Z rehash: warning: skipping duplicate certificate in azl_Sectigo_Public_Server_Authentication_Root_R46.pem
+2026-01-24T14:33:25.6058087Z rehash: warning: skipping duplicate certificate in azl_Sectigo_Public_Server_Authentication_Root_E46.pem
+2026-01-24T14:33:25.6077398Z rehash: warning: skipping duplicate certificate in azl_SSL.com_TLS_RSA_Root_CA_2022.pem
+2026-01-24T14:33:25.6466804Z 4 added, 0 removed; done.
+2026-01-24T14:33:25.7152077Z Running hooks in /etc/ca-certificates/update.d...
+2026-01-24T14:33:25.7272242Z done.
+2026-01-24T14:33:25.7683511Z CA certificates copied and updated successfully.
+2026-01-24T14:33:25.7857672Z Running oryx create-script -appPath /home/site/wwwroot -output /opt/startup/startup.sh     -bindPort 8080 -startupCommand 'php-fpm;'
+2026-01-24T14:33:25.9546752Z Could not find build manifest file at '/home/site/wwwroot/oryx-manifest.toml'
+2026-01-24T14:33:25.9547458Z Could not find operation ID in manifest. Generating an operation id...
+2026-01-24T14:33:25.9547493Z Build Operation ID: 6baee49d-f918-48e7-a163-1b1fdd61e465
+2026-01-24T14:33:26.7991136Z Writing output script to '/opt/startup/startup.sh'
+2026-01-24T14:33:27.1671479Z Starting nginx: nginx.
+2026-01-24T14:33:27.7501546Z [24-Jan-2026 14:33:27] NOTICE: fpm is running, pid 2090
+2026-01-24T14:33:27.7697451Z [24-Jan-2026 14:33:27] NOTICE: ready to handle connections
+2026-01-24T14:33:39.2241655Z 127.0.0.1 -  24/Jan/2026:14:33:28 +0000 "GET /index.php" 500
+2026-01-24T14:36:52.8037134Z 127.0.0.1 -  24/Jan/2026:14:36:47 +0000 "GET /public/index.php" 200
+2026-01-24T14:37:23.1040904Z 127.0.0.1 -  24/Jan/2026:14:37:20 +0000 "GET /index.php" 500
+2026-01-24T14:38:28.6473095Z 127.0.0.1 -  24/Jan/2026:14:38:27 +0000 "GET /index.php" 500
+2026-01-24T14:38:37.9564285Z 127.0.0.1 -  24/Jan/2026:14:38:37 +0000 "GET /index.php" 500
+2026-01-24T14:39:30.2430599Z 127.0.0.1 -  24/Jan/2026:14:39:29 +0000 "GET /index.php" 200
+2026-01-24T14:40:07.3652321Z 127.0.0.1 -  24/Jan/2026:14:40:06 +0000 "GET /index.php" 200
+2026-01-24T14:41:37.6907137Z 127.0.0.1 -  24/Jan/2026:14:41:36 +0000 "GET /index.php" 200
+2026-01-24T14:42:48.2966930Z    _____                               
+2026-01-24T14:42:48.2968780Z   /  _  \ __________ _________   ____  
+2026-01-24T14:42:48.2968833Z  /  /_\  \\___   /  |  \_  __ \_/ __ \ 
+2026-01-24T14:42:48.2968856Z /    |    \/    /|  |  /|  | \/\  ___/ 
+2026-01-24T14:42:48.2968878Z \____|__  /_____ \____/ |__|    \___  >
+2026-01-24T14:42:48.2968985Z         \/      \/                  \/ 
+2026-01-24T14:42:48.2969008Z A P P   S E R V I C E   O N   L I N U X
+2026-01-24T14:42:48.2969029Z 
+2026-01-24T14:42:48.2969057Z Documentation : http://aka.ms/webapp-linux
+2026-01-24T14:42:48.2969082Z PHP quickstart: https://aka.ms/php-qs
+2026-01-24T14:42:48.2969105Z PHP version   : 8.2.29
+2026-01-24T14:42:48.2969144Z Instance Name : lw0sdlwk0000PM
+2026-01-24T14:42:48.2969171Z Instance Id   : 57cd1b9bb672ec20a6552173796364458f0573917736609f30f0dcf32f0463a8
+2026-01-24T14:42:48.2969193Z 
+2026-01-24T14:42:48.2969215Z Note: Any data outside '/home' is not persisted
+2026-01-24T14:42:49.6616798Z Starting OpenBSD Secure Shell server: sshd.
+2026-01-24T14:42:49.6988506Z WEBSITES_INCLUDE_CLOUD_CERTS is not set to true.
+2026-01-24T14:42:49.8120352Z Updating certificates in /etc/ssl/certs...
+2026-01-24T14:43:15.3772698Z rehash: warning: skipping duplicate certificate in azl_SSL.com_TLS_ECC_Root_CA_2022.pem
+2026-01-24T14:43:15.3977292Z rehash: warning: skipping duplicate certificate in azl_Sectigo_Public_Server_Authentication_Root_R46.pem
+2026-01-24T14:43:15.4072118Z rehash: warning: skipping duplicate certificate in azl_Sectigo_Public_Server_Authentication_Root_E46.pem
+2026-01-24T14:43:15.4202165Z rehash: warning: skipping duplicate certificate in azl_SSL.com_TLS_RSA_Root_CA_2022.pem
+2026-01-24T14:43:15.4688524Z 4 added, 0 removed; done.
+2026-01-24T14:43:15.4699217Z Running hooks in /etc/ca-certificates/update.d...
+2026-01-24T14:43:15.4971445Z done.
+2026-01-24T14:43:15.5087773Z CA certificates copied and updated successfully.
+2026-01-24T14:43:15.5093584Z Running oryx create-script -appPath /home/site/wwwroot -output /opt/startup/startup.sh     -bindPort 8080 -startupCommand 'php-fpm;'
+2026-01-24T14:43:15.7670041Z Could not find build manifest file at '/home/site/wwwroot/oryx-manifest.toml'
+2026-01-24T14:43:15.7670610Z Could not find operation ID in manifest. Generating an operation id...
+2026-01-24T14:43:15.7670646Z Build Operation ID: fa12ffa4-0927-42d7-8148-5483c50d293f
+2026-01-24T14:43:16.5626730Z Writing output script to '/opt/startup/startup.sh'
+2026-01-24T14:43:16.9419115Z Starting nginx: nginx.
+2026-01-24T14:43:18.0476085Z [24-Jan-2026 14:43:18] NOTICE: fpm is running, pid 2090
+2026-01-24T14:43:18.0579303Z [24-Jan-2026 14:43:18] NOTICE: ready to handle connections
+2026-01-24T14:47:04.0815293Z    _____                               
+2026-01-24T14:47:04.0816962Z   /  _  \ __________ _________   ____  
+2026-01-24T14:47:04.0817007Z  /  /_\  \\___   /  |  \_  __ \_/ __ \ 
+2026-01-24T14:47:04.0817031Z /    |    \/    /|  |  /|  | \/\  ___/ 
+2026-01-24T14:47:04.0817055Z \____|__  /_____ \____/ |__|    \___  >
+2026-01-24T14:47:04.0817085Z         \/      \/                  \/ 
+2026-01-24T14:47:04.0817129Z A P P   S E R V I C E   O N   L I N U X
+2026-01-24T14:47:04.0817151Z 
+2026-01-24T14:47:04.0817178Z Documentation : http://aka.ms/webapp-linux
+2026-01-24T14:47:04.0817203Z PHP quickstart: https://aka.ms/php-qs
+2026-01-24T14:47:04.0817226Z PHP version   : 8.2.29
+2026-01-24T14:47:04.0817249Z Instance Name : lw0sdlwk0000PM
+2026-01-24T14:47:04.0817276Z Instance Id   : 57cd1b9bb672ec20a6552173796364458f0573917736609f30f0dcf32f0463a8
+2026-01-24T14:47:04.0817314Z 
+2026-01-24T14:47:04.0817337Z Note: Any data outside '/home' is not persisted
+2026-01-24T14:47:06.5155602Z Starting OpenBSD Secure Shell server: sshd.
+2026-01-24T14:47:06.5367777Z WEBSITES_INCLUDE_CLOUD_CERTS is not set to true.
+2026-01-24T14:47:06.6042502Z Updating certificates in /etc/ssl/certs...
+2026-01-24T14:47:42.8036177Z rehash: warning: skipping duplicate certificate in azl_SSL.com_TLS_ECC_Root_CA_2022.pem
+2026-01-24T14:47:42.8427301Z rehash: warning: skipping duplicate certificate in azl_Sectigo_Public_Server_Authentication_Root_R46.pem
+2026-01-24T14:47:42.8530025Z rehash: warning: skipping duplicate certificate in azl_Sectigo_Public_Server_Authentication_Root_E46.pem
+2026-01-24T14:47:42.8748650Z rehash: warning: skipping duplicate certificate in azl_SSL.com_TLS_RSA_Root_CA_2022.pem
+2026-01-24T14:47:42.9456797Z 4 added, 0 removed; done.
+2026-01-24T14:47:42.9634459Z Running hooks in /etc/ca-certificates/update.d...
+2026-01-24T14:47:43.0030957Z done.
+2026-01-24T14:47:43.0153070Z CA certificates copied and updated successfully.
+2026-01-24T14:47:43.0153776Z Running oryx create-script -appPath /home/site/wwwroot -output /opt/startup/startup.sh     -bindPort 8080 -startupCommand 'php -S 0.0.0.0:8080 -t /home/site/wwwroot/public; php-fpm;'
+2026-01-24T14:47:43.3562622Z Could not find build manifest file at '/home/site/wwwroot/oryx-manifest.toml'
+2026-01-24T14:47:43.3563292Z Could not find operation ID in manifest. Generating an operation id...
+2026-01-24T14:47:43.3563330Z Build Operation ID: 3acb731e-4a20-4950-9ecc-f51c2e316b33
+2026-01-24T14:47:44.4680979Z Writing output script to '/opt/startup/startup.sh'
+2026-01-24T14:47:46.9755970Z Starting nginx: nginx.
+2026-01-24T14:47:48.8567098Z [Sat Jan 24 14:47:48 2026] Failed to listen on 0.0.0.0:8080 (reason: Address already in use)
+2026-01-24T14:47:50.7578516Z [24-Jan-2026 14:47:50] NOTICE: fpm is running, pid 2092
+2026-01-24T14:47:50.7984900Z [24-Jan-2026 14:47:50] NOTICE: ready to handle connections

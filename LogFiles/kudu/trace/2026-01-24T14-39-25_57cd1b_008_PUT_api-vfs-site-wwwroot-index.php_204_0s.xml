@@ -1,0 +1,4 @@
+<step title="Incoming Request" date="2026-01-24T14:39:25.022" instance="57cd1b" url="/api/vfs/site/wwwroot/index.php" method="PUT" type="request" pid="770,1,23" Accept="*/*" Host="pec83.scm.azurewebsites.net" User-Agent="curl/8.16.0" Authorization="Bas..." If-Match="*" Content-Length="44" X-ARR-LOG-ID="22f4f229-5923-4063-bce6-b4ad4fda867c" CLIENT-IP="85.240.6.201:58388" X-SITE-DEPLOYMENT-ID="PEC83" WAS-DEFAULT-HOSTNAME="pec83.scm.azurewebsites.net" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/api/vfs/site/wwwroot/index.php" X-Client-IP="85.240.6.201" X-Client-Port="58388" >
+  <step title="Cleanup Xml Logs" date="2026-01-24T14:39:25.030" /><!-- duration: 21ms -->
+  <step title="Outgoing response" date="2026-01-24T14:39:25.101" type="response" statusCode="204" statusText="NoContent" /><!-- duration: 1ms -->
+</step><!-- duration: 82ms -->

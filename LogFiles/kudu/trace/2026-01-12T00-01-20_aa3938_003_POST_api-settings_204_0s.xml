@@ -1,0 +1,6 @@
+<step title="Incoming Request" date="2026-01-12T00:01:20.280" instance="aa3938" url="/api/settings" method="POST" type="request" pid="771,1,23" Host="pec83.scm.azurewebsites.net" User-Agent="Azure-WebSites-Controller/106.0.7.121" Authorization="Bas..." Content-Type="application/json" Expect="100-continue" Content-Length="26" x-ms-request-id="49bcf500-1346-40b7-9e81-5014d095c940" X-ARR-LOG-ID="49bcf500-1346-40b7-9e81-5014d095c940" CLIENT-IP="20.206.176.11:18436" X-SITE-DEPLOYMENT-ID="PEC83" WAS-DEFAULT-HOSTNAME="pec83.scm.azurewebsites.net" X-MS-PLATFORM-INTERNAL="True" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/api/settings" X-Client-IP="20.206.176.11" X-Client-Port="18436" >
+  <step title="Acquiring Deployment Lock" date="2026-01-12T00:01:20.476" /><!-- duration: 3ms -->
+  <step title="Acquired Deployment Lock" date="2026-01-12T00:01:20.521" /><!-- duration: 3ms -->
+  <step title="Releasing Deployment Lock" date="2026-01-12T00:01:20.629" /><!-- duration: 8ms -->
+  <step title="Outgoing response" date="2026-01-12T00:01:20.649" type="response" statusCode="204" statusText="NoContent" /><!-- duration: 3ms -->
+</step><!-- duration: 376ms -->

@@ -1,0 +1,30 @@
+<step title="Incoming Request" date="2026-01-14T02:40:43.010" instance="57cd1b" url="/api/publish?type=zip" method="POST" type="request" pid="772,1,45" Accept="*/*" Host="pec83.scm.azurewebsites.net" User-Agent="AZURECLI/2.81.0 (DEB)" Accept-Encoding="gzip, deflate" Authorization="Bas..." Cache-Control="no-cache" Content-Type="application/octet-stream" Cookie="ARRAffinity=57cd1b9bb672ec20a6552173796364458f0573917736609f30f0dcf32f0463a8; ARRAffinitySameSite=57cd1b9bb672ec20a6552173796364458f0573917736609f30f0dcf32f0463a8" Content-Length="12307279" x-ms-client-request-id="62b8fad2-f0f2-11f0-b4ff-6045bd328b45" x-ms-artifact-checksum="ce17feb78579f4e5d0fdb85cd1a190d233c4aadd1c1d0a32f007c693a477d6db" X-ARR-LOG-ID="62b8fad2-f0f2-11f0-b4ff-6045bd328b45" CLIENT-IP="52.154.20.48:5057" X-SITE-DEPLOYMENT-ID="PEC83" WAS-DEFAULT-HOSTNAME="pec83.scm.azurewebsites.net" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/api/publish?type=zip" X-Client-IP="52.154.20.48" X-Client-Port="5057" >
+  <step title="Cleanup Xml Logs" date="2026-01-14T02:40:43.059" /><!-- duration: 88ms -->
+  <step title="OneDeploy" date="2026-01-14T02:40:43.427" >
+    <step title="Starting PushDeployAsync" date="2026-01-14T02:40:43.587" /><!-- duration: 10ms -->
+    <step title="Writing artifact to /tmp/zipdeploy/9ed4e775-80b7-4948-a1cf-bd0bf1289f15.zip" date="2026-01-14T02:40:43.717" >
+      <step title="Writing multipart request body to /tmp/zipdeploy/9ed4e775-80b7-4948-a1cf-bd0bf1289f15.zip" date="2026-01-14T02:40:43.749" /><!-- duration: 110ms -->
+    </step><!-- duration: 3663ms -->
+    <step title="Attempting to fetch target branch HEAD" date="2026-01-14T02:40:47.523" /><!-- duration: 58ms -->
+    <step title="Acquiring Deployment Lock" date="2026-01-14T02:40:47.652" /><!-- duration: 29ms -->
+    <step title="Acquired Deployment Lock" date="2026-01-14T02:40:47.944" /><!-- duration: 58ms -->
+    <step title="Performing fetch based deployment" date="2026-01-14T02:40:48.011" >
+      <step title="Creating temporary deployment" date="2026-01-14T02:40:48.042" /><!-- duration: 312ms -->
+      <step title="Releasing Deployment Lock" date="2026-01-14T02:40:49.985" /><!-- duration: 22ms -->
+      <step title="Cleaning up temp folders from previous zip deployments and extracting pushed zip file /tmp/zipdeploy/9ed4e775-80b7-4948-a1cf-bd0bf1289f15.zip (11.74 MB) to /tmp/zipdeploy/extracted" date="2026-01-14T02:40:50.244" >
+        <step title="ChmodRecursive Process exited with total time taken in ms: 411" date="2026-01-14T02:41:22.173" /><!-- duration: 10ms -->
+      </step><!-- duration: 31956ms -->
+      <step title="None repository commit" date="2026-01-14T02:41:22.205" >
+        <step title="Commit id: 4f39e361-6326-41f2-8c9a-324dc2d396e6" date="2026-01-14T02:41:22.209" Message="OneDeploy" AuthorName="N/A" AuthorEmail="N/A" /><!-- duration: 6ms -->
+      </step><!-- duration: 19ms -->
+      <step title="Deployment timer started" date="2026-01-14T02:41:24.228" >
+        <step title="DeploymentManager.Deploy(id:4f39e361-6326-41f2-8c9a-324dc2d396e6)" date="2026-01-14T02:41:24.233" >
+          <step title="Collecting changeset information" date="2026-01-14T02:41:24.256" /><!-- duration: 102ms -->
+          <step title="Updating submodules" date="2026-01-14T02:41:24.364" /><!-- duration: 1256ms -->
+          <step title="Determining deployment builder" date="2026-01-14T02:41:26.050" >
+            <step title="Builder is OneDeployBuilder" date="2026-01-14T02:41:26.113" /><!-- duration: 18ms -->
+          </step><!-- duration: 92ms -->
+          <step title="PreDeployment: context.CleanOutputPath False" date="2026-01-14T02:41:26.280" >
+            <step title="PreDeployment: context.OutputPath /home/site/wwwroot" date="2026-01-14T02:41:26.760" >
+              <step title="Building" date="2026-01-14T02:41:26.911" >
+                <step title="Executing external process" date="2026-01-14T02:41:27.763" type="process" path="starter.sh" arguments="/opt/Kudu/Scripts/parallel_rsync.sh /tmp/zipdeploy/extracted /home/site/wwwroot 8 /tmp/ False False  " 

@@ -1,0 +1,20 @@
+2026-01-14T00:56:53  Fetching changes.
+2026-01-14T00:56:53    Starting  LocalZipHandler
+2026-01-14T00:56:54    Cleaning up temp folders from previous zip deployments and extracting pushed zip file /tmp/zipdeploy/ce09869d-ecf4-4f06-87e9-1974943e2ee7.zip (7.51 MB) to /tmp/zipdeploy/extracted
+2026-01-14T00:57:23  Updating submodules.
+2026-01-14T00:57:23  Preparing deployment for commit id '49f4ca20-4'.
+2026-01-14T00:57:24  PreDeployment: context.CleanOutputPath False
+2026-01-14T00:57:25  PreDeployment: context.OutputPath /home/site/wwwroot
+2026-01-14T00:57:25  Running build. Project type: OneDeploy
+2026-01-14T00:57:26  Copying the manifest
+2026-01-14T00:57:27  Running deployment command...
+2026-01-14T00:57:27    Command: /opt/Kudu/Scripts/parallel_rsync.sh /tmp/zipdeploy/extracted /home/site/wwwroot 8 /tmp/ False False  
+2026-01-14T00:57:28    Run rsync from: /tmp/zipdeploy/extracted/ to: /home/site/wwwroot/ in 8 parallel threads
+2026-01-14T00:57:29    Delete options: clean=False, use manifest=False, directory to ignore=
+2026-01-14T00:57:29    Prev manifest = /home/site/firstDeploymentManifest and next /home/site/deployments/49f4ca20-4297-4d51-8b0e-4bacea0a52c0/manifest
+2026-01-14T00:57:29    Cleaning up /tmp//filelist.txt and /tmp//splits
+2026-01-14T00:57:29    Creating a list of all files at /tmp//filelist.txt
+2026-01-14T00:57:29    No directory to exclude.
+2026-01-14T00:57:31    Created /tmp//filelist.txt. Total number of files to be synced = 6021.
+2026-01-14T00:57:31    Created batches from the list of files. Processing 753 files in each thread
+2026-01-14T00:57:31    Running rsync for filelist /tmp//splits/split.aa from /tmp/zipdeploy/extracted/ to /home/site/wwwroot/
