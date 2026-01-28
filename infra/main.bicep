@@ -43,6 +43,7 @@ resource webApp 'Microsoft.Web/sites@2024-11-01' = {
     clientCertMode: 'Optional'
     siteConfig: {
       linuxFxVersion: 'PHP|8.2'
+      appCommandLine: 'cp /home/site/wwwroot/nginx.conf /etc/nginx/sites-available/default && cp /home/site/wwwroot/nginx.conf /etc/nginx/sites-enabled/default && service nginx reload'
       alwaysOn: false
       ftpsState: 'FtpsOnly'
     }
@@ -66,6 +67,14 @@ resource webAppConfig 'Microsoft.Web/sites/config@2024-11-01' = {
       {
         name: 'WEBSITES_ENABLE_APP_SERVICE_STORAGE'
         value: 'true'
+      }
+      {
+        name: 'WEBSITES_PORT'
+        value: '8080'
+      }
+      {
+        name: 'WEBSITE_NGINX_CONFIG_PATH'
+        value: '/home/site/wwwroot/nginx.conf'
       }
       {
         name: 'APP_STORAGE'

@@ -1,9 +1,0 @@
-<step title="Incoming Request" date="2026-01-13T23:55:44.590" instance="57cd1b" url="/api/sshkey?ensurePublicKey=False" method="GET" type="request" pid="770,1,15" Host="pec83.scm.azurewebsites.net" User-Agent="Azure-WebSites-Controller/106.0.7.121" Authorization="Bas..." x-ms-request-id="77b4c55b-f7bc-44ff-9be8-c65962906093" X-ARR-LOG-ID="77b4c55b-f7bc-44ff-9be8-c65962906093" CLIENT-IP="20.206.176.11:20353" X-SITE-DEPLOYMENT-ID="PEC83" WAS-DEFAULT-HOSTNAME="pec83.scm.azurewebsites.net" X-MS-PLATFORM-INTERNAL="True" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/api/sshkey?ensurePublicKey=False" X-Client-IP="20.206.176.11" X-Client-Port="20353" >
-  <step title="Cleanup Xml Logs" date="2026-01-13T23:55:44.711" /><!-- duration: 121ms -->
-  <step title="SSHKeyController.GetPublicKey" date="2026-01-13T23:55:46.064" >
-    <step title="SSHKeyManager.GetKey" date="2026-01-13T23:55:46.976" >
-      <step title="Public key exists." date="2026-01-13T23:55:47.075" /><!-- duration: 83ms -->
-    </step><!-- duration: 450ms -->
-  </step><!-- duration: 1422ms -->
-  <step title="Outgoing response" date="2026-01-13T23:55:47.659" type="response" statusCode="200" statusText="OK" /><!-- duration: 169ms -->
-</step><!-- duration: 3418ms -->

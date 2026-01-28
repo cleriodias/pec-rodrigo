@@ -100,6 +100,24 @@ jobs:
               DB_PASSWORD="$DB_PASSWORD" \
             --output none
 
+      - name: Configurar Nginx (rewrite Laravel)
+        run: |
+          az webapp config set \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --startup-file "cp /home/site/wwwroot/nginx.conf /etc/nginx/sites-available/default && cp /home/site/wwwroot/nginx.conf /etc/nginx/sites-enabled/default && service nginx reload"
+
+          az webapp config appsettings set \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --settings \
+              WEBSITE_NGINX_CONFIG_PATH="/home/site/wwwroot/nginx.conf" \
+              WEBSITES_PORT="8080" \
+              WEBSITE_DOCUMENT_ROOT="/home/site/wwwroot/public" \
+              WEBSITE_RUN_FROM_PACKAGE="0" \
+              WEBSITES_ENABLE_APP_SERVICE_STORAGE="true" \
+              APP_STORAGE="/home/site/storage"
+
       - name: Wait for App Service to settle
         if: ${{ github.event_name == 'workflow_dispatch' }}
         run: sleep 90

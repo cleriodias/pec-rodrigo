@@ -1,4 +1,0 @@
-<step title="Incoming Request" date="2026-01-12T00:01:24.392" instance="aa3938" url="/api/settings/branch" method="GET" type="request" pid="771,1,3" Host="pec83.scm.azurewebsites.net" User-Agent="Azure-WebSites-Controller/106.0.7.121" Authorization="Bas..." x-ms-request-id="a5ed4fe0-1bce-4e20-b32e-ff444b33e588" X-ARR-LOG-ID="a5ed4fe0-1bce-4e20-b32e-ff444b33e588" CLIENT-IP="20.206.176.11:18436" X-SITE-DEPLOYMENT-ID="PEC83" WAS-DEFAULT-HOSTNAME="pec83.scm.azurewebsites.net" X-MS-PLATFORM-INTERNAL="True" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/api/settings/branch" X-Client-IP="20.206.176.11" X-Client-Port="18436" >
-  <step title="Cleanup Xml Logs" date="2026-01-12T00:01:24.395" /><!-- duration: 5ms -->
-  <step title="Outgoing response" date="2026-01-12T00:01:24.407" type="response" statusCode="200" statusText="OK" /><!-- duration: 8ms -->
-</step><!-- duration: 26ms -->
