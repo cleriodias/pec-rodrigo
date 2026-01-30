@@ -20,3 +20,11 @@ yarn-error.log
 /.idea
 /.vscode
 /.zed
+
+# Azure deployment artifacts
+deployments/
+LogFiles/
+log-latest*/
+log-latest*.zip
+logs*.zip
+deploy.zip
