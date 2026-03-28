@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const MIN_CHARACTERS = 3;
 const numericRegex = /^\d+$/;
+const BARCODE_MIN_LENGTH = 5;
 const paymentLabels = {
     maquina: 'Maquina',
     dinheiro: 'Dinheiro',
@@ -69,6 +70,12 @@ const formatDate = (value) => {
     }
 
     return new Date(value).toLocaleDateString('pt-BR');
+};
+
+const isBarcodeTerm = (value) => {
+    const term = String(value ?? '').trim();
+
+    return numericRegex.test(term) && term.length >= BARCODE_MIN_LENGTH;
 };
 
 export default function Dashboard() {
@@ -669,11 +676,18 @@ export default function Dashboard() {
         setItems((prevItems) => prevItems.filter((item) => item.id !== itemId));
     };
 
-    const fetchProductAndAdd = (productId) => {
+    const fetchProductAndAdd = (lookupTerm) => {
+        const normalizedLookupTerm = String(lookupTerm ?? '').trim();
+
+        if (!normalizedLookupTerm) {
+            return;
+        }
+
+        const lookupIsBarcode = isBarcodeTerm(normalizedLookupTerm);
         setAddingItem(true);
         setSaleError('');
 
-        fetch(route('products.search', { q: productId }), {
+        fetch(route('products.search', { q: normalizedLookupTerm }), {
             headers: {
                 Accept: 'application/json',
             },
@@ -686,7 +700,13 @@ export default function Dashboard() {
                 return response.json();
             })
             .then((data) => {
-                const product = data.find((item) => Number(item.tb1_id) === productId);
+                const product = data.find((item) => {
+                    if (lookupIsBarcode) {
+                        return String(item.tb1_codbar ?? '').trim() === normalizedLookupTerm;
+                    }
+
+                    return Number(item.tb1_id) === Number(normalizedLookupTerm);
+                });
 
                 if (!product) {
                     throw new Error('Produto nao encontrado.');
@@ -780,7 +800,7 @@ export default function Dashboard() {
 
         if (isNumericTerm) {
             event.preventDefault();
-            fetchProductAndAdd(Number(term));
+            fetchProductAndAdd(term);
             return;
         }
 
