@@ -6,6 +6,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 const MIN_CHARACTERS = 3;
 const numericRegex = /^\d+$/;
 const BARCODE_MIN_LENGTH = 5;
+const WEIGHTED_BARCODE_PREFIX = '2';
+const WEIGHTED_BARCODE_LENGTH = 13;
 const paymentLabels = {
     maquina: 'Maquina',
     dinheiro: 'Dinheiro',
@@ -36,12 +38,35 @@ const paymentOptions = [
     },
 ];
 
-const normalizeCartItem = (item) => ({
-    ...item,
-    vrEligible: Boolean(
-        item.vrEligible ?? item.vr_credit ?? item.tb1_vr_credit ?? false,
-    ),
-});
+const createCartItemId = (productId, price) =>
+    `product-${Number(productId ?? 0)}-price-${Number(price ?? 0).toFixed(2)}`;
+
+const resolveProductId = (item) => {
+    const candidate = item?.productId ?? item?.product_id ?? item?.tb1_id ?? item?.id;
+    const parsed = Number(candidate);
+
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const normalizeCartItem = (item) => {
+    const productId = resolveProductId(item);
+    const price = Number(item?.price ?? item?.unit_price ?? 0);
+    const hasStructuredId =
+        typeof item?.id === 'string' && item.id.startsWith('product-');
+
+    return {
+        ...item,
+        id: hasStructuredId ? item.id : createCartItemId(productId, price),
+        productId,
+        price,
+        quantity: Number(item?.quantity ?? 0),
+        isWeighted: Boolean(item?.isWeighted ?? item?.is_weighted ?? false),
+        barcode: item?.barcode ?? null,
+        vrEligible: Boolean(
+            item?.vrEligible ?? item?.vr_credit ?? item?.tb1_vr_credit ?? false,
+        ),
+    };
+};
 
 const ITEMS_STORAGE_KEY = 'dashboard.selectedItems';
 const SAVED_CARTS_STORAGE_KEY = 'dashboard.savedCarts';
@@ -76,6 +101,32 @@ const isBarcodeTerm = (value) => {
     const term = String(value ?? '').trim();
 
     return numericRegex.test(term) && term.length >= BARCODE_MIN_LENGTH;
+};
+
+const parseWeightedBarcode = (value) => {
+    const barcode = String(value ?? '').trim();
+
+    if (
+        !numericRegex.test(barcode) ||
+        !barcode.startsWith(WEIGHTED_BARCODE_PREFIX) ||
+        barcode.length !== WEIGHTED_BARCODE_LENGTH
+    ) {
+        return null;
+    }
+
+    const productId = Number.parseInt(barcode.slice(1, 5), 10);
+    const encodedValue = barcode.slice(7, 12);
+    const unitPrice = Number.parseInt(encodedValue, 10) / 100;
+
+    if (!Number.isFinite(productId) || productId <= 0 || !Number.isFinite(unitPrice)) {
+        return null;
+    }
+
+    return {
+        barcode,
+        productId,
+        unitPrice,
+    };
 };
 
 export default function Dashboard() {
@@ -593,7 +644,10 @@ export default function Dashboard() {
         }
     }, [canUseRefeicao, selectedValeType]);
 
-    const addItemFromProduct = (product, { preserveInput = false } = {}) => {
+    const addItemFromProduct = (
+        product,
+        { preserveInput = false, unitPrice = null, barcode = null, isWeighted = false } = {},
+    ) => {
         if (!product) {
             return;
         }
@@ -605,7 +659,10 @@ export default function Dashboard() {
         }
 
         setItems((previous) => {
-            const existingIndex = previous.findIndex((item) => item.id === product.tb1_id);
+            const productId = Number(product.tb1_id);
+            const price = Number(unitPrice ?? product.tb1_vlr_venda ?? 0);
+            const cartItemId = createCartItemId(productId, price);
+            const existingIndex = previous.findIndex((item) => item.id === cartItemId);
 
             if (existingIndex !== -1) {
                 const updated = [...previous];
@@ -614,6 +671,7 @@ export default function Dashboard() {
                 updated[existingIndex] = {
                     ...existing,
                     quantity: existing.quantity + 1,
+                    barcode: existing.barcode ?? barcode,
                 };
 
                 return updated;
@@ -622,10 +680,13 @@ export default function Dashboard() {
             return [
                 ...previous,
                 {
-                    id: product.tb1_id,
+                    id: cartItemId,
+                    productId,
                     name: product.tb1_nome,
-                    price: Number(product.tb1_vlr_venda ?? 0),
+                    price,
                     quantity: 1,
+                    barcode,
+                    isWeighted,
                     vrEligible: Boolean(product.tb1_vr_credit),
                 },
             ];
@@ -683,15 +744,21 @@ export default function Dashboard() {
             return;
         }
 
+        const weightedBarcodeData = parseWeightedBarcode(normalizedLookupTerm);
         const lookupIsBarcode = isBarcodeTerm(normalizedLookupTerm);
         setAddingItem(true);
         setSaleError('');
 
-        fetch(route('products.search', { q: normalizedLookupTerm }), {
+        fetch(
+            route('products.search', {
+                q: weightedBarcodeData ? weightedBarcodeData.productId : normalizedLookupTerm,
+            }),
+            {
             headers: {
                 Accept: 'application/json',
             },
-        })
+            },
+        )
             .then((response) => {
                 if (!response.ok) {
                     throw new Error('Produto nao encontrado.');
@@ -701,6 +768,10 @@ export default function Dashboard() {
             })
             .then((data) => {
                 const product = data.find((item) => {
+                    if (weightedBarcodeData) {
+                        return Number(item.tb1_id) === weightedBarcodeData.productId;
+                    }
+
                     if (lookupIsBarcode) {
                         return String(item.tb1_codbar ?? '').trim() === normalizedLookupTerm;
                     }
@@ -712,7 +783,12 @@ export default function Dashboard() {
                     throw new Error('Produto nao encontrado.');
                 }
 
-                addItemFromProduct(product, { preserveInput: true });
+                addItemFromProduct(product, {
+                    preserveInput: true,
+                    unitPrice: weightedBarcodeData?.unitPrice ?? null,
+                    barcode: weightedBarcodeData?.barcode ?? null,
+                    isWeighted: Boolean(weightedBarcodeData),
+                });
             })
             .catch((err) => {
                 setSaleError(err.message || 'Nao foi possivel adicionar o produto.');
@@ -865,13 +941,15 @@ export default function Dashboard() {
         if (selectedComandaCode !== null) {
             payload.comanda_codigo = selectedComandaCode;
             payload.items = items.map((item) => ({
-                product_id: item.id,
+                product_id: item.productId,
                 quantity: item.quantity,
+                barcode: item.barcode ?? null,
             }));
         } else {
             payload.items = items.map((item) => ({
-                product_id: item.id,
+                product_id: item.productId,
                 quantity: item.quantity,
+                barcode: item.barcode ?? null,
             }));
         }
 
@@ -1004,10 +1082,13 @@ export default function Dashboard() {
                 const data = response.data ?? {};
                 const mapped = Array.isArray(data.items)
                     ? data.items.map((item) => ({
-                          id: item.id,
+                          id: item.line_id ?? createCartItemId(item.product_id ?? item.id, item.price),
+                          productId: Number(item.product_id ?? item.id ?? 0),
                           name: item.name,
                           price: Number(item.price ?? 0),
                           quantity: Number(item.quantity ?? 0),
+                          barcode: item.barcode ?? null,
+                          isWeighted: Boolean(item.is_weighted ?? false),
                           vrEligible: true,
                           lancUserName: item.lanc_user_name,
                       }))
@@ -1468,8 +1549,13 @@ export default function Dashboard() {
                                                                     {item.name}
                                                                 </p>
                                                                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                                    ID {item.id}
+                                                                    ID {item.productId}
                                                                 </p>
+                                                                {item.isWeighted && (
+                                                                    <p className="text-xs font-semibold text-amber-600 dark:text-amber-300">
+                                                                        Etiqueta de balanca
+                                                                    </p>
+                                                                )}
                                                                 {item.lancUserName && (
                                                                     <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">
                                                                         {item.lancUserName}
