@@ -2677,3 +2677,9 @@ Stack trace:
 #63 C:\\xampp\\htdocs\\pec\\vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\resources\\server.php(23): require_once('C:\\\\xampp\\\\htdocs...')
 #64 {main}
 "} 
+[2026-03-28 13:25:09] local.ERROR: Method Illuminate\Routing\UrlGenerator::setRequestResolver does not exist. {"exception":"[object] (BadMethodCallException(code: 0): Method Illuminate\\Routing\\UrlGenerator::setRequestResolver does not exist. at C:\\xampp\\htdocs\\pec\\vendor\\laravel\\framework\\src\\Illuminate\\Macroable\\Traits\\Macroable.php:115)
+[stacktrace]
+#0 C:\\xampp\\htdocs\\pec\\vendor\\laravel\\framework\\src\\Illuminate\\Support\\Facades\\Facade.php(358): Illuminate\\Routing\\UrlGenerator->__call('setRequestResol...', Array)
+#1 C:\\xampp\\htdocs\\pec\\tmp_https_paginator_check.php(18): Illuminate\\Support\\Facades\\Facade::__callStatic('setRequestResol...', Array)
+#2 {main}
+"} 
