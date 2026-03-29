@@ -102,10 +102,11 @@ jobs:
 
       - name: Configurar Nginx (rewrite Laravel)
         run: |
+          chmod +x start.sh
           az webapp config set \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --name "$AZURE_WEBAPP_NAME" \
-            --startup-file "cp /home/site/wwwroot/nginx.conf /etc/nginx/sites-available/default && cp /home/site/wwwroot/nginx.conf /etc/nginx/sites-enabled/default && service nginx reload"
+            --startup-file "/home/site/wwwroot/start.sh"
 
           az webapp config appsettings set \
             --resource-group "$AZURE_RESOURCE_GROUP" \
