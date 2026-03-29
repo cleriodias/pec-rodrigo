@@ -48,6 +48,10 @@ Route::post('/newsletter', [NewsletterSubscriptionController::class, 'store'])
 
 Route::get('/app/endpoints/mobile/revenue/dashboard', [MobileRevenueController::class, 'dashboard'])
     ->name('mobile.revenue.dashboard');
+Route::get('/app/endpoints/mobile/revenue/daily', [MobileRevenueController::class, 'daily'])
+    ->name('mobile.revenue.daily');
+Route::get('/app/endpoints/mobile/revenue/monthly', [MobileRevenueController::class, 'monthly'])
+    ->name('mobile.revenue.monthly');
 
 
 Route::get('/dashboard', function () {

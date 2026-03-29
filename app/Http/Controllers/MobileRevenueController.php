@@ -8,25 +8,55 @@ use App\Models\Venda;
 use App\Models\VendaPagamento;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class MobileRevenueController extends Controller
 {
-    public function dashboard(): JsonResponse
+    public function dashboard(Request $request): JsonResponse
     {
-        $now = Carbon::now();
-        $todayStart = $now->copy()->startOfDay();
-        $todayEnd = $now->copy()->endOfDay();
-        $monthStart = $now->copy()->startOfMonth();
-        $monthEnd = $now->copy()->endOfDay();
+        $reference = $this->resolveReferenceDate($request);
+        $todayStart = $reference->copy()->startOfDay();
+        $todayEnd = $reference->copy()->endOfDay();
+        $monthStart = $reference->copy()->startOfMonth();
+        $monthEnd = $reference->copy()->endOfDay();
 
         return response()->json([
-            'generated_at' => $now->toIso8601String(),
+            'generated_at' => now()->toIso8601String(),
+            'reference_date' => $reference->toDateString(),
             'daily' => $this->buildSummary($todayStart, $todayEnd, false),
             'monthly' => $this->buildSummary($monthStart, $monthEnd, true),
             'charts' => [
-                'daily' => $this->buildDailyChart($now),
-                'monthly' => $this->buildMonthlyChart($now),
+                'daily' => $this->buildDailyChart($reference),
+                'monthly' => $this->buildMonthlyChart($reference),
             ],
+        ]);
+    }
+
+    public function daily(Request $request): JsonResponse
+    {
+        $reference = $this->resolveReferenceDate($request);
+        $start = $reference->copy()->startOfDay();
+        $end = $reference->copy()->endOfDay();
+
+        return response()->json([
+            'generated_at' => now()->toIso8601String(),
+            'reference_date' => $reference->toDateString(),
+            'summary' => $this->buildSummary($start, $end, false),
+            'chart' => $this->buildDailyChart($reference),
+        ]);
+    }
+
+    public function monthly(Request $request): JsonResponse
+    {
+        $reference = $this->resolveReferenceDate($request);
+        $start = $reference->copy()->startOfMonth();
+        $end = $reference->copy()->endOfDay();
+
+        return response()->json([
+            'generated_at' => now()->toIso8601String(),
+            'reference_date' => $reference->toDateString(),
+            'summary' => $this->buildSummary($start, $end, true),
+            'chart' => $this->buildMonthlyChart($reference),
         ]);
     }
 
@@ -85,6 +115,10 @@ class MobileRevenueController extends Controller
                 'label' => $start->translatedFormat('d/m/Y') . ' - ' . $end->translatedFormat('d/m/Y'),
             ],
             'entries_total' => $entries,
+            'entry_share' => [
+                'dinheiro_percentual' => $entries > 0 ? round(($paymentTotals['dinheiro'] / $entries) * 100, 1) : 0.0,
+                'cartao_percentual' => $entries > 0 ? round(($paymentTotals['cartao'] / $entries) * 100, 1) : 0.0,
+            ],
             'highlights' => [
                 [
                     'key' => 'dinheiro',
@@ -208,5 +242,20 @@ class MobileRevenueController extends Controller
         }
 
         return $totals;
+    }
+
+    private function resolveReferenceDate(Request $request): Carbon
+    {
+        $date = trim((string) $request->query('date', ''));
+
+        if ($date === '') {
+            return Carbon::now();
+        }
+
+        try {
+            return Carbon::parse($date);
+        } catch (\Throwable $exception) {
+            return Carbon::now();
+        }
     }
 }
