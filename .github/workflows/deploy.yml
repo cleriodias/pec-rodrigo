@@ -106,7 +106,7 @@ jobs:
           az webapp config set \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --name "$AZURE_WEBAPP_NAME" \
-            --startup-file "/home/site/wwwroot/start.sh"
+            --startup-file "bash /home/site/wwwroot/start.sh"
 
           az webapp config appsettings set \
             --resource-group "$AZURE_RESOURCE_GROUP" \
