@@ -43,8 +43,8 @@ resource webApp 'Microsoft.Web/sites@2024-11-01' = {
     clientCertMode: 'Optional'
     siteConfig: {
       linuxFxVersion: 'PHP|8.2'
-      appCommandLine: 'cp /home/site/wwwroot/nginx.conf /etc/nginx/sites-available/default && cp /home/site/wwwroot/nginx.conf /etc/nginx/sites-enabled/default && service nginx reload'
-      alwaysOn: false
+      appCommandLine: 'bash /home/site/wwwroot/start.sh'
+      alwaysOn: true
       ftpsState: 'FtpsOnly'
     }
   }

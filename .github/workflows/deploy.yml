@@ -220,12 +220,54 @@ jobs:
           WELCOME_ASSET=$(node -e "const m=require('./public/build/manifest.json'); console.log(m['resources/js/Pages/Welcome.jsx'].file)")
           HOSTNAME=$(echo "${AZURE_WEBAPP_NAME}.azurewebsites.net" | tr '[:upper:]' '[:lower:]')
           BASE_URL="https://${HOSTNAME}"
+          SCM_URL="https://${HOSTNAME/.azurewebsites.net/.scm.azurewebsites.net}"
+
+          echo "Startup command atual:"
+          az webapp config show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --query "{appCommandLine:appCommandLine,linuxFxVersion:linuxFxVersion}" \
+            -o json
+
+          echo "App settings relevantes:"
+          az webapp config appsettings list \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --query "[?name=='WEBSITE_DOCUMENT_ROOT' || name=='WEBSITE_RUN_FROM_PACKAGE' || name=='WEBSITES_ENABLE_APP_SERVICE_STORAGE' || name=='WEBSITES_PORT' || name=='WEBSITE_NGINX_CONFIG_PATH' || name=='APP_STORAGE' || name=='SCM_DO_BUILD_DURING_DEPLOYMENT'].[name,value]" \
+            -o table
+
+          PUBLISH_USER=$(az webapp deployment list-publishing-credentials \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --query publishingUserName -o tsv)
+          PUBLISH_PASS=$(az webapp deployment list-publishing-credentials \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --query publishingPassword -o tsv)
 
           fetch_status() {
             local url="$1"
             local output_file="$2"
             curl -sS -L -o "$output_file" -w "%{http_code}" "$url" || true
           }
+
+          echo "Inspecao remota do wwwroot via Kudu:"
+          curl -fsS -u "$PUBLISH_USER:$PUBLISH_PASS" \
+            -H "Content-Type: application/json" \
+            -d "{\"command\":\"pwd && ls -lah /home/site/wwwroot && echo '--- public ---' && ls -lah /home/site/wwwroot/public && echo '--- build ---' && ls -lah /home/site/wwwroot/public/build && echo '--- assets ---' && ls -lah /home/site/wwwroot/public/build/assets | sed -n '1,40p'\",\"dir\":\"/home/site/wwwroot\"}" \
+            "${SCM_URL}/api/command" \
+            -o /tmp/kudu-command.json
+          cat /tmp/kudu-command.json
+
+          echo "Checando arquivos criticos via Kudu VFS:"
+          INDEX_STATUS=$(curl -sS -u "$PUBLISH_USER:$PUBLISH_PASS" -o /tmp/kudu-index.txt -w "%{http_code}" "${SCM_URL}/api/vfs/site/wwwroot/public/index.php" || true)
+          MANIFEST_STATUS=$(curl -sS -u "$PUBLISH_USER:$PUBLISH_PASS" -o /tmp/kudu-manifest.json -w "%{http_code}" "${SCM_URL}/api/vfs/site/wwwroot/public/build/manifest.json" || true)
+          START_STATUS=$(curl -sS -u "$PUBLISH_USER:$PUBLISH_PASS" -o /tmp/kudu-start.sh -w "%{http_code}" "${SCM_URL}/api/vfs/site/wwwroot/start.sh" || true)
+          NGINX_STATUS=$(curl -sS -u "$PUBLISH_USER:$PUBLISH_PASS" -o /tmp/kudu-nginx.conf -w "%{http_code}" "${SCM_URL}/api/vfs/site/wwwroot/nginx.conf" || true)
+          echo "index.php via Kudu: ${INDEX_STATUS}"
+          echo "manifest.json via Kudu: ${MANIFEST_STATUS}"
+          echo "start.sh via Kudu: ${START_STATUS}"
+          echo "nginx.conf via Kudu: ${NGINX_STATUS}"
 
           health_attempts=20
           health_delay=15
