@@ -8,6 +8,7 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductDiscardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\LanchoneteTerminalController;
+use App\Http\Controllers\MobileRevenueController;
 use App\Http\Controllers\NoticeController;
 use App\Http\Controllers\NewsletterSubscriptionController;
 use App\Http\Controllers\RoleSwitchController;
@@ -44,6 +45,9 @@ Route::get('/', function () {
 
 Route::post('/newsletter', [NewsletterSubscriptionController::class, 'store'])
     ->name('newsletter.store');
+
+Route::get('/app/endpoints/mobile/revenue/dashboard', [MobileRevenueController::class, 'dashboard'])
+    ->name('mobile.revenue.dashboard');
 
 
 Route::get('/dashboard', function () {
