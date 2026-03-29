@@ -219,19 +219,74 @@ jobs:
           APP_CSS=$(node -e "const m=require('./public/build/manifest.json'); console.log(m['resources/js/app.jsx'].css[0])")
           WELCOME_ASSET=$(node -e "const m=require('./public/build/manifest.json'); console.log(m['resources/js/Pages/Welcome.jsx'].file)")
           HOSTNAME=$(echo "${AZURE_WEBAPP_NAME}.azurewebsites.net" | tr '[:upper:]' '[:lower:]')
+          BASE_URL="https://${HOSTNAME}"
 
-          max_attempts=10
-          delay=15
+          fetch_status() {
+            local url="$1"
+            local output_file="$2"
+            curl -sS -L -o "$output_file" -w "%{http_code}" "$url" || true
+          }
+
+          health_attempts=20
+          health_delay=15
+
+          for attempt in $(seq 1 $health_attempts); do
+            echo "Warmup da aplicacao: tentativa $attempt de $health_attempts"
+            STATUS=$(fetch_status "${BASE_URL}/up" /tmp/up.html)
+            echo "Status /up: ${STATUS}"
+
+            if [ "$STATUS" = "200" ]; then
+              echo "Aplicacao respondeu no endpoint de saude."
+              break
+            fi
+
+            if [ "$attempt" -eq "$health_attempts" ]; then
+              echo "A aplicacao nao respondeu com sucesso no endpoint /up."
+              sed -n '1,120p' /tmp/up.html || true
+              exit 1
+            fi
+
+            sleep "$health_delay"
+          done
+
+          manifest_attempts=10
+          manifest_delay=10
+
+          for attempt in $(seq 1 $manifest_attempts); do
+            echo "Validacao do manifest publicado: tentativa $attempt de $manifest_attempts"
+            STATUS=$(fetch_status "${BASE_URL}/build/manifest.json" /tmp/manifest-live.json)
+            echo "Status manifest: ${STATUS}"
+
+            if [ "$STATUS" = "200" ] && grep -q "$APP_ASSET" /tmp/manifest-live.json; then
+              echo "Manifest publicado confere com a build."
+              break
+            fi
+
+            if [ "$attempt" -eq "$manifest_attempts" ]; then
+              echo "Manifest publicado nao corresponde a build esperada."
+              echo "Asset principal esperado: $APP_ASSET"
+              sed -n '1,160p' /tmp/manifest-live.json || true
+              exit 1
+            fi
+
+            sleep "$manifest_delay"
+          done
+
+          max_attempts=12
+          delay=10
 
           for attempt in $(seq 1 $max_attempts); do
-            echo "Validacao do deploy: tentativa $attempt de $max_attempts"
+            echo "Validacao final da home e dos assets: tentativa $attempt de $max_attempts"
 
-            if curl -fsSL "https://${HOSTNAME}/" -o /tmp/home.html \
+            STATUS=$(fetch_status "${BASE_URL}/" /tmp/home.html)
+            echo "Status home: ${STATUS}"
+
+            if [ "$STATUS" = "200" ] \
               && grep -q "$APP_ASSET" /tmp/home.html \
               && grep -q "$APP_CSS" /tmp/home.html \
-              && curl -fsSI "https://${HOSTNAME}/build/${APP_ASSET}" >/tmp/app_asset_headers.txt \
-              && curl -fsSI "https://${HOSTNAME}/build/${APP_CSS}" >/tmp/app_css_headers.txt \
-              && curl -fsSI "https://${HOSTNAME}/build/${WELCOME_ASSET}" >/tmp/welcome_asset_headers.txt; then
+              && curl -fsSI "${BASE_URL}/build/${APP_ASSET}" >/tmp/app_asset_headers.txt \
+              && curl -fsSI "${BASE_URL}/build/${APP_CSS}" >/tmp/app_css_headers.txt \
+              && curl -fsSI "${BASE_URL}/build/${WELCOME_ASSET}" >/tmp/welcome_asset_headers.txt; then
               echo "Assets publicados e acessiveis."
               exit 0
             fi
@@ -248,6 +303,8 @@ jobs:
           echo "Asset Welcome esperado: $WELCOME_ASSET"
           echo "Ultimo HTML recebido:"
           sed -n '1,120p' /tmp/home.html || true
+          echo "Ultimo manifest recebido:"
+          sed -n '1,160p' /tmp/manifest-live.json || true
           echo "Headers do app asset:"
           cat /tmp/app_asset_headers.txt || true
           echo "Headers do css:"
