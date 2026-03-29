@@ -48,24 +48,29 @@ export default function ControlPanel({
     const totalSum = Number(summary?.grand_total ?? 0);
     const storesWithMovement = Array.isArray(stores) ? stores.filter((store) => Number(store.total) > 0) : [];
 
-    const pieStyle = useMemo(() => {
+    const pieSegments = useMemo(() => {
         if (totalSum <= 0 || storesWithMovement.length === 0) {
-            return { background: '#e5e7eb' };
+            return [];
         }
 
-        let accumulated = 0;
-        const segments = storesWithMovement.map((store) => {
-            const angle = (Number(store.total) / totalSum) * 360;
-            const start = accumulated;
-            const end = accumulated + angle;
-            accumulated = end;
+        const radius = 54;
+        const circumference = 2 * Math.PI * radius;
+        let offset = 0;
 
-            return `${store.color} ${start}deg ${end}deg`;
+        return storesWithMovement.map((store) => {
+            const segmentLength = (Number(store.total) / totalSum) * circumference;
+            const segment = {
+                ...store,
+                radius,
+                circumference,
+                strokeDasharray: `${segmentLength} ${Math.max(circumference - segmentLength, 0)}`,
+                strokeDashoffset: -offset,
+            };
+
+            offset += segmentLength;
+
+            return segment;
         });
-
-        return {
-            background: `conic-gradient(${segments.join(',')})`,
-        };
     }, [storesWithMovement, totalSum]);
 
     const handleSubmit = (event) => {
@@ -216,7 +221,6 @@ export default function ControlPanel({
                                 <p className="text-sm font-semibold uppercase tracking-wide text-indigo-600">
                                     Distribuicao por loja
                                 </p>
-                                <h3 className="mt-1 text-2xl font-bold text-gray-900">Grafico pizza</h3>
                                 <p className="text-sm text-gray-600">
                                     O grafico compara todas as lojas disponiveis para o filtro selecionado.
                                 </p>
@@ -267,10 +271,27 @@ export default function ControlPanel({
 
                             <div className="relative">
                                 <div className="absolute inset-0 rounded-full bg-indigo-500/30 blur-3xl" />
-                                <div
-                                    className="relative flex h-64 w-64 items-center justify-center rounded-full border-[10px] border-white/15 shadow-[0_25px_80px_rgba(15,23,42,0.55)]"
-                                    style={pieStyle}
-                                >
+                                <div className="relative flex h-64 w-64 items-center justify-center rounded-full border-[10px] border-white/15 shadow-[0_25px_80px_rgba(15,23,42,0.55)]">
+                                    <svg
+                                        viewBox="0 0 120 120"
+                                        className="absolute inset-0 h-full w-full -rotate-90"
+                                        aria-hidden="true"
+                                    >
+                                        <circle cx="60" cy="60" r="54" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="12" />
+                                        {pieSegments.map((segment) => (
+                                            <circle
+                                                key={`pie-${segment.id}`}
+                                                cx="60"
+                                                cy="60"
+                                                r={segment.radius}
+                                                fill="none"
+                                                stroke={segment.color}
+                                                strokeWidth="12"
+                                                strokeDasharray={segment.strokeDasharray}
+                                                strokeDashoffset={segment.strokeDashoffset}
+                                            />
+                                        ))}
+                                    </svg>
                                     <div className="absolute inset-[17%] rounded-full bg-slate-950/80 backdrop-blur" />
                                     <div className="absolute inset-[23%] rounded-full border border-white/10" />
                                     <div className="relative text-center">
