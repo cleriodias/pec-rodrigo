@@ -211,13 +211,47 @@ jobs:
 
       - name: Validate deployed assets
         run: |
-          sleep 20
+          az webapp restart \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME"
+
           APP_ASSET=$(node -e "const m=require('./public/build/manifest.json'); console.log(m['resources/js/app.jsx'].file)")
           APP_CSS=$(node -e "const m=require('./public/build/manifest.json'); console.log(m['resources/js/app.jsx'].css[0])")
           WELCOME_ASSET=$(node -e "const m=require('./public/build/manifest.json'); console.log(m['resources/js/Pages/Welcome.jsx'].file)")
-          curl -fsSL "https://${AZURE_WEBAPP_NAME}.azurewebsites.net/" -o /tmp/home.html
-          grep -q "$APP_ASSET" /tmp/home.html
-          grep -q "$APP_CSS" /tmp/home.html
-          curl -fsSI "https://${AZURE_WEBAPP_NAME}.azurewebsites.net/build/${APP_ASSET}"
-          curl -fsSI "https://${AZURE_WEBAPP_NAME}.azurewebsites.net/build/${APP_CSS}"
-          curl -fsSI "https://${AZURE_WEBAPP_NAME}.azurewebsites.net/build/${WELCOME_ASSET}"
+          HOSTNAME=$(echo "${AZURE_WEBAPP_NAME}.azurewebsites.net" | tr '[:upper:]' '[:lower:]')
+
+          max_attempts=10
+          delay=15
+
+          for attempt in $(seq 1 $max_attempts); do
+            echo "Validacao do deploy: tentativa $attempt de $max_attempts"
+
+            if curl -fsSL "https://${HOSTNAME}/" -o /tmp/home.html \
+              && grep -q "$APP_ASSET" /tmp/home.html \
+              && grep -q "$APP_CSS" /tmp/home.html \
+              && curl -fsSI "https://${HOSTNAME}/build/${APP_ASSET}" >/tmp/app_asset_headers.txt \
+              && curl -fsSI "https://${HOSTNAME}/build/${APP_CSS}" >/tmp/app_css_headers.txt \
+              && curl -fsSI "https://${HOSTNAME}/build/${WELCOME_ASSET}" >/tmp/welcome_asset_headers.txt; then
+              echo "Assets publicados e acessiveis."
+              exit 0
+            fi
+
+            if [ "$attempt" -lt "$max_attempts" ]; then
+              echo "Deploy ainda nao estabilizou. Aguardando ${delay}s..."
+              sleep "$delay"
+            fi
+          done
+
+          echo "Falha ao validar os assets publicados."
+          echo "Asset principal esperado: $APP_ASSET"
+          echo "CSS principal esperado: $APP_CSS"
+          echo "Asset Welcome esperado: $WELCOME_ASSET"
+          echo "Ultimo HTML recebido:"
+          sed -n '1,120p' /tmp/home.html || true
+          echo "Headers do app asset:"
+          cat /tmp/app_asset_headers.txt || true
+          echo "Headers do css:"
+          cat /tmp/app_css_headers.txt || true
+          echo "Headers do Welcome:"
+          cat /tmp/welcome_asset_headers.txt || true
+          exit 1
