@@ -5,7 +5,8 @@ import TextInput from '@/Components/TextInput';
 import GuestLayout from '@/Layouts/GuestLayout';
 import { Head, Link, useForm } from '@inertiajs/react';
 
-export default function Login({ status, canResetPassword, units = [] }) {
+export default function Login({ status, canResetPassword, units = [], selectedUnitId = null }) {
+    const loginUrl = selectedUnitId ? route('login', { l: selectedUnitId }) : route('login');
     const { data, setData, post, processing, errors, reset, transform } = useForm({
         email: '',
         password: '',
@@ -23,7 +24,7 @@ export default function Login({ status, canResetPassword, units = [] }) {
             unit_id: unitId,
         }));
 
-        post(route('login'), {
+        post(loginUrl, {
             onFinish: () => reset('password'),
         });
     };

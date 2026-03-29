@@ -23,15 +23,19 @@ use App\Http\Controllers\UnitSwitchController;
 use App\Http\Controllers\UserController;
 use App\Models\Unidade;
 use Illuminate\Foundation\Application;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-Route::get('/', function () {
+Route::get('/', function (Request $request) {
+    $requestedUnitId = (int) $request->query('l', 0);
+
     return Inertia::render('Welcome', [
         'canLogin' => Route::has('login'),
         'canRegister' => Route::has('register'),
         'laravelVersion' => Application::VERSION,
         'phpVersion' => PHP_VERSION,
+        'selectedUnitId' => $requestedUnitId > 0 ? $requestedUnitId : null,
         'units' => Unidade::orderBy('tb2_nome')->get([
             'tb2_id',
             'tb2_nome',
