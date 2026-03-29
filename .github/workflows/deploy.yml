@@ -144,6 +144,14 @@ jobs:
       - name: Build frontend assets
         run: NODE_ENV=production npm run build
 
+      - name: Verify built frontend assets
+        run: |
+          test -f public/build/manifest.json
+          test -f public/favicon.ico
+          ls -lah public
+          ls -lah public/build
+          ls -lah public/build/assets | sed -n '1,40p'
+
       - name: Remove cached Laravel files
         run: |
           rm -f bootstrap/cache/config.php
@@ -168,6 +176,13 @@ jobs:
           touch artifacts/staging/public/storage/.gitkeep
           (cd artifacts/staging && zip -r ../app.zip .)
 
+      - name: Verify deployment package contents
+        run: |
+          test -f artifacts/staging/public/build/manifest.json
+          unzip -l artifacts/app.zip | grep "public/build/manifest.json"
+          unzip -l artifacts/app.zip | grep "public/favicon.ico"
+          unzip -l artifacts/app.zip | grep "public/build/assets/app-"
+
       - name: Deploy package (Zip Deploy)
         run: |
           max_attempts=5
@@ -178,6 +193,9 @@ jobs:
               --resource-group "$AZURE_RESOURCE_GROUP" \
               --name "$AZURE_WEBAPP_NAME" \
               --type zip \
+              --clean true \
+              --restart true \
+              --track-status true \
               --src-path artifacts/app.zip; then
               echo "Deploy succeeded"
               exit 0
@@ -190,3 +208,16 @@ jobs:
           done
           echo "Deploy failed after $max_attempts attempts."
           exit 1
+
+      - name: Validate deployed assets
+        run: |
+          sleep 20
+          APP_ASSET=$(node -e "const m=require('./public/build/manifest.json'); console.log(m['resources/js/app.jsx'].file)")
+          APP_CSS=$(node -e "const m=require('./public/build/manifest.json'); console.log(m['resources/js/app.jsx'].css[0])")
+          WELCOME_ASSET=$(node -e "const m=require('./public/build/manifest.json'); console.log(m['resources/js/Pages/Welcome.jsx'].file)")
+          curl -fsSL "https://${AZURE_WEBAPP_NAME}.azurewebsites.net/" -o /tmp/home.html
+          grep -q "$APP_ASSET" /tmp/home.html
+          grep -q "$APP_CSS" /tmp/home.html
+          curl -fsSI "https://${AZURE_WEBAPP_NAME}.azurewebsites.net/build/${APP_ASSET}"
+          curl -fsSI "https://${AZURE_WEBAPP_NAME}.azurewebsites.net/build/${APP_CSS}"
+          curl -fsSI "https://${AZURE_WEBAPP_NAME}.azurewebsites.net/build/${WELCOME_ASSET}"
