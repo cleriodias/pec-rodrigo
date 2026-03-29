@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "PeC Faturamento",
+    "slug": "pec-mobile-faturamento",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "pecfaturamento",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "android": {
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "br.com.clerio.pecfaturamento"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
