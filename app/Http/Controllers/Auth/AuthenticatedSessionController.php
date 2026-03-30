@@ -22,17 +22,29 @@ class AuthenticatedSessionController extends Controller
      */
     public function create(Request $request): Response
     {
+<<<<<<< HEAD
         $selectedUnitId = (int) $request->query('l');
         $unitsQuery = Unidade::orderBy('tb2_nome');
 
         if ($selectedUnitId > 0) {
             $unitsQuery->where('tb2_id', $selectedUnitId);
+=======
+        $requestedUnitId = (int) $request->query('l', 0);
+        $unitsQuery = Unidade::orderBy('tb2_nome');
+
+        if ($requestedUnitId > 0) {
+            $unitsQuery->where('tb2_id', $requestedUnitId);
+>>>>>>> main
         }
 
         return Inertia::render('Auth/Login', [
             'canResetPassword' => Route::has('password.request'),
             'status' => session('status'),
+<<<<<<< HEAD
             'selectedUnitId' => $selectedUnitId > 0 ? $selectedUnitId : null,
+=======
+            'selectedUnitId' => $requestedUnitId > 0 ? $requestedUnitId : null,
+>>>>>>> main
             'units' => $unitsQuery->get(['tb2_id', 'tb2_nome']),
         ]);
     }

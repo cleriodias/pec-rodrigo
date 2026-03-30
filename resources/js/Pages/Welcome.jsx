@@ -4,7 +4,11 @@ import { Head, Link, useForm } from '@inertiajs/react';
 export default function Welcome({ units = [], flash = {}, selectedUnitId = null }) {
     const currentYear = new Date().getFullYear();
     const appName = import.meta.env.VITE_APP_NAME || 'PeC';
+<<<<<<< HEAD
     const loginHref = selectedUnitId ? route('login', { l: selectedUnitId }) : route('login');
+=======
+    const loginUrl = selectedUnitId ? route('login', { l: selectedUnitId }) : route('login');
+>>>>>>> main
     const {
         data,
         setData,
@@ -143,7 +147,11 @@ export default function Welcome({ units = [], flash = {}, selectedUnitId = null 
                                 </p>
                                 <div className="reveal-up mt-6 flex flex-wrap gap-3" style={{ animationDelay: '0.28s' }}>
                                     <Link
+<<<<<<< HEAD
                                         href={loginHref}
+=======
+                                        href={loginUrl}
+>>>>>>> main
                                         className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 transition hover:bg-slate-800"
                                     >
                                         Login
@@ -319,7 +327,11 @@ export default function Welcome({ units = [], flash = {}, selectedUnitId = null 
                                             Cadastre uma unidade para exibir informacoes aqui.
                                         </p>
                                         <Link
+<<<<<<< HEAD
                                             href={loginHref}
+=======
+                                            href={loginUrl}
+>>>>>>> main
                                             className="mt-6 inline-flex rounded-full border border-rose-200 bg-rose-50 px-5 py-2 text-sm font-semibold text-rose-700 transition hover:border-rose-300 hover:bg-rose-100"
                                         >
                                             Login

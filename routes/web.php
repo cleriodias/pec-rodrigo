@@ -8,6 +8,7 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductDiscardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\LanchoneteTerminalController;
+use App\Http\Controllers\MobileRevenueController;
 use App\Http\Controllers\NoticeController;
 use App\Http\Controllers\NewsletterSubscriptionController;
 use App\Http\Controllers\RoleSwitchController;
@@ -27,12 +28,21 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::get('/', function (Request $request) {
+<<<<<<< HEAD
+=======
+    $requestedUnitId = (int) $request->query('l', 0);
+
+>>>>>>> main
     return Inertia::render('Welcome', [
         'canLogin' => Route::has('login'),
         'canRegister' => Route::has('register'),
         'laravelVersion' => Application::VERSION,
         'phpVersion' => PHP_VERSION,
+<<<<<<< HEAD
         'selectedUnitId' => $request->query('l'),
+=======
+        'selectedUnitId' => $requestedUnitId > 0 ? $requestedUnitId : null,
+>>>>>>> main
         'units' => Unidade::orderBy('tb2_nome')->get([
             'tb2_id',
             'tb2_nome',
@@ -46,6 +56,13 @@ Route::get('/', function (Request $request) {
 
 Route::post('/newsletter', [NewsletterSubscriptionController::class, 'store'])
     ->name('newsletter.store');
+
+Route::get('/app/endpoints/mobile/revenue/dashboard', [MobileRevenueController::class, 'dashboard'])
+    ->name('mobile.revenue.dashboard');
+Route::get('/app/endpoints/mobile/revenue/daily', [MobileRevenueController::class, 'daily'])
+    ->name('mobile.revenue.daily');
+Route::get('/app/endpoints/mobile/revenue/monthly', [MobileRevenueController::class, 'monthly'])
+    ->name('mobile.revenue.monthly');
 
 
 Route::get('/dashboard', function () {
