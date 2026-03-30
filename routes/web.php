@@ -28,21 +28,13 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::get('/', function (Request $request) {
-<<<<<<< HEAD
-=======
     $requestedUnitId = (int) $request->query('l', 0);
-
->>>>>>> main
     return Inertia::render('Welcome', [
         'canLogin' => Route::has('login'),
         'canRegister' => Route::has('register'),
         'laravelVersion' => Application::VERSION,
         'phpVersion' => PHP_VERSION,
-<<<<<<< HEAD
-        'selectedUnitId' => $request->query('l'),
-=======
         'selectedUnitId' => $requestedUnitId > 0 ? $requestedUnitId : null,
->>>>>>> main
         'units' => Unidade::orderBy('tb2_nome')->get([
             'tb2_id',
             'tb2_nome',
