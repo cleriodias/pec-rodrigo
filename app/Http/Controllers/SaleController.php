@@ -210,7 +210,7 @@ class SaleController extends Controller
             $groupedItems[$itemKey]['quantity'] += $quantity;
         }
 
-        $dateTime = Carbon::now();
+        $dateTime = now();
         $monthStart = $dateTime->copy()->startOfMonth();
         $monthEnd = $dateTime->copy()->endOfMonth();
         $isPaid = in_array($finalPaymentType, ['maquina', 'dinheiro'], true);
@@ -546,7 +546,7 @@ class SaleController extends Controller
             $existing->update([
                 'quantidade' => $newQuantity,
                 'valor_total' => round($price * $newQuantity, 2),
-                'data_hora' => Carbon::now(),
+                'data_hora' => now(),
                 'id_lanc' => $validated['access_user_id'],
                 'id_user_caixa' => null,
             ]);
@@ -558,7 +558,7 @@ class SaleController extends Controller
                 'valor_unitario' => $price,
                 'quantidade' => $quantity,
                 'valor_total' => $total,
-                'data_hora' => Carbon::now(),
+                'data_hora' => now(),
                 'id_user_caixa' => null,
                 'id_user_vale' => null,
                 'id_lanc' => $validated['access_user_id'],
@@ -601,7 +601,7 @@ class SaleController extends Controller
             $record->update([
                 'quantidade' => $validated['quantity'],
                 'valor_total' => round($record->valor_unitario * $validated['quantity'], 2),
-                'data_hora' => Carbon::now(),
+                'data_hora' => now(),
                 'id_lanc' => $validated['access_user_id'] ?? $record->id_lanc,
                 'id_user_caixa' => null,
             ]);

@@ -505,6 +505,7 @@ class SalesReportController extends Controller
                     'id' => $payment->tb4_id,
                     'date' => $saleDateTime?->format('d/m/Y'),
                     'time' => $saleDateTime?->format('H:i'),
+                    'comanda' => $sales->pluck('id_comanda')->filter()->unique()->implode(', '),
                     'total' => round((float) $payment->valor_total, 2),
                     'receipt' => [
                         'id' => $payment->tb4_id,
