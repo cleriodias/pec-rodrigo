@@ -32,6 +32,8 @@ const formatNameInput = (value) => {
 };
 
 export default function UserCreate({ auth, units = [] }) {
+    const now = new Date();
+    const generatedPassword = `${String(now.getHours()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
 
     const initialUnits = units
         .filter((unit) => Number(unit.tb2_id) !== 4)
@@ -39,9 +41,9 @@ export default function UserCreate({ auth, units = [] }) {
 
     const { data, setData, post, processing, errors } = useForm({
         name: '',
-        email: 'xxx@paoecafe.com.br',
-        password: '12345678',
-        password_confirmation: '12345678',
+        email: '@paoecafe83.com.br',
+        password: generatedPassword,
+        password_confirmation: generatedPassword,
         funcao: '4',
         hr_ini: '00:00',
         hr_fim: '23:00',
@@ -110,7 +112,7 @@ export default function UserCreate({ auth, units = [] }) {
                                     <input
                                         id="email"
                                         type="email"
-                                        placeholder={'xxx@paoecafe.com.br'}
+                                        placeholder={'@paoecafe83.com.br'}
                                         value={data.email}
                                         onChange={(e) => setData('email', e.target.value)}
                                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
