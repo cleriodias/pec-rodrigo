@@ -98,7 +98,7 @@ export default function BoletoIndex({ activeUnit = null, filters = {}, boletos =
                 Boletos
             </h2>
             <p className="text-sm text-gray-500 dark:text-gray-300">
-                Cadastre boletos com valor, vencimento e codigo de barras. Master pode visualizar a lista e dar baixa.
+                Cadastre boletos com valor, vencimento e codigo de barras. Master e gerente podem visualizar a lista e dar baixa.
             </p>
             <p className="text-sm text-gray-500 dark:text-gray-300">
                 Unidade ativa: <span className="font-semibold text-gray-700 dark:text-gray-200">{activeUnit?.name ?? '--'}</span>
@@ -393,7 +393,7 @@ export default function BoletoIndex({ activeUnit = null, filters = {}, boletos =
                     ) : (
                         <div className="rounded-2xl bg-white p-6 shadow dark:bg-gray-800">
                             <p className="text-sm text-gray-500 dark:text-gray-300">
-                                Apenas usuarios Master conseguem visualizar a lista de boletos e dar baixa.
+                                Apenas usuarios Master e Gerente conseguem visualizar a lista de boletos e dar baixa.
                             </p>
                         </div>
                     )}

@@ -75,7 +75,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
     Route::get('/settings', function () {
         $user = auth()->user();
-        if (! $user || (int) $user->funcao !== 0) {
+        if (! $user || ! in_array((int) $user->funcao, [0, 1], true)) {
             abort(403);
         }
 
@@ -83,7 +83,7 @@ Route::middleware('auth')->group(function () {
     })->name('settings.config');
     Route::get('/settings/menu', function () {
         $user = auth()->user();
-        if (! $user || (int) $user->funcao !== 0) {
+        if (! $user || ! in_array((int) $user->funcao, [0, 1], true)) {
             abort(403);
         }
 
@@ -91,7 +91,7 @@ Route::middleware('auth')->group(function () {
     })->name('settings.menu');
     Route::get('/settings/profile-access', function () {
         $user = auth()->user();
-        if (! $user || (int) $user->funcao !== 0) {
+        if (! $user || ! in_array((int) $user->funcao, [0, 1], true)) {
             abort(403);
         }
 
@@ -99,7 +99,7 @@ Route::middleware('auth')->group(function () {
     })->name('settings.profile-access');
     Route::get('/settings/menu-order', function () {
         $user = auth()->user();
-        if (! $user || (int) $user->funcao !== 0) {
+        if (! $user || ! in_array((int) $user->funcao, [0, 1], true)) {
             abort(403);
         }
 
