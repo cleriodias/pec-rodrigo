@@ -938,6 +938,7 @@ export default function Dashboard() {
                 product_id: item.productId,
                 quantity: item.quantity,
                 barcode: item.barcode ?? null,
+                unit_price: item.price,
             }));
         } else {
             payload.items = items.map((item) => ({
