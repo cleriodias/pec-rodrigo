@@ -227,7 +227,7 @@ export default function AuthenticatedLayout({ header, headerClassName = '', chil
             },
             {
                 key: 'reports_control',
-                visible: canSeeReports && hasMenuAccess('reports_control'),
+                visible: user && [0, 1].includes(effectiveRole) && hasMenuAccess('reports_control'),
                 node: (
                     <NavLink
                         href={route('reports.control')}
