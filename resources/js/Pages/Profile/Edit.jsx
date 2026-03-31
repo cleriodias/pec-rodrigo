@@ -1,7 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head } from '@inertiajs/react';
 import UpdateProfileInformationForm from './partials/UpdateProfileInformationForm';
-import UpdatePasswordForm from './partials/UpdatePasswordForm';
+import UpdateAccessCodeForm from './partials/UpdateAccessCodeForm';
 import DeleteUserForm from './partials/DeleteUserForm';
 
 export default function Edit({ mustVerifyEmail, status }) {
@@ -21,7 +21,7 @@ export default function Edit({ mustVerifyEmail, status }) {
                         <UpdateProfileInformationForm className="w-full" />
                     </div>
                     <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-md">
-                        <UpdatePasswordForm className="w-full" />
+                        <UpdateAccessCodeForm className="w-full" />
                     </div>
 
                     <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-md">
