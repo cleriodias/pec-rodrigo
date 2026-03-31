@@ -27,6 +27,26 @@ const formatDateTime = (value) => {
     return formatBrazilDateTime(value);
 };
 
+const WHATSAPP_NUMBER = '5561984524923';
+
+const buildWhatsAppMessage = (boleto) => {
+    const description = boleto?.description ?? '--';
+    const amount = formatCurrency(boleto?.amount);
+    const digitableLine = boleto?.digitable_line ?? '--';
+    const dueDate = formatDate(boleto?.due_date);
+
+    return [
+        'Segue os dados do boleto:',
+        `Descricao: ${description}`,
+        `Valor: ${amount}`,
+        `Linha digitavel: ${digitableLine}`,
+        `Vencimento: ${dueDate}`,
+    ].join('\n');
+};
+
+const buildWhatsAppLink = (boleto) =>
+    `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(buildWhatsAppMessage(boleto))}`;
+
 export default function BoletoIndex({ activeUnit = null, filters = {}, boletos = null, canManageList }) {
     const { flash } = usePage().props;
     const today = getBrazilTodayInputValue();
@@ -311,6 +331,16 @@ export default function BoletoIndex({ activeUnit = null, filters = {}, boletos =
                                                             >
                                                                 Detalhes
                                                             </button>
+                                                            <a
+                                                                href={buildWhatsAppLink(boleto)}
+                                                                target="_blank"
+                                                                rel="noreferrer"
+                                                                aria-label={`Enviar boleto ${boleto.description} por WhatsApp`}
+                                                                title="Enviar por WhatsApp"
+                                                                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-emerald-300 text-emerald-600 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:border-emerald-500/60 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
+                                                            >
+                                                                <i className="bi bi-whatsapp text-base" aria-hidden="true"></i>
+                                                            </a>
                                                         {!boleto.is_paid && (
                                                             <button
                                                                 type="button"
