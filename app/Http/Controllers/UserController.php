@@ -131,11 +131,15 @@ class UserController extends Controller
 
     public function store(Request $request)
     {
+        $request->merge([
+            'name' => $this->normalizeUserName((string) $request->input('name', '')),
+        ]);
+
         $request->validate(
             [
-                'name' => 'required|string|max:255',
+                'name' => ['required', 'string', 'max:15', 'regex:/^\pL+(?: \pL+)?$/u'],
                 'email' => 'required|string|email|max:255|unique:users',
-                'password' => 'required|string|min:8|max:255|confirmed',
+                'password' => 'required|string|min:4|max:255|confirmed',
                 'funcao' => 'required|integer|between:0,6',
                 'hr_ini' => 'required|date_format:H:i',
                 'hr_fim' => 'required|date_format:H:i|after:hr_ini',
@@ -148,6 +152,7 @@ class UserController extends Controller
                 'name.required' => 'O campo nome é obrigatório!',
                 'name.string' => 'O nome deve ser uma string válida.',
                 'name.max' => 'O nome não pode ter mais que :max caracteres.',
+                'name.regex' => 'Informe nome e sobrenome usando apenas letras e um único espaço.',
                 'email.required' => 'O campo e-mail é obrigatório.',
                 'email.string' => 'O e-mail deve ser uma string válida.',
                 'email.email' => 'O e-mail deve ser um endereço válido.',
@@ -421,5 +426,26 @@ class UserController extends Controller
         $hasAdvances = SalaryAdvance::where('user_id', $user->id)->exists();
 
         return $hasSales || $hasAdvances;
+    }
+
+    private function normalizeUserName(string $name): string
+    {
+        $lettersAndSpaces = preg_replace('/[^\pL\s]/u', '', $name) ?? '';
+        $normalizedSpaces = preg_replace('/\s+/u', ' ', trim($lettersAndSpaces)) ?? '';
+
+        if ($normalizedSpaces === '') {
+            return '';
+        }
+
+        $words = explode(' ', $normalizedSpaces);
+
+        $formattedWords = array_map(function (string $word): string {
+            $firstLetter = mb_substr($word, 0, 1, 'UTF-8');
+            $remainingLetters = mb_substr($word, 1, null, 'UTF-8');
+
+            return mb_strtoupper($firstLetter, 'UTF-8') . mb_strtolower($remainingLetters, 'UTF-8');
+        }, $words);
+
+        return implode(' ', $formattedWords);
     }
 }
