@@ -300,12 +300,7 @@ export default function ValeReport({
                                                     {row.comanda ?? '--'}
                                                 </td>
                                                 <td className="px-3 py-2 text-gray-800 dark:text-gray-100">
-                                                    <p className="font-medium">
-                                                        {row.items_count} item(ns)
-                                                    </p>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-300">
-                                                        {row.items_label || '--'}
-                                                    </p>
+                                                    <p className="font-medium">{row.items_count} item(ns)</p>
                                                 </td>
                                                 <td className="px-3 py-2 text-right font-semibold text-gray-900 dark:text-gray-100">
                                                     {formatCurrency(row.total)}
