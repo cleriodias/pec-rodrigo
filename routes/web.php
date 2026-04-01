@@ -19,6 +19,7 @@ use App\Http\Controllers\SalesReportController;
 use App\Http\Controllers\SalaryAdvanceController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\SupplierPortalController;
+use App\Http\Controllers\SupportTicketController;
 use App\Http\Controllers\UnitController;
 use App\Http\Controllers\UnitSwitchController;
 use App\Http\Controllers\UserController;
@@ -70,6 +71,10 @@ Route::put('/supplier/disputes/{bid}', [SupplierPortalController::class, 'update
 Route::post('/supplier/disputes/{bid}/invoice', [SupplierPortalController::class, 'invoice'])->name('supplier.disputes.invoice');
 
 Route::middleware('auth')->group(function () {
+    Route::get('/chamados', [SupportTicketController::class, 'index'])->name('support.tickets.index');
+    Route::post('/chamados', [SupportTicketController::class, 'store'])->name('support.tickets.store');
+    Route::get('/chamados/{ticket}/video', [SupportTicketController::class, 'video'])->name('support.tickets.video');
+
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::put('/profile/access-code', [ProfileController::class, 'updateAccessCode'])->name('profile.access-code.update');
