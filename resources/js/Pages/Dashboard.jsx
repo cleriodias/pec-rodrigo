@@ -270,7 +270,11 @@ export default function Dashboard() {
     const closureBlockMessage = requiresClosure
         ? `Fechamento pendente${
               pendingClosureDate ? ` em ${formatDate(pendingClosureDate)}` : ''
-          }. Receba uma comanda em aberto para continuar.`
+          }. ${
+              hasPendingComandas
+                  ? 'Conclua o fechamento do caixa apos receber as pendencias.'
+                  : 'Conclua o fechamento do caixa para continuar.'
+          }`
         : '';
     const pendingComandaMessage = hasPendingComandas
         ? `Comanda${
