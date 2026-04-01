@@ -73,7 +73,11 @@ Route::post('/supplier/disputes/{bid}/invoice', [SupplierPortalController::class
 Route::middleware('auth')->group(function () {
     Route::get('/chamados', [SupportTicketController::class, 'index'])->name('support.tickets.index');
     Route::post('/chamados', [SupportTicketController::class, 'store'])->name('support.tickets.store');
+    Route::post('/chamados/{ticket}/interacoes', [SupportTicketController::class, 'reply'])->name('support.tickets.reply');
+    Route::put('/chamados/{ticket}/status', [SupportTicketController::class, 'updateStatus'])->name('support.tickets.update-status');
+    Route::delete('/chamados/{ticket}', [SupportTicketController::class, 'destroy'])->name('support.tickets.destroy');
     Route::get('/chamados/{ticket}/video', [SupportTicketController::class, 'video'])->name('support.tickets.video');
+    Route::get('/chamados/anexos/{attachment}', [SupportTicketController::class, 'attachment'])->name('support.tickets.attachments.show');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

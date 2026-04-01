@@ -3,38 +3,67 @@
 namespace App\Http\Controllers;
 
 use App\Models\SupportTicket;
+use App\Models\SupportTicketAttachment;
+use App\Models\SupportTicketInteraction;
 use App\Models\Unidade;
 use App\Support\ManagementScope;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class SupportTicketController extends Controller
 {
+    private const STATUS_LABELS = [
+        'aberto' => 'Aberto',
+        'em_analise' => 'Em analise',
+        'aguardando_usuario' => 'Aguardando usuario',
+        'resolvido' => 'Resolvido',
+        'fechado' => 'Fechado',
+    ];
+
     public function index(Request $request): Response
     {
         $user = $request->user();
         $isMaster = ManagementScope::isMaster($user);
 
-        $tickets = $isMaster
-            ? SupportTicket::with([
-                'user:id,name',
-                'unit:tb2_id,tb2_nome',
-            ])
-                ->orderByDesc('id')
-                ->get()
-                ->map(fn (SupportTicket $ticket) => $this->mapTicket($ticket))
-                ->values()
-            : [];
+        $ticketsQuery = SupportTicket::with([
+            'user:id,name',
+            'unit:tb2_id,tb2_nome',
+            'interactions' => fn ($query) => $query
+                ->with([
+                    'user:id,name',
+                    'attachments',
+                ])
+                ->orderBy('id'),
+        ])->orderByDesc('id');
+
+        if (! $isMaster) {
+            $ticketsQuery->where('user_id', $user->id);
+        }
+
+        $tickets = $ticketsQuery
+            ->get()
+            ->map(fn (SupportTicket $ticket) => $this->mapTicket($ticket))
+            ->values();
 
         return Inertia::render('Support/TicketIndex', [
             'isMaster' => $isMaster,
             'tickets' => $tickets,
             'activeUnit' => $this->resolveActiveUnit($request),
             'maxUploadMb' => $this->maxUploadMegabytes(),
+            'maxImageUploadMb' => $this->maxImageUploadMegabytes(),
+            'statusOptions' => collect(self::STATUS_LABELS)
+                ->map(fn (string $label, string $value) => [
+                    'value' => $value,
+                    'label' => $label,
+                ])
+                ->values(),
         ]);
     }
 
@@ -74,21 +103,139 @@ class SupportTicketController extends Controller
             ->with('success', 'Chamado enviado com sucesso!');
     }
 
-    public function video(Request $request, SupportTicket $ticket): BinaryFileResponse
+    public function reply(Request $request, SupportTicket $ticket): RedirectResponse
+    {
+        $user = $request->user();
+        $isMaster = ManagementScope::isMaster($user);
+
+        $this->ensureCanAccessTicket($user, $ticket);
+
+        $validator = Validator::make($request->all(), [
+            'message' => ['nullable', 'string', 'max:3000'],
+            'images' => $isMaster ? ['nullable', 'array', 'max:6'] : ['prohibited'],
+            'images.*' => $isMaster
+                ? ['image', 'mimes:jpg,jpeg,png,bmp,gif,webp', 'max:' . $this->maxImageUploadKilobytes()]
+                : ['prohibited'],
+        ]);
+
+        $validator->after(function ($validator) use ($request) {
+            $hasMessage = trim((string) $request->input('message', '')) !== '';
+            $hasImages = count($request->file('images', [])) > 0;
+
+            if (! $hasMessage && ! $hasImages) {
+                $validator->errors()->add('message', 'Informe uma mensagem ou anexe ao menos uma imagem.');
+            }
+        });
+
+        $data = $validator->validate();
+
+        DB::transaction(function () use ($ticket, $user, $request, $data) {
+            $interaction = SupportTicketInteraction::create([
+                'support_ticket_id' => $ticket->id,
+                'user_id' => $user->id,
+                'author_name' => (string) $user->name,
+                'message' => isset($data['message']) && trim((string) $data['message']) !== ''
+                    ? trim((string) $data['message'])
+                    : null,
+            ]);
+
+            foreach ($request->file('images', []) as $image) {
+                $path = $image->store('support-ticket-images', 'local');
+
+                $interaction->attachments()->create([
+                    'file_path' => $path,
+                    'original_name' => $image->getClientOriginalName(),
+                    'mime_type' => $image->getClientMimeType() ?: 'image/jpeg',
+                    'file_size' => (int) $image->getSize(),
+                ]);
+            }
+        });
+
+        return redirect()
+            ->route('support.tickets.index')
+            ->with('success', 'Interacao registrada com sucesso!');
+    }
+
+    public function updateStatus(Request $request, SupportTicket $ticket): RedirectResponse
     {
         $this->ensureMaster($request->user());
 
-        $disk = Storage::disk('local');
-        if (! $disk->exists($ticket->video_path)) {
+        $data = $request->validate([
+            'status' => ['required', 'string', Rule::in(array_keys(self::STATUS_LABELS))],
+        ]);
+
+        $ticket->update([
+            'status' => $data['status'],
+        ]);
+
+        return redirect()
+            ->route('support.tickets.index')
+            ->with('success', 'Status do chamado atualizado com sucesso!');
+    }
+
+    public function destroy(Request $request, SupportTicket $ticket): RedirectResponse
+    {
+        $this->ensureMaster($request->user());
+
+        $ticket->loadMissing('interactions.attachments');
+
+        $paths = collect([$ticket->video_path])
+            ->merge(
+                $ticket->interactions->flatMap(
+                    fn (SupportTicketInteraction $interaction) => $interaction->attachments->pluck('file_path')
+                )
+            )
+            ->filter()
+            ->values()
+            ->all();
+
+        Storage::disk('local')->delete($paths);
+        $ticket->delete();
+
+        return redirect()
+            ->route('support.tickets.index')
+            ->with('success', 'Chamado removido com sucesso!');
+    }
+
+    public function video(Request $request, SupportTicket $ticket): BinaryFileResponse
+    {
+        $this->ensureCanAccessTicket($request->user(), $ticket);
+
+        return $this->streamPrivateFile(
+            $ticket->video_path,
+            $ticket->video_mime_type ?: 'video/webm',
+            $ticket->video_original_name ?: ('chamado-' . $ticket->id . '.webm')
+        );
+    }
+
+    public function attachment(Request $request, SupportTicketAttachment $attachment): BinaryFileResponse
+    {
+        $attachment->loadMissing('interaction.supportTicket');
+
+        $ticket = $attachment->interaction?->supportTicket;
+        if (! $ticket) {
             abort(404);
         }
 
-        $path = $disk->path($ticket->video_path);
-        $filename = basename($ticket->video_original_name ?: ('chamado-' . $ticket->id . '.webm'));
+        $this->ensureCanAccessTicket($request->user(), $ticket);
 
-        return response()->file($path, [
-            'Content-Type' => $ticket->video_mime_type ?: 'video/webm',
-            'Content-Disposition' => 'inline; filename="' . $filename . '"',
+        return $this->streamPrivateFile(
+            $attachment->file_path,
+            $attachment->mime_type ?: 'image/jpeg',
+            $attachment->original_name ?: ('anexo-' . $attachment->id)
+        );
+    }
+
+    private function streamPrivateFile(string $path, string $mimeType, string $filename): BinaryFileResponse
+    {
+        $disk = Storage::disk('local');
+        if (! $disk->exists($path)) {
+            abort(404);
+        }
+
+        return response()->file($disk->path($path), [
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => 'inline; filename="' . basename($filename) . '"',
         ]);
     }
 
@@ -99,6 +246,7 @@ class SupportTicketController extends Controller
             'title' => $ticket->title,
             'description' => $ticket->description,
             'status' => $ticket->status,
+            'status_label' => self::STATUS_LABELS[$ticket->status] ?? $ticket->status,
             'video_size' => (int) $ticket->video_size,
             'video_original_name' => $ticket->video_original_name,
             'created_at' => optional($ticket->created_at)->toIso8601String(),
@@ -115,6 +263,28 @@ class SupportTicketController extends Controller
                 ]
                 : null,
             'video_url' => route('support.tickets.video', $ticket, false),
+            'interactions' => $ticket->interactions
+                ->map(fn (SupportTicketInteraction $interaction) => $this->mapInteraction($interaction))
+                ->values(),
+        ];
+    }
+
+    private function mapInteraction(SupportTicketInteraction $interaction): array
+    {
+        return [
+            'id' => $interaction->id,
+            'message' => $interaction->message,
+            'author_name' => $interaction->author_name ?: ($interaction->user?->name ?? '---'),
+            'created_at' => optional($interaction->created_at)->toIso8601String(),
+            'attachments' => $interaction->attachments
+                ->map(fn (SupportTicketAttachment $attachment) => [
+                    'id' => $attachment->id,
+                    'original_name' => $attachment->original_name,
+                    'mime_type' => $attachment->mime_type,
+                    'file_size' => (int) $attachment->file_size,
+                    'url' => route('support.tickets.attachments.show', $attachment, false),
+                ])
+                ->values(),
         ];
     }
 
@@ -123,6 +293,23 @@ class SupportTicketController extends Controller
         if (! ManagementScope::isMaster($user)) {
             abort(403);
         }
+    }
+
+    private function ensureCanAccessTicket($user, SupportTicket $ticket): void
+    {
+        if (! $user) {
+            abort(403);
+        }
+
+        if (ManagementScope::isMaster($user)) {
+            return;
+        }
+
+        if ((int) $ticket->user_id === (int) $user->id) {
+            return;
+        }
+
+        abort(403);
     }
 
     private function resolveActiveUnit(Request $request): ?array
@@ -176,6 +363,16 @@ class SupportTicketController extends Controller
     private function maxUploadMegabytes(): int
     {
         return max(1, (int) floor($this->maxUploadKilobytes() / 1024));
+    }
+
+    private function maxImageUploadKilobytes(): int
+    {
+        return min($this->maxUploadKilobytes(), 10240);
+    }
+
+    private function maxImageUploadMegabytes(): int
+    {
+        return max(1, (int) floor($this->maxImageUploadKilobytes() / 1024));
     }
 
     private function iniSizeToKilobytes(string $value): int

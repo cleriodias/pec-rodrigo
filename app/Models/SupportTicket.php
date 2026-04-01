@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SupportTicket extends Model
 {
@@ -38,5 +39,10 @@ class SupportTicket extends Model
     public function unit(): BelongsTo
     {
         return $this->belongsTo(Unidade::class, 'unit_id', 'tb2_id');
+    }
+
+    public function interactions(): HasMany
+    {
+        return $this->hasMany(SupportTicketInteraction::class);
     }
 }
