@@ -36,7 +36,7 @@ export default function ProductDiscard({ recentDiscards = [] }) {
     const [selectedProduct, setSelectedProduct] = useState(null);
     const [confirmModalOpen, setConfirmModalOpen] = useState(false);
 
-    const { data, setData, post, processing, errors, reset } = useForm({
+    const { data, setData, post, processing, errors, reset, clearErrors } = useForm({
         product_id: '',
         quantity: '',
         unit_price: '',
@@ -104,12 +104,28 @@ export default function ProductDiscard({ recentDiscards = [] }) {
         };
     }, [searchTerm]);
 
+    useEffect(() => {
+        if (!selectedProduct) {
+            return;
+        }
+
+        if (searchTerm === selectedProduct.tb1_nome) {
+            return;
+        }
+
+        setSelectedProduct(null);
+        setData('product_id', '');
+        setData('unit_price', '');
+        clearErrors('product_id');
+    }, [clearErrors, searchTerm, selectedProduct, setData]);
+
     const handleSelectProduct = (product) => {
         setSelectedProduct(product);
         setSearchTerm(product.tb1_nome);
         setSuggestions([]);
         setData('product_id', product.tb1_id);
         setData('unit_price', Number(product.tb1_vlr_venda ?? 0).toFixed(2));
+        clearErrors('product_id');
     };
 
     const unitPrice = useMemo(() => Number(data.unit_price || 0), [data.unit_price]);
@@ -226,7 +242,7 @@ export default function ProductDiscard({ recentDiscards = [] }) {
                                 <InputError message={errors.product_id} className="mt-2" />
                             </div>
 
-                            <input type="hidden" value={data.product_id} readOnly />
+                            <input type="hidden" name="product_id" value={data.product_id} readOnly />
 
                             {selectedProduct && (
                                 <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4 text-sm shadow-sm dark:border-indigo-500/40 dark:bg-indigo-900/30">
