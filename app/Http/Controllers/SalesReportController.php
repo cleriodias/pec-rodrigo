@@ -11,6 +11,7 @@ use App\Models\Venda;
 use App\Models\VendaPagamento;
 use App\Models\User;
 use App\Models\Unidade;
+use App\Support\ManagementScope;
 use Carbon\Carbon;
 use Carbon\Exceptions\InvalidFormatException;
 use Illuminate\Http\Request;
@@ -151,6 +152,32 @@ class SalesReportController extends Controller
         $this->ensureManager($request);
         [$filterUnitId, $filterUnits, $selectedUnit] = $this->resolveReportUnit($request);
         [$start, $end, $startDate, $endDate] = $this->resolveDateRange($request);
+        $selectedUserId = $this->resolveReportUserId($request->query('user_id'));
+
+        $filterUsersQuery = User::query()->orderBy('name');
+        ManagementScope::applyManagedUserScope($filterUsersQuery, $request->user());
+
+        if ($filterUnitId) {
+            $filterUsersQuery->where(function ($query) use ($filterUnitId) {
+                $query
+                    ->where('tb2_id', $filterUnitId)
+                    ->orWhereHas('units', function ($unitQuery) use ($filterUnitId) {
+                        $unitQuery->where('tb2_unidades.tb2_id', $filterUnitId);
+                    });
+            });
+        }
+
+        $filterUsers = $filterUsersQuery
+            ->get(['id', 'name'])
+            ->map(fn (User $user) => [
+                'id' => (int) $user->id,
+                'name' => $user->name,
+            ])
+            ->values();
+
+        if ($selectedUserId && ! $filterUsers->contains(fn (array $user) => $user['id'] === $selectedUserId)) {
+            $selectedUserId = null;
+        }
 
         $rows = VendaPagamento::query()
             ->with([
@@ -181,6 +208,11 @@ class SalesReportController extends Controller
             ->when($filterUnitId, function ($query) use ($filterUnitId) {
                 $query->whereHas('vendas', function ($subQuery) use ($filterUnitId) {
                     $subQuery->where('id_unidade', $filterUnitId);
+                });
+            })
+            ->when($selectedUserId, function ($query) use ($selectedUserId) {
+                $query->whereHas('vendas', function ($subQuery) use ($selectedUserId) {
+                    $subQuery->where('id_user_vale', $selectedUserId);
                 });
             })
             ->whereBetween('created_at', [$start, $end])
@@ -256,7 +288,9 @@ class SalesReportController extends Controller
             'endDate' => $endDate,
             'unit' => $selectedUnit,
             'filterUnits' => $filterUnits,
+            'filterUsers' => $filterUsers,
             'selectedUnitId' => $filterUnitId,
+            'selectedUserId' => $selectedUserId,
         ]);
     }
 
@@ -1849,6 +1883,17 @@ class SalesReportController extends Controller
             : ['id' => null, 'name' => 'Todas as unidades'];
 
         return [$filterUnitId, $availableUnits->values(), $selectedUnit];
+    }
+
+    private function resolveReportUserId(mixed $requestedUserId): ?int
+    {
+        if ($requestedUserId === null || $requestedUserId === '' || $requestedUserId === 'all') {
+            return null;
+        }
+
+        $userId = (int) $requestedUserId;
+
+        return $userId > 0 ? $userId : null;
     }
 
     private function availableUnits(User $user): Collection
