@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ProductDiscard;
 use App\Models\Produto;
+use App\Support\ManagementScope;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -112,5 +113,20 @@ class ProductDiscardController extends Controller
         return redirect()
             ->back()
             ->with('success', 'Descarte registrado com sucesso.');
+    }
+
+    public function destroy(Request $request, ProductDiscard $discard): RedirectResponse
+    {
+        $actingUser = $request->user();
+
+        if (! $actingUser || ! ManagementScope::canManageDiscard($actingUser, $discard)) {
+            abort(403);
+        }
+
+        $discard->delete();
+
+        return redirect()
+            ->back()
+            ->with('success', 'Descarte excluido com sucesso.');
     }
 }

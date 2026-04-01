@@ -178,6 +178,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/fornecedores', [SalesReportController::class, 'fornecedores'])->name('reports.fornecedores');
     Route::get('/reports/gastos', [SalesReportController::class, 'gastos'])->name('reports.gastos');
     Route::get('/reports/descarte', [SalesReportController::class, 'descarte'])->name('reports.descarte');
+    Route::delete('/reports/descarte/{discard}', [ProductDiscardController::class, 'destroy'])->name('reports.descarte.destroy');
     Route::get('/reports/hoje', [SalesReportController::class, 'hoje'])->name('reports.hoje');
     Route::get('/reports/cash-closure', [SalesReportController::class, 'cashClosure'])->name('reports.cash.closure');
     Route::get('/reports/cash-discrepancies', [SalesReportController::class, 'cashDiscrepancies'])->name('reports.cash.discrepancies');
