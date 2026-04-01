@@ -11,6 +11,7 @@ use App\Models\Venda;
 use App\Models\VendaPagamento;
 use App\Models\User;
 use App\Models\Unidade;
+use App\Support\DiscardAlertService;
 use App\Support\ManagementScope;
 use Carbon\Carbon;
 use Carbon\Exceptions\InvalidFormatException;
@@ -1073,11 +1074,12 @@ class SalesReportController extends Controller
         ]);
     }
 
-    public function cashClosure(Request $request): Response
+    public function cashClosure(Request $request, DiscardAlertService $discardAlertService): Response
     {
         $this->ensureManager($request);
         $user = $request->user();
         $availableUnits = $this->availableUnits($user);
+        $discardThreshold = $discardAlertService->thresholdPercentage();
 
         $requestedUnitId = $request->query('unit_id');
         $filterUnitId = $requestedUnitId !== null && $requestedUnitId !== '' ? (int) $requestedUnitId : null;
@@ -1195,13 +1197,17 @@ class SalesReportController extends Controller
 
         $dateKey = $date->toDateString();
         $discardEntries = ProductDiscard::query()
-            ->with('product:tb1_id,tb1_nome,tb1_vlr_venda')
+            ->with(['product:tb1_id,tb1_nome,tb1_vlr_venda', 'user:id,tb2_id'])
             ->whereDate('created_at', $dateKey)
             ->orderByDesc('created_at')
             ->get();
 
         $discardTotals = $discardEntries
-            ->groupBy('user_id')
+            ->groupBy(function (ProductDiscard $discard) {
+                $discardUnitId = $discard->unit_id ?? $discard->user?->tb2_id ?? null;
+
+                return $discard->user_id . '-' . ($discardUnitId ?? 'none');
+            })
             ->map(function ($group) {
                 $quantity = $group->sum('quantity');
                 $value = $group->sum(function (ProductDiscard $discard) {
@@ -1229,6 +1235,7 @@ class SalesReportController extends Controller
                 return [
                     'id' => $discard->id,
                     'user_id' => $discard->user_id,
+                    'unit_id' => $discard->unit_id ?? $discard->user?->tb2_id ?? null,
                     'quantity' => round((float) $discard->quantity, 3),
                     'unit_price' => round($price, 2),
                     'value' => round($value, 2),
@@ -1243,7 +1250,7 @@ class SalesReportController extends Controller
             });
 
         $records = collect($grouped)
-            ->map(function (array $record) use ($closures, $discardTotals) {
+            ->map(function (array $record) use ($closures, $discardTotals, $discardAlertService, $discardThreshold) {
                 $record['totals'] = array_map(fn ($value) => round($value, 2), $record['totals']);
                 $record['grand_total'] = round($record['grand_total'], 2);
                 $record['row_key'] = $record['row_key'] ?? ($record['cashier_id'] . '-' . ($record['unit_id'] ?? 'none'));
@@ -1291,9 +1298,14 @@ class SalesReportController extends Controller
                     ];
                 }
 
-                $discardMeta = $discardTotals[$record['cashier_id']] ?? ['value' => 0.0, 'quantity' => 0.0];
+                $discardMeta = $discardTotals[$record['row_key']] ?? ['value' => 0.0, 'quantity' => 0.0];
                 $record['discard_total'] = round((float) ($discardMeta['value'] ?? 0), 2);
                 $record['discard_quantity'] = round((float) ($discardMeta['quantity'] ?? 0), 3);
+                $record['discard_alert'] = $discardAlertService->evaluateAmounts(
+                    (float) $record['discard_total'],
+                    (float) $record['grand_total'],
+                    $discardThreshold,
+                );
 
                 return $record;
             })
