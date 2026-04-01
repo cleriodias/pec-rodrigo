@@ -36,7 +36,7 @@ export default function ProductDiscard({ recentDiscards = [] }) {
     const [selectedProduct, setSelectedProduct] = useState(null);
     const [confirmModalOpen, setConfirmModalOpen] = useState(false);
 
-    const { data, setData, post, processing, errors, reset, clearErrors } = useForm({
+    const { data, setData, post, processing, errors, reset, clearErrors, transform } = useForm({
         product_id: '',
         quantity: '',
         unit_price: '',
@@ -119,6 +119,14 @@ export default function ProductDiscard({ recentDiscards = [] }) {
         clearErrors('product_id');
     }, [clearErrors, searchTerm, selectedProduct, setData]);
 
+    useEffect(() => {
+        if (!data.product_id) {
+            return;
+        }
+
+        clearErrors('product_id');
+    }, [clearErrors, data.product_id]);
+
     const handleSelectProduct = (product) => {
         setSelectedProduct(product);
         setSearchTerm(product.tb1_nome);
@@ -127,6 +135,11 @@ export default function ProductDiscard({ recentDiscards = [] }) {
         setData('unit_price', Number(product.tb1_vlr_venda ?? 0).toFixed(2));
         clearErrors('product_id');
     };
+
+    const resolvedProductId = useMemo(
+        () => data.product_id || selectedProduct?.tb1_id || '',
+        [data.product_id, selectedProduct],
+    );
 
     const unitPrice = useMemo(() => Number(data.unit_price || 0), [data.unit_price]);
 
@@ -139,12 +152,23 @@ export default function ProductDiscard({ recentDiscards = [] }) {
 
     const closeConfirmModal = () => setConfirmModalOpen(false);
 
+    const submitDiscard = (callbacks = {}) => {
+        transform((formData) => ({
+            ...formData,
+            product_id: resolvedProductId,
+        }));
+
+        post(route('products.discard.store'), {
+            preserveScroll: true,
+            ...callbacks,
+        });
+    };
+
     const handlePrepareSubmit = (event) => {
         event.preventDefault();
 
-        if (!data.product_id || quantityValue <= 0) {
-            post(route('products.discard.store'), {
-                preserveScroll: true,
+        if (!resolvedProductId || quantityValue <= 0) {
+            submitDiscard({
                 onError: () => {
                     setConfirmModalOpen(false);
                 },
@@ -152,12 +176,15 @@ export default function ProductDiscard({ recentDiscards = [] }) {
             return;
         }
 
+        if (String(data.product_id) !== String(resolvedProductId)) {
+            setData('product_id', resolvedProductId);
+        }
+
         setConfirmModalOpen(true);
     };
 
     const handleConfirmSubmit = () => {
-        post(route('products.discard.store'), {
-            preserveScroll: true,
+        submitDiscard({
             onSuccess: () => {
                 setConfirmModalOpen(false);
                 reset('quantity', 'unit_price');
