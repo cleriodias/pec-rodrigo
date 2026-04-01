@@ -99,6 +99,13 @@ class SalesReportController extends Controller
                 'route' => 'reports.lanchonete',
             ],
             [
+                'key' => 'comandas-aberto',
+                'label' => 'Comandas em Aberto',
+                'description' => 'Comandas abertas agrupadas por numero com filtros por loja e usuario.',
+                'icon' => 'bi-journal-bookmark',
+                'route' => 'reports.comandas-aberto',
+            ],
+            [
                 'key' => 'vales',
                 'label' => 'Vales',
                 'description' => 'Compras feitas no vale.',
@@ -291,6 +298,157 @@ class SalesReportController extends Controller
 
         return Inertia::render('Reports/Vale', [
             'rows' => $rows,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'unit' => $selectedUnit,
+            'filterUnits' => $filterUnits,
+            'filterUsers' => $filterUsers,
+            'selectedUnitId' => $filterUnitId,
+            'selectedUserId' => $selectedUserId,
+        ]);
+    }
+
+    public function comandasEmAberto(Request $request): Response
+    {
+        $this->ensureManager($request);
+        [$filterUnitId, $filterUnits, $selectedUnit] = $this->resolveReportUnit($request);
+        [$start, $end, $startDate, $endDate] = $this->resolveDateRange($request);
+        $selectedUserId = $this->resolveReportUserId($request->query('user_id'));
+
+        $filterUsersQuery = User::query()
+            ->whereIn('funcao', [3, 4])
+            ->orderBy('name');
+
+        ManagementScope::applyManagedUserScope($filterUsersQuery, $request->user());
+
+        if ($filterUnitId) {
+            $filterUsersQuery->where(function ($query) use ($filterUnitId) {
+                $query
+                    ->where('tb2_id', $filterUnitId)
+                    ->orWhereHas('units', function ($unitQuery) use ($filterUnitId) {
+                        $unitQuery->where('tb2_unidades.tb2_id', $filterUnitId);
+                    });
+            });
+        }
+
+        $filterUsers = $filterUsersQuery
+            ->get(['id', 'name'])
+            ->map(fn (User $user) => [
+                'id' => (int) $user->id,
+                'name' => $user->name,
+            ])
+            ->values();
+
+        if ($selectedUserId && ! $filterUsers->contains(fn (array $user) => $user['id'] === $selectedUserId)) {
+            $selectedUserId = null;
+        }
+
+        $rows = Venda::query()
+            ->with(['unidade:tb2_id,tb2_nome,tb2_endereco,tb2_cnpj', 'caixa:id,name'])
+            ->whereNotNull('id_comanda')
+            ->whereBetween('id_comanda', [3000, 3100])
+            ->where('status', 0)
+            ->when($filterUnitId, function ($query) use ($filterUnitId) {
+                $query->where('id_unidade', $filterUnitId);
+            })
+            ->when($selectedUserId, function ($query) use ($selectedUserId) {
+                $query->where(function ($subQuery) use ($selectedUserId) {
+                    $subQuery
+                        ->where('id_user_caixa', $selectedUserId)
+                        ->orWhere('id_lanc', $selectedUserId);
+                });
+            })
+            ->whereBetween('data_hora', [$start, $end])
+            ->orderByDesc('data_hora')
+            ->get([
+                'tb3_id',
+                'tb4_id',
+                'tb1_id',
+                'id_comanda',
+                'produto_nome',
+                'valor_unitario',
+                'quantidade',
+                'valor_total',
+                'data_hora',
+                'id_unidade',
+                'id_user_caixa',
+                'id_lanc',
+            ]);
+
+        $userIds = $rows
+            ->flatMap(fn (Venda $row) => [$row->id_user_caixa, $row->id_lanc])
+            ->filter()
+            ->unique()
+            ->values();
+
+        $users = $userIds->isNotEmpty()
+            ? User::whereIn('id', $userIds)->pluck('name', 'id')
+            : collect();
+
+        $comandas = $rows
+            ->groupBy('id_comanda')
+            ->map(function (Collection $items, $comanda) use ($users) {
+                $first = $items->first();
+                $updatedAt = $items->max('data_hora');
+                $dateTime = $updatedAt ? Carbon::parse($updatedAt)->toIso8601String() : null;
+
+                return [
+                    'id' => (int) $comanda,
+                    'comanda' => (int) $comanda,
+                    'cashier' => $first?->caixa?->name ?? ($first?->id_user_caixa ? ($users[$first->id_user_caixa] ?? null) : null),
+                    'cashier_id' => $first?->id_user_caixa ? (int) $first->id_user_caixa : null,
+                    'lanchonete_user' => $first?->id_lanc ? ($users[$first->id_lanc] ?? null) : null,
+                    'lanchonete_user_id' => $first?->id_lanc ? (int) $first->id_lanc : null,
+                    'unit_name' => $first?->unidade?->tb2_nome ?? '---',
+                    'date_time' => $dateTime,
+                    'items_count' => (int) $items->sum('quantidade'),
+                    'total' => round((float) $items->sum('valor_total'), 2),
+                    'receipt' => [
+                        'id' => (int) $comanda,
+                        'total' => round((float) $items->sum('valor_total'), 2),
+                        'date_time' => $dateTime,
+                        'tipo_pago' => 'faturar',
+                        'cashier_name' => $first?->caixa?->name ?? ($first?->id_user_caixa ? ($users[$first->id_user_caixa] ?? '---') : '---'),
+                        'unit_name' => $first?->unidade?->tb2_nome ?? '---',
+                        'unit_address' => $first?->unidade?->tb2_endereco,
+                        'unit_cnpj' => $first?->unidade?->tb2_cnpj,
+                        'vale_user_name' => null,
+                        'vale_type' => null,
+                        'payment' => [
+                            'id' => $first?->tb4_id,
+                            'valor_total' => round((float) $items->sum('valor_total'), 2),
+                            'valor_pago' => null,
+                            'troco' => null,
+                            'dois_pgto' => null,
+                            'tipo_pagamento' => 'faturar',
+                        ],
+                        'items' => $items
+                            ->map(function (Venda $item) use ($users) {
+                                return [
+                                    'id' => $item->tb3_id,
+                                    'product_id' => $item->tb1_id,
+                                    'product_name' => $item->produto_nome,
+                                    'quantity' => (int) $item->quantidade,
+                                    'unit_price' => round((float) $item->valor_unitario, 2),
+                                    'subtotal' => round((float) $item->valor_total, 2),
+                                    'comanda' => $item->id_comanda,
+                                    'cashier_name' => $item->id_user_caixa ? ($users[$item->id_user_caixa] ?? null) : null,
+                                    'lanchonete_user_name' => $item->id_lanc ? ($users[$item->id_lanc] ?? null) : null,
+                                ];
+                            })
+                            ->values(),
+                    ],
+                ];
+            })
+            ->sortBy('comanda')
+            ->values();
+
+        return Inertia::render('Reports/ComandasEmAberto', [
+            'rows' => $comandas,
+            'summary' => [
+                'total_amount' => round((float) $comandas->sum('total'), 2),
+                'total_records' => $comandas->count(),
+            ],
             'startDate' => $startDate,
             'endDate' => $endDate,
             'unit' => $selectedUnit,

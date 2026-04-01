@@ -15,6 +15,7 @@ const MENU_OPTIONS = [
     { key: 'reports_sales_period', label: 'Vendas Periodo' },
     { key: 'reports_sales_detailed', label: 'Relatorio Detalhado' },
     { key: 'reports_lanchonete', label: 'Relatorio Lanchonete' },
+    { key: 'reports_comandas_aberto', label: 'Comandas em Aberto' },
     { key: 'reports_vale', label: 'Relatorio Vales' },
     { key: 'reports_refeicao', label: 'Relatorio Refeicao' },
     { key: 'reports_faturar', label: 'Relatorio Faturar' },

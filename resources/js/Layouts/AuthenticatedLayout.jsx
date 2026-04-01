@@ -27,6 +27,7 @@ const DEFAULT_MENU_KEYS = [
     'reports_sales_period',
     'reports_sales_detailed',
     'reports_lanchonete',
+    'reports_comandas_aberto',
     'reports_vale',
     'reports_refeicao',
     'reports_faturar',
