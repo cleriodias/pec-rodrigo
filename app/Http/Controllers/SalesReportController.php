@@ -113,6 +113,13 @@ class SalesReportController extends Controller
                 'route' => 'reports.refeicao',
             ],
             [
+                'key' => 'faturar',
+                'label' => 'Faturar',
+                'description' => 'Cupons com pagamento faturado, agrupados por caixa e loja.',
+                'icon' => 'bi-journal-text',
+                'route' => 'reports.faturar',
+            ],
+            [
                 'key' => 'adiantamentos',
                 'label' => 'Adiantamento',
                 'description' => 'Adiantamentos realizados no periodo.',
@@ -343,6 +350,215 @@ class SalesReportController extends Controller
             'unit' => $selectedUnit,
             'filterUnits' => $filterUnits,
             'selectedUnitId' => $filterUnitId,
+        ]);
+    }
+
+    public function faturar(Request $request): Response
+    {
+        $this->ensureManager($request);
+        [$filterUnitId, $filterUnits, $selectedUnit] = $this->resolveReportUnit($request);
+        [$start, $end, $startDate, $endDate] = $this->resolveDateRange($request);
+
+        $requestedCashierId = $request->query('cashier_id');
+        $filterCashierId = $requestedCashierId !== null && $requestedCashierId !== '' && $requestedCashierId !== 'all'
+            ? (int) $requestedCashierId
+            : null;
+
+        if ($filterCashierId !== null && $filterCashierId <= 0) {
+            $filterCashierId = null;
+        }
+
+        $allowedUnitIds = collect($filterUnits)->pluck('id')->filter()->values();
+
+        $applyBaseSaleFilters = function ($query) use ($filterUnitId, $allowedUnitIds) {
+            if ($filterUnitId) {
+                $query->where('id_unidade', $filterUnitId);
+            } elseif ($allowedUnitIds->isNotEmpty()) {
+                $query->whereIn('id_unidade', $allowedUnitIds);
+            }
+        };
+
+        $cashierPayments = VendaPagamento::query()
+            ->where('tipo_pagamento', 'faturar')
+            ->whereBetween('created_at', [$start, $end])
+            ->with(['vendas' => function ($query) use ($applyBaseSaleFilters) {
+                $query->select('tb3_id', 'tb4_id', 'id_user_caixa', 'id_unidade')
+                    ->orderBy('tb3_id');
+                $applyBaseSaleFilters($query);
+            }])
+            ->whereHas('vendas', function ($query) use ($applyBaseSaleFilters) {
+                $applyBaseSaleFilters($query);
+            })
+            ->get(['tb4_id']);
+
+        $cashierIds = $cashierPayments
+            ->map(fn (VendaPagamento $payment) => optional($payment->vendas->first())->id_user_caixa)
+            ->filter()
+            ->unique()
+            ->values();
+
+        $cashiers = $cashierIds->isNotEmpty()
+            ? User::whereIn('id', $cashierIds)->orderBy('name')->get(['id', 'name'])
+            : collect();
+
+        $cashierOptions = $cashiers
+            ->map(fn (User $cashier) => [
+                'id' => (int) $cashier->id,
+                'name' => $cashier->name,
+            ])
+            ->values();
+
+        if ($filterCashierId && ! $cashierOptions->contains(fn (array $cashier) => $cashier['id'] === $filterCashierId)) {
+            $filterCashierId = null;
+        }
+
+        $payments = VendaPagamento::query()
+            ->with([
+                'vendas' => function ($query) use ($applyBaseSaleFilters, $filterCashierId) {
+                    $query
+                        ->with(['unidade:tb2_id,tb2_nome,tb2_endereco,tb2_cnpj', 'caixa:id,name', 'valeUser:id,name'])
+                        ->orderBy('tb3_id')
+                        ->select([
+                            'tb3_id',
+                            'tb4_id',
+                            'tb1_id',
+                            'produto_nome',
+                            'valor_unitario',
+                            'quantidade',
+                            'valor_total',
+                            'data_hora',
+                            'id_comanda',
+                            'id_unidade',
+                            'id_user_caixa',
+                            'id_user_vale',
+                        ]);
+
+                    $applyBaseSaleFilters($query);
+
+                    if ($filterCashierId) {
+                        $query->where('id_user_caixa', $filterCashierId);
+                    }
+                },
+            ])
+            ->where('tipo_pagamento', 'faturar')
+            ->whereBetween('created_at', [$start, $end])
+            ->whereHas('vendas', function ($query) use ($applyBaseSaleFilters, $filterCashierId) {
+                $applyBaseSaleFilters($query);
+
+                if ($filterCashierId) {
+                    $query->where('id_user_caixa', $filterCashierId);
+                }
+            })
+            ->orderByDesc('tb4_id')
+            ->get([
+                'tb4_id',
+                'valor_total',
+                'tipo_pagamento',
+                'valor_pago',
+                'troco',
+                'dois_pgto',
+                'created_at',
+            ]);
+
+        $receipts = $payments
+            ->map(function (VendaPagamento $payment) {
+                $sales = $payment->vendas->values();
+                $firstSale = $sales->first();
+                $saleDateTime = $firstSale?->data_hora ?? $payment->created_at;
+                $cashierId = $firstSale?->id_user_caixa ? (int) $firstSale->id_user_caixa : null;
+                $unitId = $firstSale?->id_unidade ? (int) $firstSale->id_unidade : null;
+
+                return [
+                    'id' => $payment->tb4_id,
+                    'cashier_id' => $cashierId,
+                    'cashier_name' => $firstSale?->caixa?->name
+                        ?? ($cashierId ? 'Caixa #' . $cashierId : '---'),
+                    'unit_id' => $unitId,
+                    'unit_name' => $firstSale?->unidade?->tb2_nome ?? '---',
+                    'date_time' => $saleDateTime?->toIso8601String(),
+                    'comanda' => $sales->pluck('id_comanda')->filter()->unique()->implode(', '),
+                    'total' => round((float) $payment->valor_total, 2),
+                    'receipt' => [
+                        'id' => $payment->tb4_id,
+                        'total' => round((float) $payment->valor_total, 2),
+                        'date_time' => $saleDateTime?->toIso8601String(),
+                        'tipo_pago' => $payment->tipo_pagamento,
+                        'cashier_name' => $firstSale?->caixa?->name ?? '---',
+                        'unit_name' => $firstSale?->unidade?->tb2_nome ?? '---',
+                        'unit_address' => $firstSale?->unidade?->tb2_endereco,
+                        'unit_cnpj' => $firstSale?->unidade?->tb2_cnpj,
+                        'vale_user_name' => $firstSale?->valeUser?->name,
+                        'vale_type' => null,
+                        'payment' => [
+                            'id' => $payment->tb4_id,
+                            'valor_total' => round((float) $payment->valor_total, 2),
+                            'valor_pago' => $payment->valor_pago !== null ? round((float) $payment->valor_pago, 2) : null,
+                            'troco' => $payment->troco !== null ? round((float) $payment->troco, 2) : null,
+                            'dois_pgto' => $payment->dois_pgto !== null ? round((float) $payment->dois_pgto, 2) : null,
+                            'tipo_pagamento' => $payment->tipo_pagamento,
+                        ],
+                        'items' => $sales
+                            ->map(function (Venda $sale) {
+                                return [
+                                    'id' => $sale->tb3_id,
+                                    'product_id' => $sale->tb1_id,
+                                    'product_name' => $sale->produto_nome,
+                                    'quantity' => (int) $sale->quantidade,
+                                    'unit_price' => round((float) $sale->valor_unitario, 2),
+                                    'subtotal' => round((float) $sale->valor_total, 2),
+                                    'comanda' => $sale->id_comanda,
+                                ];
+                            })
+                            ->values(),
+                    ],
+                ];
+            })
+            ->values();
+
+        $rows = $receipts
+            ->groupBy(function (array $receipt) {
+                return ($receipt['cashier_id'] ?? 'none') . '-' . ($receipt['unit_id'] ?? 'none');
+            })
+            ->map(function (Collection $groupedReceipts, string $groupKey) {
+                $first = $groupedReceipts->first();
+
+                return [
+                    'row_key' => $groupKey,
+                    'cashier_id' => $first['cashier_id'],
+                    'cashier_name' => $first['cashier_name'],
+                    'unit_id' => $first['unit_id'],
+                    'unit_name' => $first['unit_name'],
+                    'total' => round((float) $groupedReceipts->sum('total'), 2),
+                    'records_count' => $groupedReceipts->count(),
+                    'receipts' => $groupedReceipts
+                        ->map(function (array $receipt) {
+                            return [
+                                'id' => $receipt['id'],
+                                'date_time' => $receipt['date_time'],
+                                'comanda' => $receipt['comanda'],
+                                'total' => $receipt['total'],
+                                'receipt' => $receipt['receipt'],
+                            ];
+                        })
+                        ->values(),
+                ];
+            })
+            ->sortByDesc('total')
+            ->values();
+
+        return Inertia::render('Reports/Faturar', [
+            'rows' => $rows,
+            'summary' => [
+                'total_amount' => round((float) $receipts->sum('total'), 2),
+                'total_records' => $receipts->count(),
+            ],
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'unit' => $selectedUnit,
+            'filterUnits' => $filterUnits,
+            'cashiers' => $cashierOptions,
+            'selectedUnitId' => $filterUnitId,
+            'selectedCashierId' => $filterCashierId,
         ]);
     }
 

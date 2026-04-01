@@ -29,6 +29,7 @@ const DEFAULT_MENU_KEYS = [
     'reports_lanchonete',
     'reports_vale',
     'reports_refeicao',
+    'reports_faturar',
     'reports_adiantamentos',
     'reports_fornecedores',
     'supplier_disputes',

@@ -37,6 +37,7 @@ const SECTIONS = [
             { label: 'Relatorio Lanchonete', icon: 'bi-cup-hot', href: routeTo('reports.lanchonete') },
             { label: 'Relatorio Vales', icon: 'bi-ticket-perforated', href: routeTo('reports.vale') },
             { label: 'Relatorio Refeicao', icon: 'bi-cup-straw', href: routeTo('reports.refeicao') },
+            { label: 'Relatorio Faturar', icon: 'bi-journal-text', href: routeTo('reports.faturar') },
             { label: 'Relatorio Adiantamentos', icon: 'bi-wallet2', href: routeTo('reports.adiantamentos') },
             { label: 'Relatorio Fornecedores', icon: 'bi-truck', href: routeTo('reports.fornecedores') },
             { label: 'Relatorio Gastos', icon: 'bi-receipt', href: routeTo('reports.gastos') },

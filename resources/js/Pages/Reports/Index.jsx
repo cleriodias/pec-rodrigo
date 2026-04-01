@@ -66,6 +66,13 @@ const fallbackReports = [
         route: 'reports.refeicao',
     },
     {
+        key: 'faturar',
+        label: 'Faturar',
+        description: 'Cupons com pagamento faturado por caixa e loja.',
+        icon: 'bi-journal-text',
+        route: 'reports.faturar',
+    },
+    {
         key: 'adiantamentos',
         label: 'Adiantamento',
         description: 'Adiantamentos realizados no periodo.',
