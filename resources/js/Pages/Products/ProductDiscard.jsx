@@ -39,6 +39,7 @@ export default function ProductDiscard({ recentDiscards = [] }) {
     const { data, setData, post, processing, errors, reset } = useForm({
         product_id: '',
         quantity: '',
+        unit_price: '',
     });
 
     useEffect(() => {
@@ -108,12 +109,10 @@ export default function ProductDiscard({ recentDiscards = [] }) {
         setSearchTerm(product.tb1_nome);
         setSuggestions([]);
         setData('product_id', product.tb1_id);
+        setData('unit_price', Number(product.tb1_vlr_venda ?? 0).toFixed(2));
     };
 
-    const unitPrice = useMemo(
-        () => Number(selectedProduct?.tb1_vlr_venda ?? 0),
-        [selectedProduct],
-    );
+    const unitPrice = useMemo(() => Number(data.unit_price || 0), [data.unit_price]);
 
     const quantityValue = useMemo(() => Number(data.quantity || 0), [data.quantity]);
 
@@ -145,7 +144,7 @@ export default function ProductDiscard({ recentDiscards = [] }) {
             preserveScroll: true,
             onSuccess: () => {
                 setConfirmModalOpen(false);
-                reset('quantity');
+                reset('quantity', 'unit_price');
                 setSelectedProduct(null);
                 setSearchTerm('');
                 setSuggestions([]);
@@ -245,9 +244,16 @@ export default function ProductDiscard({ recentDiscards = [] }) {
                                     <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
                                         Valor unitario
                                     </label>
-                                    <div className="mt-1 flex min-h-[42px] items-center rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 text-sm font-semibold text-gray-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100">
-                                        {formatCurrency(unitPrice)}
-                                    </div>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={data.unit_price}
+                                        onChange={(event) => setData('unit_price', event.target.value)}
+                                        className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                                        placeholder="Informe o valor unitario"
+                                    />
+                                    <InputError message={errors.unit_price} className="mt-2" />
                                 </div>
 
                                 <div>

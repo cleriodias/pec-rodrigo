@@ -888,10 +888,13 @@ class SalesReportController extends Controller
                 'user_id',
                 'unit_id',
                 'quantity',
+                'unit_price',
                 'created_at',
             ])
             ->map(function (ProductDiscard $discard) {
-                $unitPrice = (float) ($discard->product?->tb1_vlr_venda ?? 0);
+                $unitPrice = $discard->unit_price !== null
+                    ? (float) $discard->unit_price
+                    : (float) ($discard->product?->tb1_vlr_venda ?? 0);
                 $quantity = (float) $discard->quantity;
 
                 return [
@@ -1202,7 +1205,9 @@ class SalesReportController extends Controller
             ->map(function ($group) {
                 $quantity = $group->sum('quantity');
                 $value = $group->sum(function (ProductDiscard $discard) {
-                    $price = (float) ($discard->product->tb1_vlr_venda ?? 0);
+                    $price = $discard->unit_price !== null
+                        ? (float) $discard->unit_price
+                        : (float) ($discard->product->tb1_vlr_venda ?? 0);
 
                     return (float) $discard->quantity * $price;
                 });
@@ -1216,13 +1221,16 @@ class SalesReportController extends Controller
         $discardDetails = $discardEntries
             ->take(100)
             ->map(function (ProductDiscard $discard) {
-                $price = (float) ($discard->product->tb1_vlr_venda ?? 0);
+                $price = $discard->unit_price !== null
+                    ? (float) $discard->unit_price
+                    : (float) ($discard->product->tb1_vlr_venda ?? 0);
                 $value = (float) $discard->quantity * $price;
 
                 return [
                     'id' => $discard->id,
                     'user_id' => $discard->user_id,
                     'quantity' => round((float) $discard->quantity, 3),
+                    'unit_price' => round($price, 2),
                     'value' => round($value, 2),
                     'product' => $discard->product
                         ? [
