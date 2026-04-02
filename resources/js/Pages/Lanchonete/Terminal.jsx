@@ -239,8 +239,8 @@ export default function Terminal() {
                 body: JSON.stringify({
                     product_id: id,
                     quantity: 1,
-                    barcode,
-                    unit_price: unitPrice,
+                    ...(barcode ? { barcode } : {}),
+                    ...(unitPrice !== null ? { unit_price: unitPrice } : {}),
                     access_user_id: accessUser?.id ?? auth?.user?.id,
                 }),
             });

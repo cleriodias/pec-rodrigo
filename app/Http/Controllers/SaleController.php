@@ -512,7 +512,7 @@ class SaleController extends Controller
             ], 422);
         }
 
-        $explicitUnitPrice = array_key_exists('unit_price', $validated)
+        $explicitUnitPrice = array_key_exists('unit_price', $validated) && $validated['unit_price'] !== null
             ? round((float) $validated['unit_price'], 2)
             : null;
         $price = (float) ($weightedBarcode['unit_price'] ?? $explicitUnitPrice ?? $product->tb1_vlr_venda);
