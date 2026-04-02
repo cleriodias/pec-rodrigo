@@ -18,58 +18,19 @@ class SaleController extends Controller
 {
     public function openComandas(Request $request): JsonResponse
     {
-        $unitId = $this->resolveActiveUnitId($request);
-
-        $baseQuery = Venda::query()
-            ->whereNotNull('id_comanda')
-            ->where('status', 0);
-
-        if ($unitId) {
-            $baseQuery->where('id_unidade', $unitId);
-        }
-
-        $open = (clone $baseQuery)
-            ->selectRaw('COUNT(DISTINCT id_comanda) as total_comandas, COALESCE(SUM(valor_total), 0) as total_amount')
-            ->first();
-
-        $comandas = (clone $baseQuery)
-            ->selectRaw('id_comanda, COALESCE(SUM(valor_total), 0) as total_amount')
-            ->groupBy('id_comanda')
-            ->orderBy('id_comanda')
-            ->get()
-            ->map(function ($row) {
-                return [
-                    'codigo' => (int) $row->id_comanda,
-                    'total' => (float) $row->total_amount,
-                ];
-            });
-
-        return response()->json([
-            'total_comandas' => (int) ($open->total_comandas ?? 0),
-            'total_amount' => (float) ($open->total_amount ?? 0),
-            'comandas' => $comandas,
-        ]);
+        return response()->json($this->buildOpenComandasPayload($request));
     }
 
     public function restrictions(Request $request): JsonResponse
     {
-        $user = $request->user();
+        return response()->json($this->buildRestrictionsPayload($request));
+    }
 
-        if (! $user || (int) $user->funcao !== 3) {
-            return response()->json([
-                'requires_closure' => false,
-                'pending_closure_date' => null,
-                'pending_comandas' => [],
-            ]);
-        }
-
-        $unit = $request->session()->get('active_unit');
-        $restrictions = $this->resolveCashierRestrictions($user, $unit);
-
+    public function dashboardStatus(Request $request): JsonResponse
+    {
         return response()->json([
-            'requires_closure' => $restrictions['requires_closure'],
-            'pending_closure_date' => $restrictions['pending_closure_date'],
-            'pending_comandas' => $restrictions['pending_comandas'],
+            ...$this->buildOpenComandasPayload($request),
+            ...$this->buildRestrictionsPayload($request),
         ]);
     }
 
@@ -654,6 +615,65 @@ class SaleController extends Controller
             'pending_comandas' => $pendingComandas,
             'pending_closure_date' => $pendingClosureDate ? $pendingClosureDate->toDateString() : null,
             'requires_closure' => $pendingClosureDate !== null,
+        ];
+    }
+
+    private function buildOpenComandasPayload(Request $request): array
+    {
+        $unitId = $this->resolveActiveUnitId($request);
+
+        $baseQuery = Venda::query()
+            ->whereNotNull('id_comanda')
+            ->where('status', 0);
+
+        if ($unitId) {
+            $baseQuery->where('id_unidade', $unitId);
+        }
+
+        $open = (clone $baseQuery)
+            ->selectRaw('COUNT(DISTINCT id_comanda) as total_comandas, COALESCE(SUM(valor_total), 0) as total_amount')
+            ->first();
+
+        $comandas = (clone $baseQuery)
+            ->selectRaw('id_comanda, COALESCE(SUM(valor_total), 0) as total_amount')
+            ->groupBy('id_comanda')
+            ->orderBy('id_comanda')
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'codigo' => (int) $row->id_comanda,
+                    'total' => (float) $row->total_amount,
+                ];
+            })
+            ->values()
+            ->all();
+
+        return [
+            'total_comandas' => (int) ($open->total_comandas ?? 0),
+            'total_amount' => (float) ($open->total_amount ?? 0),
+            'comandas' => $comandas,
+        ];
+    }
+
+    private function buildRestrictionsPayload(Request $request): array
+    {
+        $user = $request->user();
+
+        if (! $user || (int) $user->funcao !== 3) {
+            return [
+                'requires_closure' => false,
+                'pending_closure_date' => null,
+                'pending_comandas' => [],
+            ];
+        }
+
+        $unit = $request->session()->get('active_unit');
+        $restrictions = $this->resolveCashierRestrictions($user, $unit);
+
+        return [
+            'requires_closure' => $restrictions['requires_closure'],
+            'pending_closure_date' => $restrictions['pending_closure_date'],
+            'pending_comandas' => $restrictions['pending_comandas'],
         ];
     }
 

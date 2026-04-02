@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Models\CashierClosure;
+use App\Models\OnlineUser;
 use App\Models\Unidade;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -49,6 +50,16 @@ class AuthenticatedSessionController extends Controller
         $unitId = (int) $request->input('unit_id');
         $user = $request->user();
         $funcaoOriginal = $user->funcao_original ?? $user->funcao;
+
+        if (in_array((int) $funcaoOriginal, [5, 6], true)) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            throw ValidationException::withMessages([
+                'username' => 'Este perfil nao possui acesso ao sistema.',
+            ]);
+        }
 
         if ((int) $funcaoOriginal === 3) {
             $closedToday = CashierClosure::where('user_id', $user->id)
@@ -101,6 +112,10 @@ class AuthenticatedSessionController extends Controller
      */
     public function destroy(Request $request): RedirectResponse
     {
+        OnlineUser::query()
+            ->where('session_id', $request->session()->getId())
+            ->delete();
+
         Auth::guard('web')->logout();
 
         $request->session()->invalidate();

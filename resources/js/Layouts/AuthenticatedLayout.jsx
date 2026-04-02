@@ -3,6 +3,7 @@ import Dropdown from '@/Components/Dropdown';
 import NavLink from '@/Components/NavLink';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink';
 import { Link, router, usePage } from '@inertiajs/react';
+import axios from 'axios';
 import { useEffect, useMemo, useState } from 'react';
 
 const MenuLabel = ({ icon, text, attention = false }) => (
@@ -50,6 +51,7 @@ const DEFAULT_MENU_KEYS = [
     'salary_advances',
     'expenses',
     'support_tickets',
+    'online_users',
     'notices',
     'settings',
     'lanchonete_terminal',
@@ -86,6 +88,8 @@ export default function AuthenticatedLayout({ header, headerClassName = '', chil
         typeof route === 'function' && route().has && route().has('lanchonete.terminal');
     const hasHojeRoute =
         typeof route === 'function' && route().has && route().has('reports.hoje');
+    const hasOnlineRoute =
+        typeof route === 'function' && route().has && route().has('online.index');
 
     const [showingNavigationDropdown, setShowingNavigationDropdown] =
         useState(false);
@@ -140,6 +144,36 @@ export default function AuthenticatedLayout({ header, headerClassName = '', chil
         }
     }, []);
 
+    useEffect(() => {
+        if (
+            typeof window === 'undefined' ||
+            typeof route !== 'function' ||
+            !hasOnlineRoute ||
+            !user ||
+            ![0, 1, 2, 3, 4].includes(effectiveRole)
+        ) {
+            return undefined;
+        }
+
+        let cancelled = false;
+
+        const sendHeartbeat = () => {
+            axios.post(route('online.heartbeat')).catch(() => {
+                if (!cancelled) {
+                    // Mantem a UI silenciosa para nao poluir a navegacao em caso de falha temporaria.
+                }
+            });
+        };
+
+        sendHeartbeat();
+        const intervalId = window.setInterval(sendHeartbeat, 45000);
+
+        return () => {
+            cancelled = true;
+            window.clearInterval(intervalId);
+        };
+    }, [effectiveRole, hasOnlineRoute, user]);
+
     const hasMenuAccess = useMemo(() => {
         const defaultAllow = new Set(DEFAULT_MENU_KEYS);
 
@@ -154,6 +188,11 @@ export default function AuthenticatedLayout({ header, headerClassName = '', chil
             return Array.isArray(allowed) ? allowed.includes(key) : defaultAllow.has(key);
         };
     }, [menuAccessConfig, effectiveRole]);
+    const canSeeOnline =
+        user &&
+        [0, 1, 2, 3, 4].includes(effectiveRole) &&
+        hasOnlineRoute &&
+        hasMenuAccess('online_users');
 
     const orderMap = useMemo(() => {
         if (!menuOrderConfig || !Array.isArray(menuOrderConfig)) {
@@ -445,6 +484,11 @@ export default function AuthenticatedLayout({ header, headerClassName = '', chil
                                         <Dropdown.Link href={route('profile.edit')}>
                                             <MenuLabel icon="bi bi-person-circle" text="Perfil" />
                                         </Dropdown.Link>
+                                        {canSeeOnline && (
+                                            <Dropdown.Link href={route('online.index')}>
+                                                <MenuLabel icon="bi bi-broadcast-pin" text="On-Line" />
+                                            </Dropdown.Link>
+                                        )}
                                         {dropdownMenuItems.map((item) => (
                                             <span key={item.key}>{item.node}</span>
                                         ))}
@@ -540,6 +584,14 @@ export default function AuthenticatedLayout({ header, headerClassName = '', chil
                                 >
                                     Perfil
                                 </ResponsiveNavLink>
+                                {canSeeOnline && (
+                                    <ResponsiveNavLink
+                                        href={route('online.index')}
+                                        active={route().current('online.index')}
+                                    >
+                                        On-Line
+                                    </ResponsiveNavLink>
+                                )}
                                 {dropdownMenuItems.map((item) => (
                                     <div key={item.key}>{item.node}</div>
                                 ))}
