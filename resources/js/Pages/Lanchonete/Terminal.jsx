@@ -2,6 +2,11 @@ import { Head, Link, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import { useEffect, useRef, useState } from 'react';
 
+const numericRegex = /^\d+$/;
+const BARCODE_MIN_LENGTH = 5;
+const WEIGHTED_BARCODE_PREFIX = '2';
+const WEIGHTED_BARCODE_LENGTH = 13;
+
 const StepCard = ({ title, description, children }) => (
     <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="mb-4">
@@ -11,6 +16,54 @@ const StepCard = ({ title, description, children }) => (
         {children}
     </div>
 );
+
+const isBarcodeTerm = (value) => {
+    const term = String(value ?? '').trim();
+
+    return numericRegex.test(term) && term.length >= BARCODE_MIN_LENGTH;
+};
+
+const parseWeightedBarcode = (value) => {
+    const barcode = String(value ?? '').trim();
+
+    if (
+        !numericRegex.test(barcode) ||
+        !barcode.startsWith(WEIGHTED_BARCODE_PREFIX) ||
+        barcode.length !== WEIGHTED_BARCODE_LENGTH
+    ) {
+        return null;
+    }
+
+    const productId = Number.parseInt(barcode.slice(1, 5), 10);
+    const encodedValue = barcode.slice(7, 12);
+    const unitPrice = Number.parseInt(encodedValue, 10) / 100;
+
+    if (!Number.isFinite(productId) || productId <= 0 || !Number.isFinite(unitPrice)) {
+        return null;
+    }
+
+    return {
+        barcode,
+        productId,
+        unitPrice,
+    };
+};
+
+const normalizeComandaItem = (item) => {
+    const price = Number(item?.price ?? 0);
+    const productId = Number(item?.product_id ?? item?.id ?? 0);
+    const lineId =
+        String(item?.line_id ?? '').trim() || `product-${productId}-price-${price.toFixed(2)}`;
+
+    return {
+        ...item,
+        id: lineId,
+        line_id: lineId,
+        product_id: productId,
+        price,
+        quantity: Number(item?.quantity ?? 0),
+    };
+};
 
 export default function Terminal() {
     const pageProps = usePage().props;
@@ -131,7 +184,7 @@ export default function Terminal() {
                     return;
                 }
                 const data = await resp.json();
-                setComandaItems(data?.items ?? []);
+                setComandaItems(Array.isArray(data?.items) ? data.items.map(normalizeComandaItem) : []);
                 goToStep(3);
             })
             .catch(() => {
@@ -162,13 +215,13 @@ export default function Terminal() {
             const resp = await fetch(route('sales.comandas.items', { codigo }));
             if (!resp.ok) throw new Error();
             const data = await resp.json();
-            setComandaItems(data?.items ?? []);
+            setComandaItems(Array.isArray(data?.items) ? data.items.map(normalizeComandaItem) : []);
         } catch (err) {
             // silencioso: lista não atualizada
         }
     };
 
-    const addItemFromProduct = async (product) => {
+    const addItemFromProduct = async (product, { unitPrice = null, barcode = null } = {}) => {
         if (!product || !comanda) {
             setSearchError('Informe a comanda antes de adicionar itens.');
             return;
@@ -186,6 +239,8 @@ export default function Terminal() {
                 body: JSON.stringify({
                     product_id: id,
                     quantity: 1,
+                    barcode,
+                    unit_price: unitPrice,
                     access_user_id: accessUser?.id ?? auth?.user?.id,
                 }),
             });
@@ -197,7 +252,7 @@ export default function Terminal() {
             }
 
             const data = await resp.json();
-            setComandaItems(data?.items ?? []);
+            setComandaItems(Array.isArray(data?.items) ? data.items.map(normalizeComandaItem) : []);
             setSearch('');
             setSuggestions([]);
             setSearchError('');
@@ -208,26 +263,52 @@ export default function Terminal() {
     };
 
     const fetchProductAndAdd = (term) => {
-        if (!term) return;
+        const normalizedLookupTerm = String(term ?? '').trim();
+
+        if (!normalizedLookupTerm) return;
+
+        const weightedBarcodeData = parseWeightedBarcode(normalizedLookupTerm);
+        const lookupIsBarcode = isBarcodeTerm(normalizedLookupTerm);
         setSearchLoading(true);
         setSearchError('');
-        fetch(route('products.search', { q: term }), {
-            headers: { Accept: 'application/json' },
-        })
+        fetch(
+            route('products.search', {
+                q: weightedBarcodeData ? weightedBarcodeData.productId : normalizedLookupTerm,
+            }),
+            {
+                headers: { Accept: 'application/json' },
+            },
+        )
             .then((resp) => {
                 if (!resp.ok) throw new Error();
                 return resp.json();
             })
             .then((data) => {
-                const product =
-                    data.find((p) => String(p.tb1_id) === String(term)) ||
-                    data.find((p) => (p.tb1_nome ?? '').toLowerCase() === term.toLowerCase()) ||
-                    data[0];
+                const product = data.find((item) => {
+                    if (weightedBarcodeData) {
+                        return Number(item.tb1_id) === weightedBarcodeData.productId;
+                    }
+
+                    if (lookupIsBarcode) {
+                        return String(item.tb1_codbar ?? '').trim() === normalizedLookupTerm;
+                    }
+
+                    return Number(item.tb1_id) === Number(normalizedLookupTerm);
+                })
+                    ?? data.find(
+                        (item) =>
+                            String(item.tb1_nome ?? '').toLowerCase() === normalizedLookupTerm.toLowerCase(),
+                    )
+                    ?? data[0];
+
                 if (!product) {
                     setSearchError('Produto nao encontrado.');
                     return;
                 }
-                addItemFromProduct(product);
+                addItemFromProduct(product, {
+                    unitPrice: weightedBarcodeData?.unitPrice ?? null,
+                    barcode: weightedBarcodeData?.barcode ?? null,
+                });
             })
             .catch(() => setSearchError('Falha ao buscar produto.'))
             .finally(() => setSearchLoading(false));
@@ -249,7 +330,10 @@ export default function Terminal() {
 
         searchDebounce.current = setTimeout(() => {
             setSearchLoading(true);
-            fetch(route('products.search', { q: term }), {
+            const trimmedTerm = term.trim();
+            const weightedBarcodeData = parseWeightedBarcode(trimmedTerm);
+
+            fetch(route('products.search', { q: weightedBarcodeData ? weightedBarcodeData.productId : trimmedTerm }), {
                 headers: { Accept: 'application/json' },
             })
                 .then((resp) => {
@@ -293,20 +377,20 @@ export default function Terminal() {
                 return;
             }
             const data = await resp.json();
-            setComandaItems(data?.items ?? []);
+            setComandaItems(Array.isArray(data?.items) ? data.items.map(normalizeComandaItem) : []);
         } catch (err) {
             setSearchError('Falha ao atualizar item.');
         }
     };
 
     const incrementItem = (id) => {
-        const current = comandaItems.find((item) => item.id === id);
+        const current = comandaItems.find((item) => item.line_id === id);
         const next = (current?.quantity ?? 0) + 1;
         updateQuantity(id, next);
     };
 
     const decrementItem = (id) => {
-        const current = comandaItems.find((item) => item.id === id);
+        const current = comandaItems.find((item) => item.line_id === id);
         const next = Math.max(0, (current?.quantity ?? 0) - 1);
         updateQuantity(id, next);
     };
@@ -452,7 +536,7 @@ export default function Terminal() {
                                 <input
                                     ref={searchRef}
                                     type="text"
-                                    placeholder="Digite nome, codigo ou ID do produto"
+                                    placeholder="Digite nome, codigo de barras ou ID do produto"
                                     value={search}
                                     onChange={handleSearchChange}
                                     className="w-full rounded-lg border border-green-300 bg-green-50 px-4 py-3 text-lg font-semibold text-green-800 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-200"
@@ -465,7 +549,7 @@ export default function Terminal() {
                                         <ul className="max-h-60 overflow-auto divide-y divide-gray-100">
                                             {suggestions.map((item) => (
                                                 <li
-                                                    key={item.tb1_id}
+                                                    key={`${item.tb1_id}-${Number(item.tb1_vlr_venda ?? 0).toFixed(2)}`}
                                                     className="flex cursor-pointer items-center justify-between px-4 py-2 text-sm hover:bg-green-50"
                                                     onClick={() => addItemFromProduct(item)}
                                                 >
@@ -518,11 +602,11 @@ export default function Terminal() {
                             ) : (
                                 <ul className="mt-3 divide-y divide-gray-200">
                                     {comandaItems.map((item) => (
-                                        <li key={item.id} className="flex items-center justify-between py-2 text-sm">
+                                        <li key={item.line_id} className="flex items-center justify-between py-2 text-sm">
                                             <div>
                                                 <p className="font-semibold text-gray-800">{item.name}</p>
                                                 <p className="text-gray-500">
-                                                    R$ {Number(item.price).toFixed(2)}
+                                                    ID: {item.product_id} • R$ {Number(item.price).toFixed(2)}
                                                 </p>
                                                 {item.lanc_user_name && (
                                                     <p className="text-xs font-semibold text-gray-600">
@@ -533,7 +617,7 @@ export default function Terminal() {
                                             <div className="flex items-center gap-2">
                                                 <button
                                                     type="button"
-                                                    onClick={() => decrementItem(item.id)}
+                                                    onClick={() => decrementItem(item.line_id)}
                                                     className="h-8 w-8 rounded-full border border-gray-300 text-gray-700 hover:bg-gray-100"
                                                 >
                                                     -
@@ -543,7 +627,7 @@ export default function Terminal() {
                                                 </span>
                                                 <button
                                                     type="button"
-                                                    onClick={() => incrementItem(item.id)}
+                                                    onClick={() => incrementItem(item.line_id)}
                                                     className="h-8 w-8 rounded-full border border-gray-300 text-gray-700 hover:bg-gray-100"
                                                 >
                                                     +
@@ -553,7 +637,7 @@ export default function Terminal() {
                                                 </span>
                                                 <button
                                                     type="button"
-                                                    onClick={() => removeItem(item.id)}
+                                                    onClick={() => removeItem(item.line_id)}
                                                     className="text-xs font-semibold text-red-600 hover:text-red-700"
                                                 >
                                                     Remover

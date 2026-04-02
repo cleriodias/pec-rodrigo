@@ -488,6 +488,8 @@ class SaleController extends Controller
         $validated = $request->validate([
             'product_id' => ['required', 'integer', 'exists:tb1_produto,tb1_id'],
             'quantity' => ['nullable', 'integer', 'min:1', 'max:1000'],
+            'barcode' => ['nullable', 'string', 'max:64'],
+            'unit_price' => ['nullable', 'numeric', 'min:0'],
             'access_user_id' => ['required', 'integer', 'exists:users,id'],
         ]);
 
@@ -497,14 +499,31 @@ class SaleController extends Controller
 
         $product = Produto::select('tb1_id', 'tb1_nome', 'tb1_vlr_venda')->findOrFail($validated['product_id']);
         $quantity = (int) ($validated['quantity'] ?? 1);
-        $price = (float) $product->tb1_vlr_venda;
+        $barcode = trim((string) ($validated['barcode'] ?? ''));
+        $weightedBarcode = $barcode !== '' ? $this->parseWeightedBarcode($barcode) : null;
+
+        if ($barcode !== '' && $weightedBarcode === null) {
+            return response()->json(['message' => 'Codigo de barras da balanca invalido.'], 422);
+        }
+
+        if ($weightedBarcode !== null && $weightedBarcode['product_id'] !== (int) $product->tb1_id) {
+            return response()->json([
+                'message' => 'O codigo de barras da balanca nao corresponde ao produto informado.',
+            ], 422);
+        }
+
+        $explicitUnitPrice = array_key_exists('unit_price', $validated)
+            ? round((float) $validated['unit_price'], 2)
+            : null;
+        $price = (float) ($weightedBarcode['unit_price'] ?? $explicitUnitPrice ?? $product->tb1_vlr_venda);
         $total = round($price * $quantity, 2);
 
-        // Upsert para manter um registro por produto/comanda em aberto.
+        // Mantem um registro por produto/preco/comanda em aberto.
         $existing = Venda::query()
             ->where('id_comanda', $codigo)
             ->where('id_unidade', $unitId)
             ->where('tb1_id', $product->tb1_id)
+            ->where('valor_unitario', $price)
             ->where('status', 0)
             ->first();
 
@@ -543,7 +562,7 @@ class SaleController extends Controller
         ]);
     }
 
-    public function updateComandaItem(Request $request, int $codigo, int $productId): JsonResponse
+    public function updateComandaItem(Request $request, int $codigo, string $lineKey): JsonResponse
     {
         $unitId = $this->resolveActiveUnitId($request);
         $validated = $request->validate([
@@ -551,10 +570,17 @@ class SaleController extends Controller
             'access_user_id' => ['nullable', 'integer', 'exists:users,id'],
         ]);
 
+        $lineData = $this->parseSaleItemKey($lineKey);
+
+        if ($lineData === null) {
+            return response()->json(['message' => 'Item invalido na comanda.'], 422);
+        }
+
         $record = Venda::query()
             ->where('id_comanda', $codigo)
             ->where('id_unidade', $unitId)
-            ->where('tb1_id', $productId)
+            ->where('tb1_id', $lineData['product_id'])
+            ->where('valor_unitario', $lineData['unit_price'])
             ->where('status', 0)
             ->first();
 
@@ -766,6 +792,27 @@ class SaleController extends Controller
         $normalizedPrice = number_format((float) ($unitPrice ?? 0), 2, '.', '');
 
         return sprintf('product-%d-price-%s', $productId, $normalizedPrice);
+    }
+
+    private function parseSaleItemKey(?string $itemKey): ?array
+    {
+        $itemKey = trim((string) $itemKey);
+
+        if (! preg_match('/^product-(\d+)-price-(\d+\.\d{2})$/', $itemKey, $matches)) {
+            return null;
+        }
+
+        $productId = (int) $matches[1];
+        $unitPrice = round((float) $matches[2], 2);
+
+        if ($productId <= 0) {
+            return null;
+        }
+
+        return [
+            'product_id' => $productId,
+            'unit_price' => $unitPrice,
+        ];
     }
 
     private function collapseSaleItems(array $items): array
