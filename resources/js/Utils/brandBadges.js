@@ -3,55 +3,67 @@ const BADGE_BASE_CLASSNAME =
 
 const UNIT_STYLE_MAP = {
     'SETOR 10': {
-        className:
-            `${BADGE_BASE_CLASSNAME} border-violet-800 bg-violet-700 text-white hover:border-violet-900 hover:text-white`,
+        backgroundColor: '#6d28d9',
+        borderColor: '#5b21b6',
+        color: '#ffffff',
     },
     'SETOR 1': {
-        className:
-            `${BADGE_BASE_CLASSNAME} border-sky-800 bg-sky-700 text-white hover:border-sky-900 hover:text-white`,
+        backgroundColor: '#0369a1',
+        borderColor: '#075985',
+        color: '#ffffff',
     },
     'BARRAGEM 1': {
-        className:
-            `${BADGE_BASE_CLASSNAME} border-emerald-800 bg-emerald-700 text-white hover:border-emerald-900 hover:text-white`,
+        backgroundColor: '#047857',
+        borderColor: '#065f46',
+        color: '#ffffff',
     },
     default: {
-        className:
-            `${BADGE_BASE_CLASSNAME} border-slate-800 bg-slate-700 text-white hover:border-slate-900 hover:text-white`,
+        backgroundColor: '#475569',
+        borderColor: '#334155',
+        color: '#ffffff',
     },
 };
 
 const ROLE_STYLE_MAP = {
     MASTER: {
-        className:
-            `${BADGE_BASE_CLASSNAME} border-amber-400 bg-amber-50 text-amber-800 hover:border-amber-500 hover:text-amber-900`,
+        backgroundColor: '#d97706',
+        borderColor: '#b45309',
+        color: '#ffffff',
     },
     GERENTE: {
-        className:
-            `${BADGE_BASE_CLASSNAME} border-blue-400 bg-blue-50 text-blue-800 hover:border-blue-500 hover:text-blue-900`,
+        backgroundColor: '#2563eb',
+        borderColor: '#1d4ed8',
+        color: '#ffffff',
     },
-    'SUB-GERENTE': {
-        className:
-            `${BADGE_BASE_CLASSNAME} border-cyan-400 bg-cyan-50 text-cyan-800 hover:border-cyan-500 hover:text-cyan-900`,
+    'SUB GERENTE': {
+        backgroundColor: '#0891b2',
+        borderColor: '#0e7490',
+        color: '#ffffff',
     },
     CAIXA: {
-        className:
-            `${BADGE_BASE_CLASSNAME} border-indigo-400 bg-indigo-50 text-indigo-800 hover:border-indigo-500 hover:text-indigo-900`,
+        backgroundColor: '#4f46e5',
+        borderColor: '#4338ca',
+        color: '#ffffff',
     },
     LANCHONETE: {
-        className:
-            `${BADGE_BASE_CLASSNAME} border-rose-400 bg-rose-50 text-rose-800 hover:border-rose-500 hover:text-rose-900`,
+        backgroundColor: '#e11d48',
+        borderColor: '#be123c',
+        color: '#ffffff',
     },
     FUNCIONARIO: {
-        className:
-            `${BADGE_BASE_CLASSNAME} border-slate-400 bg-slate-50 text-slate-700 hover:border-slate-500 hover:text-slate-800`,
+        backgroundColor: '#475569',
+        borderColor: '#334155',
+        color: '#ffffff',
     },
     CLIENTE: {
-        className:
-            `${BADGE_BASE_CLASSNAME} border-lime-400 bg-lime-50 text-lime-800 hover:border-lime-500 hover:text-lime-900`,
+        backgroundColor: '#65a30d',
+        borderColor: '#4d7c0f',
+        color: '#ffffff',
     },
     default: {
-        className:
-            `${BADGE_BASE_CLASSNAME} border-slate-400 bg-slate-50 text-slate-700 hover:border-slate-500 hover:text-slate-800`,
+        backgroundColor: '#475569',
+        borderColor: '#334155',
+        color: '#ffffff',
     },
 };
 
@@ -65,7 +77,13 @@ const normalizeKey = (value) =>
         .toUpperCase();
 
 export const getUserNameBadgeClassName = () =>
-    `${BADGE_BASE_CLASSNAME} border-gray-300 bg-white text-black hover:border-indigo-400 hover:text-black`;
+    `${BADGE_BASE_CLASSNAME} border-slate-900 bg-slate-900 text-white hover:border-slate-800 hover:text-white`;
+
+export const getUnitBadgeClassName = () =>
+    `${BADGE_BASE_CLASSNAME} whitespace-nowrap hover:text-white`;
+
+export const getRoleBadgeClassName = () =>
+    `${BADGE_BASE_CLASSNAME} whitespace-nowrap hover:text-white`;
 
 export const formatUnitBadgeLabel = (value) =>
     normalizeKey(value).replace(/\s+/g, '-') || 'SEM-LOJA';
@@ -84,8 +102,8 @@ export const formatRoleBadgeLabel = (value) => {
     return normalized || '---';
 };
 
-export const getUnitBadgeClassName = (value) =>
-    (UNIT_STYLE_MAP[normalizeKey(value)] ?? UNIT_STYLE_MAP.default).className;
+export const getUnitBadgeStyle = (value) =>
+    UNIT_STYLE_MAP[normalizeKey(value)] ?? UNIT_STYLE_MAP.default;
 
-export const getRoleBadgeClassName = (value) =>
-    (ROLE_STYLE_MAP[normalizeKey(value)] ?? ROLE_STYLE_MAP.default).className;
+export const getRoleBadgeStyle = (value) =>
+    ROLE_STYLE_MAP[normalizeKey(value)] ?? ROLE_STYLE_MAP.default;

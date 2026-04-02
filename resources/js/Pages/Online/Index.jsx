@@ -4,7 +4,9 @@ import {
     formatRoleBadgeLabel,
     formatUnitBadgeLabel,
     getRoleBadgeClassName,
+    getRoleBadgeStyle,
     getUnitBadgeClassName,
+    getUnitBadgeStyle,
     getUserNameBadgeClassName,
 } from '@/Utils/brandBadges';
 import { formatBrazilDateTime } from '@/Utils/date';
@@ -353,16 +355,18 @@ export default function OnlineIndex({
                                                     className={`inline-flex min-w-[72px] max-w-[108px] items-center justify-center ${getUserNameBadgeClassName()}`}
                                                 >
                                                     <span className="truncate">
-                                                        {user.name}
+                                                        {String(user.name ?? '').toUpperCase()}
                                                     </span>
                                                 </span>
                                                 <span
-                                                    className={`inline-flex shrink-0 items-center justify-center uppercase tracking-wide ${getRoleBadgeClassName(user.role_label)}`}
+                                                    className={`inline-flex shrink-0 items-center justify-center uppercase tracking-wide ${getRoleBadgeClassName()}`}
+                                                    style={getRoleBadgeStyle(user.role_label)}
                                                 >
                                                     {formatRoleBadgeLabel(user.role_label)}
                                                 </span>
                                                 <span
-                                                    className={`inline-flex min-w-[88px] shrink-0 items-center justify-center uppercase tracking-wide ${getUnitBadgeClassName(user.unit_name)}`}
+                                                    className={`inline-flex min-w-[88px] shrink-0 items-center justify-center uppercase tracking-wide ${getUnitBadgeClassName()}`}
+                                                    style={getUnitBadgeStyle(user.unit_name)}
                                                 >
                                                     {formatUnitBadgeLabel(user.unit_name)}
                                                 </span>
