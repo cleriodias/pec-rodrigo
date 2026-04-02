@@ -1,5 +1,12 @@
 import AlertMessage from '@/Components/Alert/AlertMessage';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import {
+    formatRoleBadgeLabel,
+    formatUnitBadgeLabel,
+    getRoleBadgeClassName,
+    getUnitBadgeClassName,
+    getUserNameBadgeClassName,
+} from '@/Utils/brandBadges';
 import { formatBrazilDateTime } from '@/Utils/date';
 import { Head, usePage } from '@inertiajs/react';
 import axios from 'axios';
@@ -336,31 +343,34 @@ export default function OnlineIndex({
                                                 type="button"
                                                 key={user.id}
                                                 onClick={() => handleSelectUser(user.id)}
-                                                className={`flex w-full flex-col gap-1 border-b border-gray-100 px-4 py-4 text-left transition last:border-b-0 dark:border-gray-800 ${
+                                                className={`flex w-full items-center gap-2 overflow-hidden border-b border-gray-100 px-4 py-4 text-left transition last:border-b-0 dark:border-gray-800 ${
                                                     isSelected
-                                                        ? 'bg-indigo-50 dark:bg-indigo-900/20'
+                                                        ? 'bg-slate-100 dark:bg-slate-800/80'
                                                         : 'hover:bg-gray-50 dark:hover:bg-gray-800/70'
                                                 }`}
                                             >
-                                                <div className="flex items-start justify-between gap-3">
-                                                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                                                <span
+                                                    className={`inline-flex min-w-[72px] max-w-[108px] items-center justify-center ${getUserNameBadgeClassName()}`}
+                                                >
+                                                    <span className="truncate">
                                                         {user.name}
-                                                    </p>
-                                                    {Number(user.unread_count ?? 0) > 0 && (
-                                                        <span className="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-semibold text-white">
-                                                            {user.unread_count}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <p className="text-xs font-semibold uppercase text-indigo-600 dark:text-indigo-300">
-                                                    {user.role_label}
-                                                </p>
-                                                <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                    Loja: {user.unit_name ?? '---'}
-                                                </p>
-                                                <p className="text-[11px] text-gray-400 dark:text-gray-500">
-                                                    Ativo em {formatBrazilDateTime(user.last_seen_at)}
-                                                </p>
+                                                    </span>
+                                                </span>
+                                                <span
+                                                    className={`inline-flex shrink-0 items-center justify-center uppercase tracking-wide ${getRoleBadgeClassName(user.role_label)}`}
+                                                >
+                                                    {formatRoleBadgeLabel(user.role_label)}
+                                                </span>
+                                                <span
+                                                    className={`inline-flex min-w-[88px] shrink-0 items-center justify-center uppercase tracking-wide ${getUnitBadgeClassName(user.unit_name)}`}
+                                                >
+                                                    {formatUnitBadgeLabel(user.unit_name)}
+                                                </span>
+                                                {Number(user.unread_count ?? 0) > 0 && (
+                                                    <span className="ms-auto shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-semibold text-white">
+                                                        {user.unread_count}
+                                                    </span>
+                                                )}
                                             </button>
                                         );
                                     })
