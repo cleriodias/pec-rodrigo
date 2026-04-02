@@ -935,7 +935,32 @@ class SalesReportController extends Controller
     public function descarteConsolidado(Request $request): Response
     {
         $this->ensureManager($request);
-        [$filterUnitId, $filterUnits, $selectedUnit] = $this->resolveReportUnit($request);
+        $availableUnits = $this->availableUnits($request->user());
+        $fallbackUnitId = $this->resolveUnitId($request);
+        $selectedUnitId = $fallbackUnitId > 0 ? $fallbackUnitId : null;
+
+        if ($selectedUnitId && ! $availableUnits->contains(fn ($unit) => $unit['id'] === $selectedUnitId)) {
+            $selectedUnitId = null;
+        }
+
+        $requestedUnitId = $request->query('unit_id');
+        if ($requestedUnitId !== null && $requestedUnitId !== '' && $requestedUnitId !== 'all') {
+            $candidateUnitId = (int) $requestedUnitId;
+
+            if ($candidateUnitId > 0 && $availableUnits->contains(fn ($unit) => $unit['id'] === $candidateUnitId)) {
+                $selectedUnitId = $candidateUnitId;
+            }
+        }
+
+        if (! $selectedUnitId) {
+            $selectedUnitId = $availableUnits->first()['id'] ?? null;
+        }
+
+        $filterUnitId = $selectedUnitId;
+        $filterUnits = $availableUnits->values();
+        $selectedUnit = $filterUnitId
+            ? $availableUnits->firstWhere('id', $filterUnitId)
+            : ['id' => null, 'name' => '---'];
         [$start, $end, $monthValue, $monthLabel] = $this->resolveMonthRange($request->query('month'));
 
         $entries = ProductDiscard::query()
@@ -1021,12 +1046,28 @@ class SalesReportController extends Controller
                 return $row;
             });
 
+        $topQuantityProduct = $rows->first();
+        $topValueProduct = $rows
+            ->sort(function (array $left, array $right) {
+                if ($left['total_value'] !== $right['total_value']) {
+                    return $right['total_value'] <=> $left['total_value'];
+                }
+
+                if ($left['total_quantity'] !== $right['total_quantity']) {
+                    return $right['total_quantity'] <=> $left['total_quantity'];
+                }
+
+                return strcmp($left['product'], $right['product']);
+            })
+            ->first();
+
         $summary = [
             'products_count' => $rows->count(),
             'total_quantity' => round((float) $rows->sum('total_quantity'), 3),
             'total_value' => round((float) $rows->sum('total_value'), 2),
             'total_occurrences' => (int) $rows->sum('occurrences'),
-            'top_product' => $rows->first(),
+            'top_quantity_product' => $topQuantityProduct,
+            'top_value_product' => $topValueProduct,
         ];
 
         return Inertia::render('Reports/DiscardConsolidated', [

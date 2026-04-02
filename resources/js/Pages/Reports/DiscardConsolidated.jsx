@@ -50,7 +50,7 @@ export default function DiscardConsolidated({
         unit_id:
             selectedUnitId !== null && selectedUnitId !== undefined
                 ? String(selectedUnitId)
-                : 'all',
+                : '',
     });
 
     const handleSubmit = (event) => {
@@ -63,7 +63,8 @@ export default function DiscardConsolidated({
         });
     };
 
-    const topProduct = summary?.top_product ?? null;
+    const topQuantityProduct = summary?.top_quantity_product ?? null;
+    const topValueProduct = summary?.top_value_product ?? null;
 
     return (
         <AuthenticatedLayout
@@ -73,7 +74,7 @@ export default function DiscardConsolidated({
                         Discarte Consolidado
                     </h2>
                     <p className="text-sm text-gray-500 dark:text-gray-300">
-                        Ranking de itens mais descartados no mes. Loja atual: {unit?.name ?? 'Todas'}.
+                        Ranking de itens mais descartados no mes. Loja atual: {unit?.name ?? '---'}.
                     </p>
                 </div>
             }
@@ -96,7 +97,6 @@ export default function DiscardConsolidated({
                                     onChange={(event) => setData('unit_id', event.target.value)}
                                     className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
                                 >
-                                    <option value="all">Todas</option>
                                     {filterUnits.map((filterUnit) => (
                                         <option key={filterUnit.id} value={filterUnit.id}>
                                             {filterUnit.name}
@@ -151,14 +151,33 @@ export default function DiscardConsolidated({
                             accentClass="text-emerald-700 dark:text-emerald-300"
                         />
                         <SummaryCard
-                            title="Item lider"
-                            value={topProduct?.product ?? 'Nenhum'}
+                            title="Lider por quantidade"
+                            value={topQuantityProduct?.product ?? 'Nenhum'}
                             description={
-                                topProduct
-                                    ? `${formatQuantity(topProduct.total_quantity)} descartados em ${topProduct.occurrences} registros`
+                                topQuantityProduct
+                                    ? `${formatQuantity(topQuantityProduct.total_quantity)} descartados em ${topQuantityProduct.occurrences} registros`
                                     : 'Nenhum descarte encontrado no filtro.'
                             }
                             accentClass="text-amber-700 dark:text-amber-300"
+                        />
+                    </section>
+
+                    <section className="grid gap-4 md:grid-cols-1 xl:grid-cols-2">
+                        <SummaryCard
+                            title="Maior soma por valor"
+                            value={topValueProduct?.product ?? 'Nenhum'}
+                            description={
+                                topValueProduct
+                                    ? `${formatCurrency(topValueProduct.total_value)} acumulados no filtro`
+                                    : 'Nenhum descarte encontrado no filtro.'
+                            }
+                            accentClass="text-emerald-700 dark:text-emerald-300"
+                        />
+                        <SummaryCard
+                            title="Loja analisada"
+                            value={unit?.name ?? '---'}
+                            description="Este relatorio sempre considera uma loja individual."
+                            accentClass="text-slate-700 dark:text-slate-200"
                         />
                     </section>
 
@@ -169,7 +188,7 @@ export default function DiscardConsolidated({
                                     Ranking de descarte
                                 </h3>
                                 <p className="text-sm text-gray-500 dark:text-gray-300">
-                                    Ordenado pelos itens com maior quantidade descartada.
+                                    Ordenado por quantidade, com destaque adicional para o maior valor acumulado.
                                 </p>
                             </div>
                             <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-indigo-700 shadow-sm dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200">
@@ -216,20 +235,48 @@ export default function DiscardConsolidated({
                                     </thead>
                                     <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                                         {rows.map((row) => (
+                                            (() => {
+                                                const isTopQuantity =
+                                                    topQuantityProduct
+                                                    && row.product === topQuantityProduct.product
+                                                    && Number(row.total_quantity) === Number(topQuantityProduct.total_quantity)
+                                                    && Number(row.total_value) === Number(topQuantityProduct.total_value);
+                                                const isTopValue =
+                                                    topValueProduct
+                                                    && row.product === topValueProduct.product
+                                                    && Number(row.total_value) === Number(topValueProduct.total_value)
+                                                    && Number(row.total_quantity) === Number(topValueProduct.total_quantity);
+                                                const rowClassName =
+                                                    isTopQuantity && isTopValue
+                                                        ? 'bg-gradient-to-r from-amber-50 to-emerald-50 dark:from-amber-500/10 dark:to-emerald-500/10'
+                                                        : isTopQuantity
+                                                            ? 'bg-amber-50/60 dark:bg-amber-500/10'
+                                                            : isTopValue
+                                                                ? 'bg-emerald-50/70 dark:bg-emerald-500/10'
+                                                                : '';
+
+                                                return (
                                             <tr
                                                 key={`${row.product_id ?? row.product}-${row.rank}`}
-                                                className={row.rank === 1 ? 'bg-amber-50/60 dark:bg-amber-500/10' : ''}
+                                                className={rowClassName}
                                             >
                                                 <td className="px-3 py-2 text-center font-bold text-gray-700 dark:text-gray-200">
                                                     {row.rank}
                                                 </td>
                                                 <td className="px-3 py-2 text-gray-800 dark:text-gray-100">
                                                     <div className="font-semibold">{row.product}</div>
-                                                    {row.rank === 1 ? (
-                                                        <div className="text-xs text-amber-700 dark:text-amber-300">
-                                                            Item mais descartado do filtro
-                                                        </div>
-                                                    ) : null}
+                                                    <div className="mt-1 flex flex-wrap gap-2 text-xs">
+                                                        {isTopQuantity ? (
+                                                            <span className="rounded-full bg-amber-100 px-2 py-1 font-semibold text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
+                                                                Lider em quantidade
+                                                            </span>
+                                                        ) : null}
+                                                        {isTopValue ? (
+                                                            <span className="rounded-full bg-emerald-100 px-2 py-1 font-semibold text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300">
+                                                                Lider em valor
+                                                            </span>
+                                                        ) : null}
+                                                    </div>
                                                 </td>
                                                 <td className="px-3 py-2 text-center text-gray-700 dark:text-gray-200">
                                                     {row.occurrences}
@@ -247,6 +294,8 @@ export default function DiscardConsolidated({
                                                     {formatDateTime(row.last_discard_at)}
                                                 </td>
                                             </tr>
+                                                );
+                                            })()
                                         ))}
                                     </tbody>
                                 </table>
