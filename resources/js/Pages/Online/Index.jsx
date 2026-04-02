@@ -89,12 +89,18 @@ export default function OnlineIndex({
     const [messages, setMessages] = useState(initialMessages);
     const [draftMessage, setDraftMessage] = useState('');
     const [loadingSnapshot, setLoadingSnapshot] = useState(false);
+    const [refreshingSnapshot, setRefreshingSnapshot] = useState(false);
     const [sendingMessage, setSendingMessage] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
     const [lastSyncAt, setLastSyncAt] = useState(() => new Date().toISOString());
     const textareaRef = useRef(null);
     const messagesEndRef = useRef(null);
+    const messagesContainerRef = useRef(null);
     const selectedUserIdRef = useRef(initialSelectedUserId);
+    const lastMessageMetaRef = useRef({
+        selectedUserId: initialSelectedUserId,
+        count: initialMessages.length,
+    });
 
     const selectedUser = useMemo(
         () =>
@@ -109,8 +115,37 @@ export default function OnlineIndex({
     }, [selectedUserId]);
 
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
+        const container = messagesContainerRef.current;
+        const previous = lastMessageMetaRef.current;
+        const latestMessage = messages[messages.length - 1] ?? null;
+        const selectedChanged =
+            Number(previous.selectedUserId ?? 0) !== Number(selectedUser?.id ?? 0);
+        const countIncreased = messages.length > Number(previous.count ?? 0);
+        const distanceFromBottom = container
+            ? container.scrollHeight - container.scrollTop - container.clientHeight
+            : 0;
+        const shouldStickToBottom =
+            selectedChanged ||
+            (countIncreased && (distanceFromBottom < 120 || Boolean(latestMessage?.is_mine)));
+
+        if (shouldStickToBottom) {
+            messagesEndRef.current?.scrollIntoView({
+                behavior: selectedChanged ? 'auto' : 'smooth',
+            });
+        }
+
+        lastMessageMetaRef.current = {
+            selectedUserId: selectedUser?.id ?? null,
+            count: messages.length,
+        };
+    }, [messages, selectedUser?.id]);
+
+    useEffect(() => {
+        if (selectedUser) {
+            textareaRef.current?.focus();
+        }
+        setErrorMessage('');
+    }, [selectedUser?.id]);
 
     const applySnapshot = (payload, requestedUserId = null) => {
         const nextUsers = Array.isArray(payload?.onlineUsers) ? payload.onlineUsers : [];
@@ -131,6 +166,8 @@ export default function OnlineIndex({
     const loadSnapshot = async (requestedUserId = null, silent = false) => {
         if (!silent) {
             setLoadingSnapshot(true);
+        } else {
+            setRefreshingSnapshot(true);
         }
 
         try {
@@ -141,10 +178,14 @@ export default function OnlineIndex({
             applySnapshot(response.data ?? {}, requestedUserId);
             setErrorMessage('');
         } catch (error) {
-            setErrorMessage(resolveErrorMessage(error, 'Nao foi possivel atualizar a lista de usuarios on-line.'));
+            if (!silent) {
+                setErrorMessage(resolveErrorMessage(error, 'Nao foi possivel atualizar a lista de usuarios on-line.'));
+            }
         } finally {
             if (!silent) {
                 setLoadingSnapshot(false);
+            } else {
+                setRefreshingSnapshot(false);
             }
         }
     };
@@ -257,14 +298,24 @@ export default function OnlineIndex({
                                         <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
                                             {onlineUsers.length} usuario(s)
                                         </h3>
+                                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                            Atualizacao automatica a cada 15 segundos.
+                                        </p>
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => loadSnapshot(selectedUserIdRef.current)}
-                                        className="rounded-full border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-700 transition hover:border-indigo-400 hover:text-indigo-600 dark:border-gray-600 dark:text-gray-200"
-                                    >
-                                        Atualizar
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        {refreshingSnapshot && (
+                                            <span className="text-[11px] font-semibold uppercase text-emerald-600 dark:text-emerald-300">
+                                                Sincronizando
+                                            </span>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => loadSnapshot(selectedUserIdRef.current)}
+                                            className="rounded-full border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-700 transition hover:border-indigo-400 hover:text-indigo-600 dark:border-gray-600 dark:text-gray-200"
+                                        >
+                                            Atualizar
+                                        </button>
+                                    </div>
                                 </div>
                                 <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                                     Ultima sincronizacao: {formatBrazilDateTime(lastSyncAt)}
@@ -307,6 +358,9 @@ export default function OnlineIndex({
                                                 <p className="text-xs text-gray-500 dark:text-gray-400">
                                                     Loja: {user.unit_name ?? '---'}
                                                 </p>
+                                                <p className="text-[11px] text-gray-400 dark:text-gray-500">
+                                                    Ativo em {formatBrazilDateTime(user.last_seen_at)}
+                                                </p>
                                             </button>
                                         );
                                     })
@@ -317,13 +371,18 @@ export default function OnlineIndex({
                         <div className="rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
                             <div className="border-b border-gray-200 px-5 py-4 dark:border-gray-700">
                                 {selectedUser ? (
-                                    <div className="flex flex-col gap-1">
-                                        <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
-                                            Conversa com {selectedUser.name}
-                                        </h3>
-                                        <p className="text-sm text-gray-500 dark:text-gray-300">
-                                            {selectedUser.role_label} | Loja: {selectedUser.unit_name ?? '---'}
-                                        </p>
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="flex flex-col gap-1">
+                                            <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
+                                                Conversa com {selectedUser.name}
+                                            </h3>
+                                            <p className="text-sm text-gray-500 dark:text-gray-300">
+                                                {selectedUser.role_label} | Loja: {selectedUser.unit_name ?? '---'}
+                                            </p>
+                                        </div>
+                                        <div className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-900/20 dark:text-emerald-200">
+                                            Ao vivo
+                                        </div>
                                     </div>
                                 ) : (
                                     <div>
@@ -338,7 +397,10 @@ export default function OnlineIndex({
                             </div>
 
                             <div className="flex min-h-[68vh] flex-col">
-                                <div className="flex-1 space-y-3 overflow-y-auto px-5 py-5">
+                                <div
+                                    ref={messagesContainerRef}
+                                    className="flex-1 space-y-3 overflow-y-auto px-5 py-5"
+                                >
                                     {selectedUser ? (
                                         messages.length === 0 ? (
                                             <div className="rounded-2xl border border-dashed border-gray-300 px-4 py-6 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
@@ -429,6 +491,12 @@ export default function OnlineIndex({
                                             rows={4}
                                             value={draftMessage}
                                             onChange={(event) => setDraftMessage(event.target.value)}
+                                            onKeyDown={(event) => {
+                                                if (event.key === 'Enter' && !event.shiftKey) {
+                                                    event.preventDefault();
+                                                    handleSendMessage(event);
+                                                }
+                                            }}
                                             placeholder={
                                                 selectedUser
                                                     ? 'Digite sua mensagem. As marcacoes simples sao mantidas.'
@@ -439,7 +507,7 @@ export default function OnlineIndex({
                                         />
                                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                             <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                Use as marcacoes: [b] [/b], [i] [/i], [u] [/u] e [color=#xxxxxx] [/color].
+                                                `Enter` envia, `Shift + Enter` quebra linha. Marcacoes: [b], [i], [u] e [color=#xxxxxx].
                                             </p>
                                             <button
                                                 type="submit"

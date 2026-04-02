@@ -1,4 +1,5 @@
 import { Head, Link, usePage } from '@inertiajs/react';
+import axios from 'axios';
 import { useEffect, useRef, useState } from 'react';
 
 const StepCard = ({ title, description, children }) => (
@@ -43,6 +44,30 @@ export default function Terminal() {
             searchRef.current.focus();
         }
     }, [step]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined' || typeof route !== 'function') {
+            return undefined;
+        }
+
+        let cancelled = false;
+
+        const sendHeartbeat = () => {
+            axios.post(route('online.heartbeat')).catch(() => {
+                if (!cancelled) {
+                    // Presenca nao deve interromper a operacao do terminal.
+                }
+            });
+        };
+
+        sendHeartbeat();
+        const intervalId = window.setInterval(sendHeartbeat, 45000);
+
+        return () => {
+            cancelled = true;
+            window.clearInterval(intervalId);
+        };
+    }, []);
 
     const goToStep = (targetStep) => {
         setStep(targetStep);
@@ -321,6 +346,13 @@ export default function Terminal() {
                         >
                             <i className="bi bi-arrow-left-right" aria-hidden="true"></i>
                             Trocar
+                        </Link>
+                        <Link
+                            href={route('online.index')}
+                            className="inline-flex items-center gap-2 rounded-full border border-gray-200 px-3 py-1 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-100"
+                        >
+                            <i className="bi bi-broadcast-pin" aria-hidden="true"></i>
+                            On-Line
                         </Link>
                         <div className="hidden sm:flex flex-col items-end">
                             <span className="text-sm font-semibold text-gray-800">
