@@ -46,7 +46,7 @@ const replaceColorTag = (value) =>
             return content;
         }
 
-        return `<span style="color:${normalized}">${content}</span>`;
+        return content;
     });
 
 const renderMessage = (value) => {
@@ -339,6 +339,7 @@ export default function OnlineIndex({
                                 ) : (
                                     onlineUsers.map((user) => {
                                         const isSelected = Number(user.id) === Number(selectedUser?.id);
+                                        const hasUnread = Number(user.unread_count ?? 0) > 0;
 
                                         return (
                                             <button
@@ -347,8 +348,12 @@ export default function OnlineIndex({
                                                 onClick={() => handleSelectUser(user.id)}
                                                 className={`flex w-full items-center gap-2 overflow-hidden border-b border-gray-100 px-4 py-4 text-left transition last:border-b-0 dark:border-gray-800 ${
                                                     isSelected
-                                                        ? 'bg-slate-100 dark:bg-slate-800/80'
-                                                        : 'hover:bg-gray-50 dark:hover:bg-gray-800/70'
+                                                        ? hasUnread
+                                                            ? 'border-l-4 border-l-emerald-500 bg-slate-100 dark:border-l-emerald-400 dark:bg-slate-800/80'
+                                                            : 'bg-slate-100 dark:bg-slate-800/80'
+                                                        : hasUnread
+                                                          ? 'border-l-4 border-l-emerald-500 bg-emerald-50/80 hover:bg-emerald-100/70 dark:border-l-emerald-400 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/15'
+                                                          : 'hover:bg-gray-50 dark:hover:bg-gray-800/70'
                                                 }`}
                                             >
                                                 <span
@@ -370,8 +375,8 @@ export default function OnlineIndex({
                                                 >
                                                     {formatUnitBadgeLabel(user.unit_name)}
                                                 </span>
-                                                {Number(user.unread_count ?? 0) > 0 && (
-                                                    <span className="ms-auto shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-semibold text-white">
+                                                {hasUnread && (
+                                                    <span className="ms-auto -mt-3 shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-semibold text-white shadow-sm">
                                                         {user.unread_count}
                                                     </span>
                                                 )}
@@ -429,18 +434,19 @@ export default function OnlineIndex({
                                                     <div
                                                         className={`max-w-[85%] rounded-2xl px-4 py-3 shadow-sm ${
                                                             message.is_mine
-                                                                ? 'bg-indigo-600 text-white'
-                                                                : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100'
+                                                                ? 'bg-slate-300 text-slate-800 dark:bg-slate-600 dark:text-slate-100'
+                                                                : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-100'
                                                         }`}
                                                     >
                                                         <div
                                                             className={`mb-2 text-[11px] font-semibold uppercase ${
                                                                 message.is_mine
-                                                                    ? 'text-indigo-100'
-                                                                    : 'text-gray-500 dark:text-gray-400'
+                                                                    ? ''
+                                                                    : 'text-slate-500 dark:text-slate-400'
                                                             }`}
+                                                            style={message.is_mine ? { color: '#475569' } : undefined}
                                                         >
-                                                            {message.sender_role_label} • {formatBrazilDateTime(message.sent_at)}
+                                                            {String(message.sender_name ?? '---').toUpperCase()} - {message.sender_role_label} • {formatBrazilDateTime(message.sent_at)}
                                                         </div>
                                                         <div
                                                             className="prose prose-sm max-w-none text-inherit prose-p:my-0 prose-strong:text-inherit prose-em:text-inherit prose-u:text-inherit"

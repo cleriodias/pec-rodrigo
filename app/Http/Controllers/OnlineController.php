@@ -62,6 +62,13 @@ class OnlineController extends Controller
         ]);
     }
 
+    public function summary(Request $request): JsonResponse
+    {
+        $user = $this->ensureCanAccessOnline($request->user());
+
+        return response()->json($this->buildUnreadSummary((int) $user->id));
+    }
+
     public function storeMessage(Request $request): JsonResponse
     {
         $user = $this->ensureCanAccessOnline($request->user());
@@ -121,6 +128,7 @@ class OnlineController extends Controller
             'messages' => $selectedUserId
                 ? $this->buildConversation((int) $user->id, (int) $selectedUserId)
                 : [],
+            'unreadSummary' => $this->buildUnreadSummary((int) $user->id),
             'currentUser' => [
                 'id' => (int) $user->id,
                 'name' => (string) $user->name,
@@ -199,9 +207,28 @@ class OnlineController extends Controller
             ->all();
     }
 
+    private function buildUnreadSummary(int $viewerId): array
+    {
+        $baseQuery = ChatMessage::query()
+            ->where('recipient_id', $viewerId)
+            ->whereNull('read_at');
+
+        return [
+            'unread_total' => (clone $baseQuery)->count(),
+            'unread_sender_ids' => (clone $baseQuery)
+                ->select('sender_id')
+                ->distinct()
+                ->pluck('sender_id')
+                ->map(fn ($value) => (int) $value)
+                ->values()
+                ->all(),
+        ];
+    }
+
     private function buildConversation(int $viewerId, int $otherUserId): array
     {
         return ChatMessage::query()
+            ->with(['sender:id,name'])
             ->where(function ($query) use ($viewerId, $otherUserId) {
                 $query->where('sender_id', $viewerId)
                     ->where('recipient_id', $otherUserId);
@@ -220,6 +247,7 @@ class OnlineController extends Controller
                 'sender_id' => (int) $message->sender_id,
                 'recipient_id' => (int) $message->recipient_id,
                 'message' => (string) $message->message,
+                'sender_name' => (string) ($message->sender?->name ?? '---'),
                 'sent_at' => optional($message->created_at)->toIso8601String(),
                 'read_at' => optional($message->read_at)->toIso8601String(),
                 'sender_role' => (int) $message->sender_role,

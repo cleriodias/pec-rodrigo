@@ -86,6 +86,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
     Route::get('/on-line', [OnlineController::class, 'index'])->name('online.index');
     Route::get('/on-line/snapshot', [OnlineController::class, 'snapshot'])->name('online.snapshot');
+    Route::get('/on-line/summary', [OnlineController::class, 'summary'])->name('online.summary');
     Route::post('/on-line/heartbeat', [OnlineController::class, 'heartbeat'])->name('online.heartbeat');
     Route::post('/on-line/messages', [OnlineController::class, 'storeMessage'])->name('online.messages.store');
     Route::get('/settings', function () {
