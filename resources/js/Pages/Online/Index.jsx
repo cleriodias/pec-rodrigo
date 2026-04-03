@@ -91,12 +91,14 @@ const resolveDraftKey = (userId) => String(userId ?? '');
 
 export default function OnlineIndex({
     onlineUsers: initialOnlineUsers = [],
+    offlineUsers: initialOfflineUsers = [],
     selectedUserId: initialSelectedUserId = null,
     messages: initialMessages = [],
     currentUser = null,
 }) {
     const { flash } = usePage().props;
     const [onlineUsers, setOnlineUsers] = useState(initialOnlineUsers);
+    const [offlineUsers, setOfflineUsers] = useState(initialOfflineUsers);
     const [selectedUserId, setSelectedUserId] = useState(initialSelectedUserId);
     const [messages, setMessages] = useState(initialMessages);
     const [draftMessages, setDraftMessages] = useState({});
@@ -120,10 +122,11 @@ export default function OnlineIndex({
 
     const selectedUser = useMemo(
         () =>
-            onlineUsers.find((user) => Number(user.id) === Number(selectedUserId)) ??
+            [...onlineUsers, ...offlineUsers].find((user) => Number(user.id) === Number(selectedUserId)) ??
             onlineUsers[0] ??
+            offlineUsers[0] ??
             null,
-        [onlineUsers, selectedUserId],
+        [onlineUsers, offlineUsers, selectedUserId],
     );
 
     const editingMessage = useMemo(
@@ -184,15 +187,19 @@ export default function OnlineIndex({
 
     const applySnapshot = (payload, requestedUserId = null) => {
         const nextUsers = Array.isArray(payload?.onlineUsers) ? payload.onlineUsers : [];
-        const availableIds = nextUsers.map((user) => Number(user.id));
+        const nextOfflineUsers = Array.isArray(payload?.offlineUsers) ? payload.offlineUsers : [];
+        const availableIds = nextUsers
+            .map((user) => Number(user.id))
+            .concat(nextOfflineUsers.map((user) => Number(user.id)));
         const nextSelectedUserId =
             requestedUserId && availableIds.includes(Number(requestedUserId))
                 ? Number(requestedUserId)
                 : payload?.selectedUserId && availableIds.includes(Number(payload.selectedUserId))
                   ? Number(payload.selectedUserId)
-                  : nextUsers[0]?.id ?? null;
+                  : nextUsers[0]?.id ?? nextOfflineUsers[0]?.id ?? null;
 
         setOnlineUsers(nextUsers);
+        setOfflineUsers(nextOfflineUsers);
         setSelectedUserId(nextSelectedUserId);
         setMessages(Array.isArray(payload?.messages) ? payload.messages : []);
     };
@@ -365,6 +372,55 @@ export default function OnlineIndex({
         }
     };
 
+    const renderContactButton = (user, offline = false) => {
+        const isSelected = Number(user.id) === Number(selectedUser?.id);
+        const hasUnread = Number(user.unread_count ?? 0) > 0;
+
+        return (
+            <button
+                type="button"
+                key={`${offline ? 'offline' : 'online'}-${user.id}`}
+                onClick={() => handleSelectUser(user.id)}
+                className={`flex w-full items-center gap-2 overflow-hidden border-b border-gray-100 px-4 py-4 text-left transition last:border-b-0 dark:border-gray-800 ${
+                    isSelected
+                        ? hasUnread
+                            ? 'border-l-4 border-l-emerald-500 bg-slate-100 dark:border-l-emerald-400 dark:bg-slate-800/80'
+                            : 'bg-slate-100 dark:bg-slate-800/80'
+                        : hasUnread
+                          ? 'border-l-4 border-l-emerald-500 bg-emerald-50/80 hover:bg-emerald-100/70 dark:border-l-emerald-400 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/15'
+                          : offline
+                            ? 'bg-gray-50/80 hover:bg-gray-100 dark:bg-gray-900/40 dark:hover:bg-gray-800/60'
+                            : 'hover:bg-gray-50 dark:hover:bg-gray-800/70'
+                }`}
+            >
+                <span
+                    className={`inline-flex min-w-[72px] max-w-[108px] items-center justify-center ${getUserNameBadgeClassName()}`}
+                >
+                    <span className="truncate">
+                        {String(user.name ?? '').toUpperCase()}
+                    </span>
+                </span>
+                <span
+                    className={`inline-flex shrink-0 items-center justify-center uppercase tracking-wide ${getRoleBadgeClassName()} px-1.5 py-0 text-[9px] leading-3`}
+                    style={getRoleBadgeStyle(user.role_label)}
+                >
+                    {formatRoleBadgeLabel(user.role_label)}
+                </span>
+                <span
+                    className={`inline-flex min-w-[56px] shrink-0 items-center justify-center uppercase tracking-wide ${getUnitBadgeClassName()} px-1.5 py-0 text-[9px] leading-3`}
+                    style={getUnitBadgeStyle(user.unit_name)}
+                >
+                    {formatUnitBadgeLabel(user.unit_name)}
+                </span>
+                {hasUnread && (
+                    <span className="ms-auto -mt-3 shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-semibold text-white shadow-sm">
+                        {user.unread_count}
+                    </span>
+                )}
+            </button>
+        );
+    };
+
     return (
         <AuthenticatedLayout
             header={(
@@ -407,57 +463,24 @@ export default function OnlineIndex({
                             </div>
 
                             <div className="max-h-[68vh] overflow-y-auto">
-                                {onlineUsers.length === 0 ? (
+                                {onlineUsers.length === 0 && offlineUsers.length === 0 ? (
                                     <div className="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">
-                                        Nenhum usuario visivel on-line neste momento.
+                                        Nenhum usuario visivel neste momento.
                                     </div>
                                 ) : (
-                                    onlineUsers.map((user) => {
-                                        const isSelected = Number(user.id) === Number(selectedUser?.id);
-                                        const hasUnread = Number(user.unread_count ?? 0) > 0;
+                                    <>
+                                        {onlineUsers.length > 0 && onlineUsers.map((user) => renderContactButton(user))}
 
-                                        return (
-                                            <button
-                                                type="button"
-                                                key={user.id}
-                                                onClick={() => handleSelectUser(user.id)}
-                                                className={`flex w-full items-center gap-2 overflow-hidden border-b border-gray-100 px-4 py-4 text-left transition last:border-b-0 dark:border-gray-800 ${
-                                                    isSelected
-                                                        ? hasUnread
-                                                            ? 'border-l-4 border-l-emerald-500 bg-slate-100 dark:border-l-emerald-400 dark:bg-slate-800/80'
-                                                            : 'bg-slate-100 dark:bg-slate-800/80'
-                                                        : hasUnread
-                                                          ? 'border-l-4 border-l-emerald-500 bg-emerald-50/80 hover:bg-emerald-100/70 dark:border-l-emerald-400 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/15'
-                                                          : 'hover:bg-gray-50 dark:hover:bg-gray-800/70'
-                                                }`}
-                                            >
-                                                <span
-                                                    className={`inline-flex min-w-[72px] max-w-[108px] items-center justify-center ${getUserNameBadgeClassName()}`}
-                                                >
-                                                    <span className="truncate">
-                                                        {String(user.name ?? '').toUpperCase()}
-                                                    </span>
-                                                </span>
-                                                <span
-                                                    className={`inline-flex shrink-0 items-center justify-center uppercase tracking-wide ${getRoleBadgeClassName()} px-2 py-0.5 text-[10px] leading-4`}
-                                                    style={getRoleBadgeStyle(user.role_label)}
-                                                >
-                                                    {formatRoleBadgeLabel(user.role_label)}
-                                                </span>
-                                                <span
-                                                    className={`inline-flex min-w-[68px] shrink-0 items-center justify-center uppercase tracking-wide ${getUnitBadgeClassName()} px-2 py-0.5 text-[10px] leading-4`}
-                                                    style={getUnitBadgeStyle(user.unit_name)}
-                                                >
-                                                    {formatUnitBadgeLabel(user.unit_name)}
-                                                </span>
-                                                {hasUnread && (
-                                                    <span className="ms-auto -mt-3 shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-semibold text-white shadow-sm">
-                                                        {user.unread_count}
-                                                    </span>
-                                                )}
-                                            </button>
-                                        );
-                                    })
+                                        {offlineUsers.length > 0 && (
+                                            <div className="border-t border-gray-200 px-4 py-3 dark:border-gray-700">
+                                                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                                                    Offline
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        {offlineUsers.length > 0 && offlineUsers.map((user) => renderContactButton(user, true))}
+                                    </>
                                 )}
                             </div>
                         </div>
