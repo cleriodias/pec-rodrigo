@@ -4,9 +4,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import {
     formatRoleBadgeLabel,
     formatUnitBadgeLabel,
-    getRoleBadgeClassName,
     getRoleBadgeStyle,
-    getUnitBadgeClassName,
     getUnitBadgeStyle,
     getUserNameBadgeClassName,
 } from '@/Utils/brandBadges';
@@ -88,6 +86,9 @@ const resolveErrorMessage = (error, fallback) => {
 };
 
 const resolveDraftKey = (userId) => String(userId ?? '');
+
+const COMPACT_BADGE_CLASSNAME =
+    'inline-flex shrink-0 items-center justify-center rounded-full border font-semibold uppercase tracking-wide whitespace-nowrap';
 
 export default function OnlineIndex({
     onlineUsers: initialOnlineUsers = [],
@@ -401,14 +402,27 @@ export default function OnlineIndex({
                     </span>
                 </span>
                 <span
-                    className={`inline-flex shrink-0 items-center justify-center uppercase tracking-wide ${getRoleBadgeClassName()} px-1.5 py-0 text-[9px] leading-3`}
-                    style={getRoleBadgeStyle(user.role_label)}
+                    className={COMPACT_BADGE_CLASSNAME}
+                    style={{
+                        ...getRoleBadgeStyle(user.role_label),
+                        padding: '0 6px',
+                        fontSize: '9px',
+                        lineHeight: '12px',
+                        minHeight: '16px',
+                    }}
                 >
                     {formatRoleBadgeLabel(user.role_label)}
                 </span>
                 <span
-                    className={`inline-flex min-w-[56px] shrink-0 items-center justify-center uppercase tracking-wide ${getUnitBadgeClassName()} px-1.5 py-0 text-[9px] leading-3`}
-                    style={getUnitBadgeStyle(user.unit_name)}
+                    className={COMPACT_BADGE_CLASSNAME}
+                    style={{
+                        ...getUnitBadgeStyle(user.unit_name),
+                        padding: '0 6px',
+                        fontSize: '9px',
+                        lineHeight: '12px',
+                        minHeight: '16px',
+                        minWidth: '52px',
+                    }}
                 >
                     {formatUnitBadgeLabel(user.unit_name)}
                 </span>
