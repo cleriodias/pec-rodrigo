@@ -2,12 +2,37 @@ import ApplicationLogo from '@/Components/ApplicationLogo';
 import Dropdown from '@/Components/Dropdown';
 import NavLink from '@/Components/NavLink';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink';
+import {
+    buildSupportTicketMenuCounters,
+    getSupportTicketStatusStyle,
+} from '@/Utils/supportTicketStatus';
 import { Link, router, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import { useEffect, useMemo, useState } from 'react';
 
-const MenuLabel = ({ icon, text, attention = false }) => (
-    <span className="inline-flex items-center gap-2">
+const SupportTicketCounters = ({ items = [] }) => {
+    if (!items.length) {
+        return null;
+    }
+
+    return (
+        <span className="inline-flex flex-wrap items-center gap-1">
+            {items.map((item) => (
+                <span
+                    key={item.status}
+                    className="inline-flex min-w-[20px] items-center justify-center rounded-full border px-1.5 py-0.5 text-[10px] font-bold leading-none"
+                    style={getSupportTicketStatusStyle(item.status)}
+                    title={`${item.label}: ${item.count}`}
+                >
+                    {item.count}
+                </span>
+            ))}
+        </span>
+    );
+};
+
+const MenuLabel = ({ icon, text, attention = false, trailing = null }) => (
+    <span className="inline-flex flex-wrap items-center gap-2">
         <i className={`${icon} text-base`} aria-hidden="true"></i>
         <span>{text}</span>
         {attention && (
@@ -17,6 +42,7 @@ const MenuLabel = ({ icon, text, attention = false }) => (
                 title="Alerta de discarte"
             ></i>
         )}
+        {trailing}
     </span>
 );
 
@@ -62,6 +88,7 @@ export default function AuthenticatedLayout({ header, headerClassName = '', chil
     const user = pageProps.auth.user;
     const activeUnitName = pageProps.auth.unit?.name ?? 'Dashboard';
     const discardAlert = pageProps.discardAlert ?? null;
+    const supportTicketsMenu = pageProps.supportTicketsMenu ?? null;
     const effectiveRole = user ? Number(user.funcao) : null;
     const originalRole = user ? Number(user.funcao_original ?? user.funcao) : null;
     const roleLabels = {
@@ -198,6 +225,10 @@ export default function AuthenticatedLayout({ header, headerClassName = '', chil
         hasOnlineRoute &&
         hasMenuAccess('online_users');
     const unreadOnlineTotal = Number(onlineSummary?.unread_total ?? 0);
+    const supportTicketCounters = useMemo(
+        () => buildSupportTicketMenuCounters(supportTicketsMenu),
+        [supportTicketsMenu],
+    );
 
     useEffect(() => {
         if (
@@ -319,7 +350,11 @@ export default function AuthenticatedLayout({ header, headerClassName = '', chil
                         href={route('support.tickets.index')}
                         active={route().current('support.tickets.*')}
                     >
-                        <MenuLabel icon="bi bi-camera-video" text="Chamados" />
+                        <MenuLabel
+                            icon="bi bi-camera-video"
+                            text="Chamados"
+                            trailing={<SupportTicketCounters items={supportTicketCounters} />}
+                        />
                     </NavLink>
                 ),
             },
