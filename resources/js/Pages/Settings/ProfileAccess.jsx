@@ -33,7 +33,7 @@ const MENU_OPTIONS = [
     { key: 'notices', label: 'Avisos' },
     { key: 'discard', label: 'Descarte' },
     { key: 'switch_unit', label: 'Trocar' },
-    { key: 'settings', label: 'Farrammentas' },
+    { key: 'settings', label: 'Ferramentas' },
     { key: 'lanchonete_terminal', label: 'Terminal Lanchonete' },
 ];
 
@@ -48,6 +48,26 @@ const ROLES = [
 ];
 
 const STORAGE_KEY = 'menuAccessConfig';
+const normalizeMenuAccessConfig = (config) => {
+    if (!config || typeof config !== 'object') {
+        return config;
+    }
+
+    const allowedKeys = MENU_OPTIONS.map((item) => item.key);
+    const normalized = { ...config };
+
+    Object.entries(normalized).forEach(([role, value]) => {
+        if (!Array.isArray(value)) {
+            return;
+        }
+
+        const filtered = value.filter((key, index) => allowedKeys.includes(key) && value.indexOf(key) === index);
+        const missingKeys = allowedKeys.filter((key) => !filtered.includes(key));
+        normalized[role] = [...filtered, ...missingKeys];
+    });
+
+    return normalized;
+};
 
 export default function ProfileAccess() {
     const { auth } = usePage().props;
@@ -64,7 +84,9 @@ export default function ProfileAccess() {
         }
         try {
             const parsed = JSON.parse(raw);
-            setConfig(parsed ?? {});
+            const normalized = normalizeMenuAccessConfig(parsed ?? {});
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+            setConfig(normalized);
         } catch (err) {
             console.error('Failed to parse menuAccessConfig', err);
         }
