@@ -106,6 +106,36 @@ class OnlineController extends Controller
         return response()->json($this->buildSnapshotPayload($request, $recipientId));
     }
 
+    public function updateMessage(Request $request, ChatMessage $message): JsonResponse
+    {
+        $user = $this->ensureCanAccessOnline($request->user());
+        $this->touchPresence($request, $user);
+
+        if ((int) $message->sender_id !== (int) $user->id) {
+            abort(403);
+        }
+
+        $data = $request->validate([
+            'message' => ['required', 'string', 'max:2000'],
+        ]);
+
+        $nextMessage = trim((string) $data['message']);
+
+        if ($nextMessage === '') {
+            throw ValidationException::withMessages([
+                'message' => 'Digite uma mensagem antes de salvar.',
+            ]);
+        }
+
+        $message->update([
+            'message' => $nextMessage,
+        ]);
+
+        return response()->json(
+            $this->buildSnapshotPayload($request, (int) $message->recipient_id)
+        );
+    }
+
     private function buildSnapshotPayload(Request $request, ?int $selectedUserId = null): array
     {
         $user = $this->ensureCanAccessOnline($request->user());
