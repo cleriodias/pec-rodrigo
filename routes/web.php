@@ -184,6 +184,7 @@ Route::middleware('auth')->group(function () {
     Route::put('/sales/comandas/{codigo}/items/{productId}', [SaleController::class, 'updateComandaItem'])->name('sales.comandas.update-item');
     Route::get('/reports', [SalesReportController::class, 'index'])->name('reports.index');
     Route::get('/reports/sales-today', [SalesReportController::class, 'today'])->name('reports.sales.today');
+    Route::delete('/reports/sales-today/{payment}', [SalesReportController::class, 'destroyTodayReceipt'])->name('reports.sales.today.destroy');
     Route::get('/reports/sales-period', [SalesReportController::class, 'period'])->name('reports.sales.period');
     Route::get('/reports/sales-detailed', [SalesReportController::class, 'detailed'])->name('reports.sales.detailed');
     Route::get('/reports/lanchonete', [SalesReportController::class, 'lanchonete'])->name('reports.lanchonete');
