@@ -1,4 +1,4 @@
-import AlertMessage from '@/Components/Alert/AlertMessage';
+﻿import AlertMessage from '@/Components/Alert/AlertMessage';
 import Modal from '@/Components/Modal';
 import PrimaryButton from '@/Components/Button/PrimaryButton';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
@@ -87,6 +87,32 @@ const resolveErrorMessage = (error, fallback) => {
 };
 
 const resolveDraftKey = (userId) => String(userId ?? '');
+
+const formatMessageFooterMeta = (value) => {
+    if (!value) {
+        return {
+            date: '--',
+            time: '--:--',
+        };
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return {
+            date: '--',
+            time: '--:--',
+        };
+    }
+
+    return {
+        date: date.toLocaleDateString('pt-BR'),
+        time: date.toLocaleTimeString('pt-BR', {
+            hour: '2-digit',
+            minute: '2-digit',
+        }),
+    };
+};
 
 const COMPACT_BADGE_CLASSNAME =
     'inline-flex shrink-0 items-center justify-center rounded-full border font-semibold uppercase tracking-wide whitespace-nowrap';
@@ -743,7 +769,7 @@ export default function OnlineIndex({
                                                             }`}
                                                             style={message.is_mine ? { color: '#475569' } : undefined}
                                                         >
-                                                            {String(message.sender_name ?? '---').toUpperCase()} - {message.sender_role_label} | {formatBrazilDateTime(message.sent_at)}
+                                                            {String(message.sender_name ?? '---').toUpperCase()} - {message.sender_role_label}
                                                         </div>
                                                         <div
                                                             className="prose prose-sm max-w-none text-inherit prose-p:my-0 prose-strong:text-inherit prose-em:text-inherit prose-u:text-inherit"
@@ -751,19 +777,25 @@ export default function OnlineIndex({
                                                                 __html: renderMessage(message.message),
                                                             }}
                                                         />
-                                                        {message.is_mine && (
-                                                            <div className="mt-2 flex justify-end">
+                                                        <div className="mt-2 flex justify-end">
+                                                            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-300">
+                                                                {formatMessageFooterMeta(message.sent_at).date}
+                                                            </span>
+                                                            <span className="ml-2 text-[11px] font-semibold text-slate-500 dark:text-slate-300">
+                                                                {formatMessageFooterMeta(message.sent_at).time}
+                                                            </span>
+                                                            {message.is_mine && (
                                                                 <span
-                                                                    className="text-[11px] font-bold tracking-[-0.18em]"
+                                                                    className="ml-2 text-[11px] font-bold tracking-[-0.18em]"
                                                                     style={{
                                                                         color: message.read_at ? '#38bdf8' : '#e2e8f0',
                                                                     }}
                                                                     title={message.read_at ? 'Mensagem lida' : 'Mensagem entregue'}
                                                                 >
-                                                                    ✓✓
+                                                                    {'\u2713\u2713'}
                                                                 </span>
-                                                            </div>
-                                                        )}
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             ))
