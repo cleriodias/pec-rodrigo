@@ -741,7 +741,7 @@ export default function OnlineIndex({
                                 )}
                             </div>
 
-                            <div className="flex min-h-[68vh] flex-col">
+                            <div className="flex h-[68vh] min-h-0 flex-col">
                                 <div
                                     ref={messagesContainerRef}
                                     className="flex-1 space-y-3 overflow-y-auto px-5 py-5"

@@ -254,11 +254,12 @@ class SalesReportController extends Controller
                 $sales = $payment->vendas->values();
                 $firstSale = $sales->first();
                 $saleDateTime = $firstSale?->data_hora ?? $payment->created_at;
+                $receiptComanda = $this->resolveReceiptComanda($sales);
 
                 return [
                     'id' => $payment->tb4_id,
                     'date_time' => $saleDateTime?->toIso8601String(),
-                    'comanda' => $sales->pluck('id_comanda')->filter()->unique()->implode(', '),
+                    'comanda' => $receiptComanda,
                     'items_count' => (int) $sales->sum('quantidade'),
                     'items_label' => $sales
                         ->map(function (Venda $sale) {
@@ -271,6 +272,7 @@ class SalesReportController extends Controller
                     'vale_user' => $firstSale?->valeUser?->name ?? null,
                     'receipt' => [
                         'id' => $payment->tb4_id,
+                        'comanda' => $receiptComanda,
                         'total' => round((float) $payment->valor_total, 2),
                         'date_time' => $saleDateTime?->toIso8601String(),
                         'tipo_pago' => $payment->tipo_pagamento,
@@ -635,6 +637,7 @@ class SalesReportController extends Controller
                 $saleDateTime = $firstSale?->data_hora ?? $payment->created_at;
                 $cashierId = $firstSale?->id_user_caixa ? (int) $firstSale->id_user_caixa : null;
                 $unitId = $firstSale?->id_unidade ? (int) $firstSale->id_unidade : null;
+                $receiptComanda = $this->resolveReceiptComanda($sales);
 
                 return [
                     'id' => $payment->tb4_id,
@@ -644,10 +647,11 @@ class SalesReportController extends Controller
                     'unit_id' => $unitId,
                     'unit_name' => $firstSale?->unidade?->tb2_nome ?? '---',
                     'date_time' => $saleDateTime?->toIso8601String(),
-                    'comanda' => $sales->pluck('id_comanda')->filter()->unique()->implode(', '),
+                    'comanda' => $receiptComanda,
                     'total' => round((float) $payment->valor_total, 2),
                     'receipt' => [
                         'id' => $payment->tb4_id,
+                        'comanda' => $receiptComanda,
                         'total' => round((float) $payment->valor_total, 2),
                         'date_time' => $saleDateTime?->toIso8601String(),
                         'tipo_pago' => $payment->tipo_pagamento,
@@ -1085,7 +1089,7 @@ class SalesReportController extends Controller
 
     public function hoje(Request $request): Response
     {
-        $this->ensureCashier($request);
+        $this->ensureHojeAccess($request);
 
         $unitId = $this->resolveUnitId($request);
         $unit = Unidade::find($unitId, ['tb2_id', 'tb2_nome', 'tb2_endereco', 'tb2_cnpj']);
@@ -1136,15 +1140,17 @@ class SalesReportController extends Controller
                 $sales = $payment->vendas->values();
                 $firstSale = $sales->first();
                 $saleDateTime = $firstSale?->data_hora ?? $payment->created_at;
+                $receiptComanda = $this->resolveReceiptComanda($sales);
 
                 return [
                     'id' => $payment->tb4_id,
                     'date' => $saleDateTime?->format('d/m/Y'),
                     'time' => $saleDateTime?->format('H:i'),
-                    'comanda' => $sales->pluck('id_comanda')->filter()->unique()->implode(', '),
+                    'comanda' => $receiptComanda,
                     'total' => round((float) $payment->valor_total, 2),
                     'receipt' => [
                         'id' => $payment->tb4_id,
+                        'comanda' => $receiptComanda,
                         'total' => round((float) $payment->valor_total, 2),
                         'date_time' => $saleDateTime?->toIso8601String(),
                         'tipo_pago' => $payment->tipo_pagamento,
@@ -2033,6 +2039,15 @@ class SalesReportController extends Controller
         }
     }
 
+    private function ensureHojeAccess(Request $request): void
+    {
+        $user = $request->user();
+
+        if (! $user || ! in_array((int) $user->funcao, [0, 1, 2], true)) {
+            abort(403);
+        }
+    }
+
     private function fetchPayments(Carbon $start, Carbon $end, ?int $unitId = null): Collection
     {
         $query = VendaPagamento::query()
@@ -2151,9 +2166,11 @@ class SalesReportController extends Controller
         $sales = $payment->vendas->values();
         $firstSale = $sales->first();
         $saleDateTime = $firstSale?->data_hora ?? $payment->created_at;
+        $receiptComanda = $this->resolveReceiptComanda($sales);
 
         return [
             'id' => $payment->tb4_id,
+            'comanda' => $receiptComanda,
             'total' => round((float) $payment->valor_total, 2),
             'date_time' => $saleDateTime?->toIso8601String(),
             'tipo_pago' => $payment->tipo_pagamento,
@@ -2188,6 +2205,17 @@ class SalesReportController extends Controller
                 ->values()
                 ->all(),
         ];
+    }
+
+    private function resolveReceiptComanda(Collection $sales): ?string
+    {
+        $comanda = $sales
+            ->pluck('id_comanda')
+            ->filter(fn ($value) => $value !== null && $value !== '')
+            ->unique()
+            ->implode(', ');
+
+        return $comanda !== '' ? $comanda : null;
     }
 
     private function parseDate(?string $value, string $format, Carbon $fallback): Carbon

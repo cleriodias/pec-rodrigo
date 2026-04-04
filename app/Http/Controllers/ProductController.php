@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Produto;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redirect;
@@ -314,6 +315,30 @@ class ProductController extends Controller
             }
         }
 
+        $this->ensurePriceEditingIsAuthorized($data, $product, $request->user());
+
+        if ((int) ($data['tb1_tipo'] ?? $product?->tb1_tipo ?? 0) === 1) {
+            $balanceBarcode = $this->resolveBalanceBarcode($data, $product);
+
+            $barcodeInUse = Produto::query()
+                ->where('tb1_codbar', $balanceBarcode)
+                ->when(
+                    $product,
+                    fn ($query) => $query->where('tb1_id', '!=', $product->tb1_id)
+                )
+                ->first();
+
+            if ($barcodeInUse) {
+                throw ValidationException::withMessages([
+                    'tb1_id' => sprintf(
+                        'O codigo interno %s ja esta em uso no produto %d.',
+                        $balanceBarcode,
+                        $barcodeInUse->tb1_id
+                    ),
+                ]);
+            }
+        }
+
         return $data;
     }
 
@@ -335,7 +360,7 @@ class ProductController extends Controller
         $type = (int) ($data['tb1_tipo'] ?? $product?->tb1_tipo ?? 0);
 
         if ($type === 1) {
-            $data['tb1_codbar'] = '';
+            $data['tb1_codbar'] = $this->resolveBalanceBarcode($data, $product);
         } else {
             unset($data['tb1_id']);
             $data['tb1_codbar'] = trim((string) ($data['tb1_codbar'] ?? ''));
@@ -346,6 +371,61 @@ class ProductController extends Controller
         }
 
         return $data;
+    }
+
+    private function resolveBalanceBarcode(array $data, ?Produto $product = null): string
+    {
+        $currentBarcode = trim((string) ($product?->tb1_codbar ?? ''));
+
+        if ($currentBarcode !== '') {
+            return $currentBarcode;
+        }
+
+        $balanceId = isset($data['tb1_id'])
+            ? (int) $data['tb1_id']
+            : (int) ($product?->tb1_id ?? 0);
+
+        if ($balanceId > 0) {
+            return 'SEM-' . $balanceId;
+        }
+
+        return 'SEM-PRODUTO-BALANCA';
+    }
+
+    private function ensurePriceEditingIsAuthorized(array $data, ?Produto $product, ?User $user): void
+    {
+        if (! $product || $this->canEditProductPrices($user)) {
+            return;
+        }
+
+        $errors = [];
+
+        if ($this->priceValueChanged($data['tb1_vlr_custo'] ?? null, $product->tb1_vlr_custo)) {
+            $errors['tb1_vlr_custo'] = 'Apenas Master, Gerente e Sub-Gerente podem alterar o valor de custo.';
+        }
+
+        if ($this->priceValueChanged($data['tb1_vlr_venda'] ?? null, $product->tb1_vlr_venda)) {
+            $errors['tb1_vlr_venda'] = 'Apenas Master, Gerente e Sub-Gerente podem alterar o valor de venda.';
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+    }
+
+    private function canEditProductPrices(?User $user): bool
+    {
+        return $user instanceof User
+            && in_array((int) $user->funcao, [0, 1, 2], true);
+    }
+
+    private function priceValueChanged(mixed $requestedValue, mixed $currentValue): bool
+    {
+        if ($requestedValue === null) {
+            return false;
+        }
+
+        return abs((float) $requestedValue - (float) $currentValue) > 0.00001;
     }
 
     private function existingProductMessage(Produto $product): string

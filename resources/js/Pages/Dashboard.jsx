@@ -1,6 +1,7 @@
 ﻿import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, usePage, router } from '@inertiajs/react';
 import { formatBrazilDate, formatBrazilDateTime } from '@/Utils/date';
+import { buildReceiptHtml, resolveReceiptComanda, resolveReceiptId } from '@/Utils/receipt';
 import axios from 'axios';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -1189,85 +1190,12 @@ export default function Dashboard() {
         const receiptUnitAddress =
             receiptData.unit_address || activeUnitAddress;
         const receiptUnitCnpj = receiptData.unit_cnpj || activeUnitCnpj;
-        const unitInfoHtml = `
-                    ${receiptUnitAddress ? `<p>Endereco: ${receiptUnitAddress}</p>` : ''}
-                    ${receiptUnitCnpj ? `<p>CNPJ: ${receiptUnitCnpj}</p>` : ''}
-                `;
-
-        const itemsHtml = (receiptData.items || [])
-            .map(
-                (item) => `
-                    <div class="items-row">
-                        <span>${item.quantity}x ${item.product_name}</span>
-                        <span>${formatCurrency(item.unit_price)}</span>
-                    </div>
-                    <div class="items-row items-row-subtotal">
-                        <span>Subtotal</span>
-                        <span>${formatCurrency(item.subtotal)}</span>
-                    </div>
-                `,
-            )
-            .join('');
-
-        const paymentHtml = receiptData.payment
-            ? `
-                    ${
-                        receiptData.payment.valor_pago !== null
-                            ? `<p>Pago em dinheiro: ${formatCurrency(receiptData.payment.valor_pago)}</p>`
-                            : ''
-                    }
-                    <p>Troco: ${formatCurrency(receiptData.payment.troco ?? 0)}</p>
-                    ${
-                        receiptData.payment.dois_pgto > 0
-                            ? `<p>Cartao (compl.): ${formatCurrency(receiptData.payment.dois_pgto)}</p>`
-                            : ''
-                    }
-                `
-            : '';
-
-        const receiptHtml = `
-            <!DOCTYPE html>
-            <html>
-                <head>
-                    <meta charset="utf-8" />
-                    <title>Cupom Fiscal</title>
-                    <style>
-                        * { font-family: 'Courier New', monospace; box-sizing: border-box; }
-                        body { width: 80mm; margin: 0 auto; padding: 12px; }
-                        h1 { text-align: center; font-size: 16px; margin: 0 0 10px 0; }
-                        p { font-size: 12px; margin: 4px 0; }
-                        .divider { border-top: 1px dashed #000; margin: 10px 0; }
-                        .items-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px; }
-                        .items-row-subtotal { font-style: italic; }
-                        .total { font-size: 14px; font-weight: bold; text-align: right; margin-top: 10px; }
-                    </style>
-                </head>
-                <body>
-                    <h1>${receiptUnitName}</h1>
-                    ${unitInfoHtml}
-                    <p>Caixa: ${receiptData.cashier_name}</p>
-                    ${
-                        receiptData.vale_user_name
-                            ? `<p>Vale: ${receiptData.vale_user_name}${
-                                  receiptData.vale_type === 'refeicao' ? ' (RefeiÃ§Ã£o)' : ''
-                              }</p>`
-                            : ''
-                    }
-                    <p>Data: ${formatDateTime(receiptData.date_time)}</p>
-                    <div class="divider"></div>
-                    ${itemsHtml}
-                    <div class="divider"></div>
-                    <p>Pagamento: ${
-                        paymentLabels[receiptData.tipo_pago] ?? receiptData.tipo_pago
-                    }</p>
-                    ${paymentHtml}
-                    <div class="total">Total: ${formatCurrency(receiptData.total)}</div>
-                    <p style="text-align:center;margin-top:12px;">Obrigado pela preferencia</p>
-                </body>
-            </html>
-        `;
-
-        printWindow.document.write(receiptHtml);
+        printWindow.document.write(buildReceiptHtml({
+            ...receiptData,
+            unit_name: receiptUnitName,
+            unit_address: receiptUnitAddress,
+            unit_cnpj: receiptUnitCnpj,
+        }));
         printWindow.document.close();
         printWindow.focus();
         printWindow.print();
@@ -2002,6 +1930,18 @@ export default function Dashboard() {
                                     <p>
                                         <span className="font-medium">Cartao (compl.):</span>{' '}
                                         {formatCurrency(receiptData.payment.dois_pgto)}
+                                    </p>
+                                )}
+                                {resolveReceiptId(receiptData) && (
+                                    <p>
+                                        <span className="font-medium">Cupom:</span> #
+                                        {resolveReceiptId(receiptData)}
+                                    </p>
+                                )}
+                                {resolveReceiptComanda(receiptData) && (
+                                    <p>
+                                        <span className="font-medium">Comanda:</span> #
+                                        {resolveReceiptComanda(receiptData)}
                                     </p>
                                 )}
                                 <p>

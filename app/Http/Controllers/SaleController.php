@@ -456,9 +456,24 @@ class SaleController extends Controller
             }
         }
 
+        $receiptItems = array_map(
+            static function (array $item) use ($comandaCodigo): array {
+                if ($comandaCodigo === null) {
+                    return $item;
+                }
+
+                $item['comanda'] = $comandaCodigo;
+
+                return $item;
+            },
+            $itemsPayload
+        );
+
         return response()->json([
             'sale' => [
-                'items' => $itemsPayload,
+                'id' => $payment->tb4_id,
+                'comanda' => $comandaCodigo,
+                'items' => $receiptItems,
                 'total' => $totalValue,
                 'date_time' => $dateTime->toIso8601String(),
                 'tipo_pago' => $finalPaymentType,
