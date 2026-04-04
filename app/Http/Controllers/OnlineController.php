@@ -274,11 +274,13 @@ class OnlineController extends Controller
 
         $onlineUsers = $visiblePresences
             ->map(function (OnlineUser $presence) {
+                $displayRole = (int) ($presence->user?->funcao_original ?? $presence->user?->funcao ?? $presence->active_role);
+
                 return [
                     'id' => (int) $presence->user_id,
                     'name' => (string) $presence->user->name,
-                    'role' => (int) $presence->active_role,
-                    'role_label' => self::ROLE_LABELS[(int) $presence->active_role] ?? '---',
+                    'role' => $displayRole,
+                    'role_label' => self::ROLE_LABELS[$displayRole] ?? '---',
                     'unit_id' => $presence->active_unit_id ? (int) $presence->active_unit_id : null,
                     'unit_name' => $presence->unit?->tb2_nome ?? 'Sem loja ativa',
                     'last_seen_at' => optional($presence->last_seen_at)->toIso8601String(),
@@ -310,6 +312,7 @@ class OnlineController extends Controller
             ->map(function (User $target) {
                 $targetUnitIds = ManagementScope::targetUserUnitIds($target);
                 $primaryTargetUnitId = $targetUnitIds->first();
+                $displayRole = (int) ($target->funcao_original ?? $target->funcao);
                 $unitName = $target->primaryUnit?->tb2_nome
                     ?? $target->units->firstWhere('tb2_id', $primaryTargetUnitId)?->tb2_nome
                     ?? $target->units->first()?->tb2_nome
@@ -318,8 +321,8 @@ class OnlineController extends Controller
                 return [
                     'id' => (int) $target->id,
                     'name' => (string) $target->name,
-                    'role' => (int) $target->funcao,
-                    'role_label' => self::ROLE_LABELS[(int) $target->funcao] ?? '---',
+                    'role' => $displayRole,
+                    'role_label' => self::ROLE_LABELS[$displayRole] ?? '---',
                     'unit_id' => $primaryTargetUnitId ? (int) $primaryTargetUnitId : null,
                     'unit_name' => $unitName,
                     'last_seen_at' => null,
