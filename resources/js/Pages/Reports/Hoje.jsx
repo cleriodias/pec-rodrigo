@@ -1,7 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { formatBrazilDateTime } from '@/Utils/date';
 import { buildReceiptHtml } from '@/Utils/receipt';
-import { Head } from '@inertiajs/react';
+import { Head, useForm } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
 
 const PAYMENT_LABELS = {
@@ -26,7 +26,13 @@ const formatDateTime = (value) => {
     return formatBrazilDateTime(value);
 };
 
-export default function Hoje({ records = [], reportDate, unit }) {
+export default function Hoje({ records = [], reportDate, unit, filters = {} }) {
+    const { data, setData, get, processing } = useForm({
+        cupom: filters.cupom ?? '',
+        comanda: filters.comanda ?? '',
+        valor: filters.valor ?? '',
+        hora: filters.hora ?? '',
+    });
     const [selectedReceipt, setSelectedReceipt] = useState(null);
     const [printError, setPrintError] = useState('');
 
@@ -34,6 +40,47 @@ export default function Hoje({ records = [], reportDate, unit }) {
         () => records.reduce((sum, record) => sum + Number(record.total ?? 0), 0),
         [records],
     );
+
+    const handleSubmit = (event) => {
+        event.preventDefault();
+
+        const params = {};
+
+        if (data.cupom) {
+            params.cupom = data.cupom;
+        }
+        if (data.comanda) {
+            params.comanda = data.comanda;
+        }
+        if (data.valor) {
+            params.valor = data.valor;
+        }
+        if (data.hora) {
+            params.hora = data.hora;
+        }
+
+        get(route('reports.hoje'), {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            data: params,
+        });
+    };
+
+    const handleClear = () => {
+        setData({
+            cupom: '',
+            comanda: '',
+            valor: '',
+            hora: '',
+        });
+
+        get(route('reports.hoje'), {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+        });
+    };
 
     const handlePrint = (receipt) => {
         setPrintError('');
@@ -86,10 +133,85 @@ export default function Hoje({ records = [], reportDate, unit }) {
                         </div>
                     )}
 
+                    <form
+                        onSubmit={handleSubmit}
+                        className="rounded-2xl bg-white p-6 shadow dark:bg-gray-800"
+                    >
+                        <div className="flex flex-wrap items-end gap-3">
+                            <div>
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                    Cupom
+                                </label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={data.cupom}
+                                    onChange={(event) => setData('cupom', event.target.value)}
+                                    placeholder="Numero do cupom"
+                                    className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                    Comanda
+                                </label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={data.comanda}
+                                    onChange={(event) => setData('comanda', event.target.value)}
+                                    placeholder="Numero da comanda"
+                                    className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                    Valor
+                                </label>
+                                <input
+                                    type="text"
+                                    value={data.valor}
+                                    onChange={(event) => setData('valor', event.target.value)}
+                                    placeholder="0,00"
+                                    className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                    Hora
+                                </label>
+                                <input
+                                    type="time"
+                                    value={data.hora}
+                                    onChange={(event) => setData('hora', event.target.value)}
+                                    className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                                />
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={processing}
+                                className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-indigo-700 disabled:opacity-60"
+                            >
+                                Buscar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleClear}
+                                disabled={processing}
+                                className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100 disabled:opacity-60 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+                            >
+                                Limpar
+                            </button>
+                        </div>
+                        <p className="mt-3 text-sm text-gray-500 dark:text-gray-300">
+                            A busca considera sempre os cupons de hoje da loja atual e retorna no maximo 10 registros.
+                        </p>
+                    </form>
+
                     <div className="rounded-2xl bg-white p-6 shadow dark:bg-gray-800">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                                Cupons do dia
+                                Resultado da busca
                             </h3>
                             <div className="flex flex-wrap items-center gap-3">
                                 <span className="text-xs font-semibold text-gray-500 dark:text-gray-300">
@@ -107,7 +229,7 @@ export default function Hoje({ records = [], reportDate, unit }) {
                         <div className="mt-4 overflow-x-auto">
                             {records.length === 0 ? (
                                 <p className="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-300">
-                                    Nenhum cupom encontrado para hoje nesta loja.
+                                    Nenhum cupom encontrado com os filtros informados para hoje nesta loja.
                                 </p>
                             ) : (
                                 <table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-700">

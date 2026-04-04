@@ -1,5 +1,81 @@
 # 2026-04-04
 
+## Regra diaria para Refeicao no Dashboard
+
+- Arquivos alterados:
+  - `app/Http/Controllers/SaleController.php`
+  - `app/Http/Controllers/UserController.php`
+  - `resources/js/Pages/Dashboard.jsx`
+  - `tests/Feature/SaleRefeicaoRulesTest.php`
+- Problema corrigido:
+  - o fluxo de lancamentos no `Dashboard` aceitava pagamento em `Refeicao` apenas com base no saldo mensal, sem limite diario e exibindo o saldo do colaborador o tempo todo.
+- Causa real:
+  - o `SaleController` validava somente o saldo disponivel no periodo mensal;
+  - o `users.search` devolvia apenas saldo/uso mensal;
+  - a tela do `Dashboard` sempre mostrava o saldo no modo `Refeicao`, mesmo quando a compra era permitida.
+- Comportamento novo:
+  - compras em `Refeicao` agora respeitam limite diario de `R$ 12,00` de segunda a sabado e `R$ 24,00` no domingo;
+  - se a compra ultrapassar o limite diario, a conclusao e bloqueada com mensagem personalizada;
+  - se o saldo de refeicao for insuficiente, a mensagem passa a mostrar o saldo disponivel do colaborador;
+  - na lista de usuarios do modal, o saldo so aparece quando ele for insuficiente para a compra atual;
+  - quando o bloqueio for pelo limite diario, a lista mostra apenas o valor ainda disponivel no dia.
+- Testes adicionados:
+  - bloqueio de venda em `Refeicao` acima do limite diario em dia util;
+  - validacao de venda permitida no domingo com limite maior;
+  - cobertura da busca de usuarios com campos de uso diario de refeicao.
+- Impacto na sincronizacao com `pec1`:
+  - replicar a validacao do limite diario no `SaleController`;
+  - replicar os novos campos de uso diario em `UserController::search`;
+  - replicar o ajuste visual e a validacao previa no `resources/js/Pages/Dashboard.jsx`.
+
+## Busca por comanda no endpoint reports/hoje
+
+- Arquivos alterados:
+  - `app/Http/Controllers/SalesReportController.php`
+  - `resources/js/Pages/Reports/Hoje.jsx`
+  - `tests/Feature/SalesReportHojeTest.php`
+- Problema corrigido:
+  - a tela `reports/hoje` ja filtrava por cupom, valor e horario, mas ainda nao permitia buscar diretamente pelo numero da comanda.
+- Causa real:
+  - o backend nao aceitava nenhum parametro `comanda` na consulta;
+  - o frontend nao tinha campo para enviar esse filtro.
+- Comportamento novo:
+  - a busca de `reports/hoje` agora tambem aceita o numero da comanda;
+  - o filtro funciona em conjunto com os demais criterios, mantendo sempre a base fixa no dia atual da loja e o limite de 10 registros.
+- Teste adicionado:
+  - cobertura para garantir o filtro por numero da comanda.
+- Impacto na sincronizacao com `pec1`:
+  - replicar o filtro `comanda` no metodo `hoje()` do `SalesReportController`;
+  - replicar o novo campo no formulario de `resources/js/Pages/Reports/Hoje.jsx`;
+  - copiar a cobertura de teste correspondente, se o `pec1` estiver com a mesma base de testes.
+
+## Busca limitada no endpoint reports/hoje
+
+- Arquivos alterados:
+  - `app/Http/Controllers/SalesReportController.php`
+  - `resources/js/Pages/Reports/Hoje.jsx`
+  - `tests/Feature/SalesReportHojeTest.php`
+- Problema corrigido:
+  - o endpoint `reports/hoje` listava todos os cupons do dia da loja atual de uma vez, sem busca dedicada e sem limite por consulta.
+- Causa real:
+  - o metodo `hoje()` carregava todos os pagamentos do dia com `get()` e sem filtros especificos;
+  - a tela `Hoje.jsx` apenas renderizava a lista recebida, sem formulario para pesquisar por cupom, valor ou horario.
+- Comportamento novo:
+  - a tela `reports/hoje` agora exibe uma busca com filtros por numero do cupom, valor e hora;
+  - a base da consulta continua sempre fixa nos cupons do dia atual da loja ativa;
+  - ao informar `hora:minuto`, o backend retorna os cupons entre 10 minutos antes e 10 minutos depois do horario informado;
+  - cada busca retorna no maximo 10 registros, ordenados do mais recente para o mais antigo;
+  - a tela ganhou botao para limpar os filtros e mensagem explicando o limite da pesquisa.
+- Teste adicionado:
+  - cobertura para garantir o limite de 10 resultados no dia/unidade atual;
+  - cobertura para filtro por valor + janela de horario;
+  - cobertura para filtro por numero do cupom.
+- Impacto na sincronizacao com `pec1`:
+  - replicar no metodo `hoje()` do `SalesReportController` os filtros `cupom`, `valor` e `hora`, mantendo o dia atual como filtro fixo;
+  - limitar o retorno da consulta a 10 registros;
+  - replicar o formulario de busca em `resources/js/Pages/Reports/Hoje.jsx`;
+  - copiar tambem o teste `tests/Feature/SalesReportHojeTest.php` se o projeto `pec1` ja estiver com a estrutura de testes alinhada.
+
 ## Botao para listar produtos disponiveis para VR Credito
 
 - Arquivos alterados:

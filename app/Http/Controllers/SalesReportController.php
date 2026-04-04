@@ -1095,13 +1095,20 @@ class SalesReportController extends Controller
         $unit = Unidade::find($unitId, ['tb2_id', 'tb2_nome', 'tb2_endereco', 'tb2_cnpj']);
         $start = Carbon::today()->startOfDay();
         $end = Carbon::today()->endOfDay();
+        $receiptId = $this->parseReceiptIdFilter($request->query('cupom'));
+        $comandaId = $this->parseReceiptIdFilter($request->query('comanda'));
+        $valueFilter = $this->parseCurrencyFilter($request->query('valor'));
+        $timeWindow = $this->resolveHojeTimeWindow($request->query('hora'), $start, $end);
 
         $records = VendaPagamento::query()
             ->with([
-                'vendas' => function ($query) use ($unitId) {
+                'vendas' => function ($query) use ($unitId, $start, $end) {
                     $query
                         ->with(['caixa:id,name', 'valeUser:id,name'])
-                        ->where('id_unidade', $unitId)
+                        ->whereBetween('data_hora', [$start, $end])
+                        ->when($unitId > 0, function ($salesQuery) use ($unitId) {
+                            $salesQuery->where('id_unidade', $unitId);
+                        })
                         ->orderBy('tb3_id')
                         ->select([
                             'tb3_id',
@@ -1120,13 +1127,28 @@ class SalesReportController extends Controller
                         ]);
                 },
             ])
-            ->whereBetween('created_at', [$start, $end])
-            ->when($unitId > 0, function ($query) use ($unitId) {
-                $query->whereHas('vendas', function ($subQuery) use ($unitId) {
-                    $subQuery->where('id_unidade', $unitId);
-                });
+            ->whereHas('vendas', function ($query) use ($unitId, $start, $end, $timeWindow, $comandaId) {
+                $query
+                    ->whereBetween('data_hora', [$start, $end])
+                    ->when($unitId > 0, function ($salesQuery) use ($unitId) {
+                        $salesQuery->where('id_unidade', $unitId);
+                    })
+                    ->when($comandaId !== null, function ($salesQuery) use ($comandaId) {
+                        $salesQuery->where('id_comanda', $comandaId);
+                    })
+                    ->when($timeWindow !== null, function ($salesQuery) use ($timeWindow) {
+                        $salesQuery->whereBetween('data_hora', [$timeWindow['start'], $timeWindow['end']]);
+                    });
             })
+            ->when($receiptId !== null, function ($query) use ($receiptId) {
+                $query->where('tb4_id', $receiptId);
+            })
+            ->when($valueFilter !== null, function ($query) use ($valueFilter) {
+                $query->whereBetween('valor_total', [$valueFilter - 0.005, $valueFilter + 0.005]);
+            })
+            ->orderByDesc('created_at')
             ->orderByDesc('tb4_id')
+            ->limit(10)
             ->get([
                 'tb4_id',
                 'valor_total',
@@ -1194,6 +1216,12 @@ class SalesReportController extends Controller
             'unit' => [
                 'id' => $unit?->tb2_id ?? $unitId,
                 'name' => $unit?->tb2_nome ?? '---',
+            ],
+            'filters' => [
+                'cupom' => $receiptId !== null ? (string) $receiptId : trim((string) $request->query('cupom', '')),
+                'comanda' => $comandaId !== null ? (string) $comandaId : trim((string) $request->query('comanda', '')),
+                'valor' => trim((string) $request->query('valor', '')),
+                'hora' => $timeWindow['value'] ?? trim((string) $request->query('hora', '')),
             ],
         ]);
     }
@@ -2229,6 +2257,69 @@ class SalesReportController extends Controller
         } catch (InvalidFormatException $exception) {
             return $fallback;
         }
+    }
+
+    private function parseReceiptIdFilter(mixed $value): ?int
+    {
+        $digits = preg_replace('/\D+/', '', trim((string) $value));
+
+        if ($digits === null || $digits === '') {
+            return null;
+        }
+
+        $receiptId = (int) $digits;
+
+        return $receiptId > 0 ? $receiptId : null;
+    }
+
+    private function parseCurrencyFilter(mixed $value): ?float
+    {
+        $normalized = trim((string) $value);
+
+        if ($normalized === '') {
+            return null;
+        }
+
+        $normalized = str_replace(['R$', ' '], '', $normalized);
+
+        if (str_contains($normalized, ',')) {
+            $normalized = str_replace('.', '', $normalized);
+            $normalized = str_replace(',', '.', $normalized);
+        }
+
+        if (! is_numeric($normalized)) {
+            return null;
+        }
+
+        return round((float) $normalized, 2);
+    }
+
+    private function resolveHojeTimeWindow(mixed $value, Carbon $start, Carbon $end): ?array
+    {
+        $normalized = trim((string) $value);
+
+        if ($normalized === '') {
+            return null;
+        }
+
+        if (! preg_match('/^(\d{1,2}):(\d{2})$/', $normalized, $matches)) {
+            return null;
+        }
+
+        $hour = (int) $matches[1];
+        $minute = (int) $matches[2];
+
+        if ($hour < 0 || $hour > 23 || $minute < 0 || $minute > 59) {
+            return null;
+        }
+
+        $baseTime = $start->copy()->setTime($hour, $minute);
+
+        return [
+            'start' => $baseTime->copy()->subMinutes(10)->max($start->copy()),
+            'end' => $baseTime->copy()->addMinutes(10)->min($end->copy()),
+            'value' => sprintf('%02d:%02d', $hour, $minute),
+        ];
     }
 
     private function resolveUnitId(Request $request): int

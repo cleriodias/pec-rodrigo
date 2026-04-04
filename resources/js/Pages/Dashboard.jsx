@@ -89,6 +89,68 @@ const formatCurrency = (value) => {
     });
 };
 
+const resolveRefeicaoDailyLimit = (date = new Date()) => (date.getDay() === 0 ? 24 : 12);
+
+const formatRefeicaoLimitLabel = (value) => `Limite R$${Number(value ?? 0).toFixed(0)}`;
+
+const resolveRefeicaoValidation = (user, totalAmount, { includeBalanceMessage = true } = {}) => {
+    const balance = Number(user?.refeicao_balance ?? user?.vr_cred ?? 0);
+    const dailyLimit = Number(user?.refeicao_daily_limit ?? resolveRefeicaoDailyLimit());
+    const dailyUsed = Number(user?.refeicao_daily_used ?? 0);
+    const dailyRemaining = Math.max(
+        0,
+        Number(user?.refeicao_daily_remaining ?? dailyLimit - dailyUsed),
+    );
+
+    if (totalAmount > balance) {
+        return {
+            canProceed: false,
+            reason: 'balance',
+            balance,
+            dailyLimit,
+            dailyUsed,
+            dailyRemaining,
+            message: includeBalanceMessage
+                ? `Saldo de refeicao insuficiente para ${user?.name ?? 'o colaborador'}. Disponivel: ${formatCurrency(balance)}.`
+                : '',
+        };
+    }
+
+    if (totalAmount > dailyRemaining) {
+        if (dailyRemaining <= 0) {
+            return {
+                canProceed: false,
+                reason: 'daily_limit',
+                balance,
+                dailyLimit,
+                dailyUsed,
+                dailyRemaining,
+                message: formatRefeicaoLimitLabel(dailyLimit),
+            };
+        }
+
+        return {
+            canProceed: false,
+            reason: 'daily_limit',
+            balance,
+            dailyLimit,
+            dailyUsed,
+            dailyRemaining,
+            message: formatRefeicaoLimitLabel(dailyLimit),
+        };
+    }
+
+    return {
+        canProceed: true,
+        reason: null,
+        balance,
+        dailyLimit,
+        dailyUsed,
+        dailyRemaining,
+        message: '',
+    };
+};
+
 const formatDateTime = (value) => formatBrazilDateTime(value ?? new Date());
 
 const formatDate = (value) => {
@@ -336,7 +398,6 @@ export default function Dashboard() {
         () => items.length > 0 && !hasVrRestrictions,
         [items.length, hasVrRestrictions],
     );
-
     useEffect(() => {
         if (
             effectiveRole === 4 &&
@@ -1161,11 +1222,10 @@ export default function Dashboard() {
         }
 
         if (selectedValeType === 'refeicao') {
-            const balance = Number(user.refeicao_balance ?? user.vr_cred ?? 0);
-            if (totalAmount > balance) {
-                setSaleError(
-                    `Saldo de refeicao insuficiente para ${user.name}. Disponivel: ${formatCurrency(balance)}`,
-                );
+            const validation = resolveRefeicaoValidation(user, totalAmount);
+
+            if (!validation.canProceed) {
+                setSaleError(validation.message);
                 return;
             }
         }
@@ -1780,12 +1840,12 @@ export default function Dashboard() {
                                         </div>
                                         <p className="mt-2 text-xs text-amber-800 dark:text-amber-100">
                                             {selectedValeType === 'refeicao'
-                                                ? 'O saldo de Refeição do colaborador será utilizado; saldo insuficiente impede a venda.'
+                                                ? 'O saldo de Refeicao do colaborador sera utilizado; saldo insuficiente impede a venda.'
                                                 : 'Utilize esta opção para lançar o valor no vale tradicional do colaborador.'}
                                         </p>
                                         {!canUseRefeicao && (
                                             <p className="mt-1 text-xs text-amber-700 dark:text-amber-200">
-                                                Remova itens não liberados para VR Crédito para habilitar a opção Refeição.
+                                                Remova itens nao liberados para VR Credito para habilitar a opcao Refeicao.
                                             </p>
                                         )}
                                         <div className="mt-4">
@@ -1811,27 +1871,47 @@ export default function Dashboard() {
                                             )}
                                             {!valeLoading && valeResults.length > 0 && (
                                                 <ul className="divide-y divide-gray-200 rounded-xl border border-gray-200 bg-white dark:divide-gray-700 dark:border-gray-700 dark:bg-gray-800">
-                                                    {valeResults.map((user) => (
-                                                        <li key={user.id}>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleSelectValeUser(user)}
-                                                                className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium text-gray-800 hover:bg-indigo-50 dark:text-gray-100 dark:hover:bg-indigo-900/30"
-                                                            >
-                                                                <div>
-                                                                    <p className="font-semibold">{user.name}</p>
-                                                                    {selectedValeType === 'refeicao' && (
-                                                                        <p className="text-xs text-amber-700 dark:text-amber-200">
-                                                                            Saldo: {formatCurrency(user.refeicao_balance ?? user.vr_cred ?? 0)}
-                                                                        </p>
-                                                                    )}
-                                                                </div>
-                                                                <span className="text-xs text-gray-500 dark:text-gray-300">
-                                                                    Selecionar
-                                                                </span>
-                                                            </button>
-                                                        </li>
-                                                    ))}
+                                                    {valeResults.map((user) => {
+                                                        const refeicaoValidation =
+                                                            selectedValeType === 'refeicao'
+                                                                ? resolveRefeicaoValidation(user, totalAmount, {
+                                                                      includeBalanceMessage: false,
+                                                                  })
+                                                                : null;
+                                                        const showBalanceWarning =
+                                                            refeicaoValidation?.reason === 'balance';
+                                                        const showDailyWarning =
+                                                            refeicaoValidation?.reason === 'daily_limit';
+
+                                                        return (
+                                                            <li key={user.id}>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleSelectValeUser(user)}
+                                                                    className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium text-gray-800 hover:bg-indigo-50 dark:text-gray-100 dark:hover:bg-indigo-900/30"
+                                                                >
+                                                                    <div>
+                                                                        <p className="font-semibold">{user.name}</p>
+                                                                        {selectedValeType === 'refeicao' &&
+                                                                            showBalanceWarning && (
+                                                                                <p className="text-xs text-amber-700 dark:text-amber-200">
+                                                                                    Saldo: {formatCurrency(user.refeicao_balance ?? user.vr_cred ?? 0)}
+                                                                                </p>
+                                                                            )}
+                                                                        {selectedValeType === 'refeicao' &&
+                                                                            showDailyWarning && (
+                                                                                <p className="text-xs text-amber-700 dark:text-amber-200">
+                                                                                    {formatRefeicaoLimitLabel(user.refeicao_daily_limit)}
+                                                                                </p>
+                                                                            )}
+                                                                    </div>
+                                                                    <span className="text-xs text-gray-500 dark:text-gray-300">
+                                                                        Selecionar
+                                                                    </span>
+                                                                </button>
+                                                            </li>
+                                                        );
+                                                    })}
                                                 </ul>
                                             )}
                                         </div>

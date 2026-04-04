@@ -367,8 +367,31 @@ class SaleController extends Controller
             if ($totalValue > $availableBalance) {
                 throw ValidationException::withMessages([
                     'vale_user_id' => sprintf(
-                        'Saldo de refeicao insuficiente. Disponivel: R$ %s',
+                        'Saldo de refeicao insuficiente para %s. Disponivel: R$ %s',
+                        $valeUser->name,
                         number_format($availableBalance, 2, ',', '.')
+                    ),
+                ]);
+            }
+
+            $dailyLimit = $this->resolveRefeicaoDailyLimit($dateTime);
+            $dailyUsage = (float) Venda::query()
+                ->where('tipo_pago', 'refeicao')
+                ->where('id_user_vale', $valeUserId)
+                ->whereBetween('data_hora', [
+                    $dateTime->copy()->startOfDay(),
+                    $dateTime->copy()->endOfDay(),
+                ])
+                ->sum('valor_total');
+            $dailyRemaining = max(0, $dailyLimit - $dailyUsage);
+
+            if ($totalValue > $dailyRemaining) {
+                throw ValidationException::withMessages([
+                    'vale_user_id' => $this->buildRefeicaoDailyLimitMessage(
+                        $valeUser->name,
+                        $dailyLimit,
+                        $dailyUsage,
+                        $dailyRemaining
                     ),
                 ]);
             }
@@ -884,5 +907,38 @@ class SaleController extends Controller
             'product_id' => $productId,
             'unit_price' => $unitPrice,
         ];
+    }
+
+    private function resolveRefeicaoDailyLimit(Carbon $date): float
+    {
+        return $date->isSunday() ? 24.0 : 12.0;
+    }
+
+    private function buildRefeicaoDailyLimitMessage(
+        string $userName,
+        float $dailyLimit,
+        float $dailyUsage,
+        float $dailyRemaining,
+    ): string {
+        if ($dailyRemaining <= 0) {
+            return sprintf(
+                'Limite diario de refeicao de %s ja foi atingido hoje para %s.',
+                $this->formatCurrencyForMessage($dailyLimit),
+                $userName
+            );
+        }
+
+        return sprintf(
+            'A compra ultrapassa o limite diario de refeicao para %s. Limite de hoje: %s. Ja utilizado: %s. Disponivel hoje: %s.',
+            $userName,
+            $this->formatCurrencyForMessage($dailyLimit),
+            $this->formatCurrencyForMessage($dailyUsage),
+            $this->formatCurrencyForMessage($dailyRemaining)
+        );
+    }
+
+    private function formatCurrencyForMessage(float $value): string
+    {
+        return 'R$ ' . number_format($value, 2, ',', '.');
     }
 }
