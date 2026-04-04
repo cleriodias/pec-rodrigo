@@ -596,7 +596,7 @@ export default function OnlineIndex({
                 type="button"
                 key={`${offline ? 'offline' : 'online'}-${user.id}`}
                 onClick={() => handleSelectUser(user.id)}
-                className={`flex w-full items-center gap-2 overflow-hidden border-b border-gray-100 px-4 py-4 text-left transition last:border-b-0 dark:border-gray-800 ${
+                className={`flex w-full flex-col gap-1 overflow-hidden border-b border-gray-100 px-4 py-4 text-left transition last:border-b-0 dark:border-gray-800 ${
                     isSelected
                         ? hasUnread
                             ? 'border-l-4 border-l-emerald-500 bg-slate-100 dark:border-l-emerald-400 dark:bg-slate-800/80'
@@ -608,43 +608,48 @@ export default function OnlineIndex({
                             : 'hover:bg-gray-50 dark:hover:bg-gray-800/70'
                 }`}
             >
-                <span
-                    className={`inline-flex min-w-[72px] max-w-[108px] items-center justify-center ${getUserNameBadgeClassName()}`}
-                >
-                    <span className="truncate">
-                        {String(user.name ?? '').toUpperCase()}
+                <div className="flex w-full items-start gap-2">
+                    <span
+                        className={`inline-flex min-w-[72px] max-w-[108px] items-center justify-center ${getUserNameBadgeClassName()}`}
+                    >
+                        <span className="truncate">
+                            {String(user.name ?? '').toUpperCase()}
+                        </span>
                     </span>
-                </span>
-                <span
-                    className={COMPACT_BADGE_CLASSNAME}
-                    style={{
-                        ...getRoleBadgeStyle(user.role_label),
-                        padding: '0 6px',
-                        fontSize: '9px',
-                        lineHeight: '12px',
-                        minHeight: '16px',
-                    }}
-                >
-                    {formatRoleBadgeLabel(user.role_label)}
-                </span>
-                <span
-                    className={COMPACT_BADGE_CLASSNAME}
-                    style={{
-                        ...getUnitBadgeStyle(user.unit_name),
-                        padding: '0 6px',
-                        fontSize: '9px',
-                        lineHeight: '12px',
-                        minHeight: '16px',
-                        minWidth: '52px',
-                    }}
-                >
-                    {formatUnitBadgeLabel(user.unit_name)}
-                </span>
-                {hasUnread && (
-                    <span className="ms-auto -mt-3 shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-semibold text-white shadow-sm">
-                        {user.unread_count}
+                    <span
+                        className={COMPACT_BADGE_CLASSNAME}
+                        style={{
+                            ...getRoleBadgeStyle(user.role_label),
+                            padding: '0 6px',
+                            fontSize: '9px',
+                            lineHeight: '12px',
+                            minHeight: '16px',
+                        }}
+                    >
+                        {formatRoleBadgeLabel(user.role_label)}
                     </span>
-                )}
+                    <span
+                        className={COMPACT_BADGE_CLASSNAME}
+                        style={{
+                            ...getUnitBadgeStyle(user.unit_name),
+                            padding: '0 6px',
+                            fontSize: '9px',
+                            lineHeight: '12px',
+                            minHeight: '16px',
+                            minWidth: '52px',
+                        }}
+                    >
+                        {formatUnitBadgeLabel(user.unit_name)}
+                    </span>
+                    {hasUnread && (
+                        <span className="ms-auto -mt-3 shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-semibold text-white shadow-sm">
+                            {user.unread_count}
+                        </span>
+                    )}
+                </div>
+                <span className="block w-full truncate text-[11px] font-medium leading-4 text-gray-500 dark:text-gray-400">
+                    {String(user.last_message_preview ?? '').trim()}
+                </span>
             </button>
         );
     };
