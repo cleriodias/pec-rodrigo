@@ -222,24 +222,13 @@ export default function OnlineIndex({
     }, [selectedUserId]);
 
     useEffect(() => {
-        const container = messagesContainerRef.current;
         const previous = lastMessageMetaRef.current;
-        const latestMessage = messages[messages.length - 1] ?? null;
         const selectedChanged =
             Number(previous.selectedUserId ?? 0) !== Number(selectedUser?.id ?? 0);
-        const countIncreased = messages.length > Number(previous.count ?? 0);
-        const distanceFromBottom = container
-            ? container.scrollHeight - container.scrollTop - container.clientHeight
-            : 0;
-        const shouldStickToBottom =
-            selectedChanged ||
-            (countIncreased && (distanceFromBottom < 120 || Boolean(latestMessage?.is_mine)));
 
-        if (shouldStickToBottom) {
-            messagesEndRef.current?.scrollIntoView({
-                behavior: selectedChanged ? 'auto' : 'smooth',
-            });
-        }
+        messagesEndRef.current?.scrollIntoView({
+            behavior: selectedChanged ? 'auto' : 'smooth',
+        });
 
         lastMessageMetaRef.current = {
             selectedUserId: selectedUser?.id ?? null,

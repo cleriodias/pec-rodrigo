@@ -1,5 +1,23 @@
 # 2026-04-04
 
+## Conversa do On-Line sempre posicionada no final
+
+- Arquivos alterados:
+  - `resources/js/Pages/Online/Index.jsx`
+- Problema corrigido:
+  - a barra de rolagem da conversa no endpoint `on-line` nem sempre permanecia no fim da conversa.
+- Causa real:
+  - a logica de auto-scroll era condicional;
+  - o sistema so rolava automaticamente em algumas situacoes, como troca de usuario ou chegada de mensagem quando a barra ja estava perto do final;
+  - se a atualizacao acontecesse fora dessas condicoes, a conversa podia permanecer acima do rodape.
+- Comportamento novo:
+  - toda atualizacao da conversa agora reposiciona a barra no final;
+  - ao trocar de usuario, o scroll vai direto para baixo;
+  - ao chegar nova mensagem, a conversa continua sempre ancorada no fim.
+- Impacto na sincronizacao com `pec1`:
+  - replicar a simplificacao do `useEffect` de scroll em `resources/js/Pages/Online/Index.jsx`;
+  - nao alterar `resources/js/Pages/Welcome.jsx` nem `resources/js/Pages/Auth/Login.jsx`, porque fazem parte das diferencas conhecidas entre os projetos.
+
 ## Padronizacao da impressao de cupons e exibicao obrigatoria da comanda
 
 - Arquivos alterados:
