@@ -1,5 +1,35 @@
 # 2026-04-04
 
+## Master Confere no endpoint reports/cash-closure
+
+- Arquivos alterados:
+  - `app/Http/Controllers/SalesReportController.php`
+  - `app/Models/CashierClosure.php`
+  - `database/migrations/2026_04_04_120000_add_master_review_fields_to_cashier_closures_table.php`
+  - `resources/js/Pages/Reports/CashClosure.jsx`
+  - `routes/web.php`
+  - `tests/Feature/CashClosureMasterReviewTest.php`
+- Problema corrigido:
+  - o relatorio `reports/cash-closure` mostrava apenas os valores originais fechados pelo caixa e nao permitia uma segunda conferencia do `Master`;
+  - o card `Base da conferencia` ficava misturado no bloco de resumo, em vez de acompanhar os filtros no topo.
+- Causa real:
+  - a tabela `cashier_closures` nao tinha campos separados para a revisao do `Master`;
+  - o backend so carregava `cash_amount` e `card_amount` originais;
+  - o frontend nao tinha acao de edicao nem modal para a segunda conferencia.
+- Comportamento novo:
+  - quando o fechamento existir, o `Master (0)` passa a ver o botao `Master Confere` ao lado do status;
+  - esse botao abre um modal para editar dinheiro e cartao na segunda conferencia;
+  - o relatorio passa a usar os valores revisados pelo `Master` como base efetiva de conferencia, preservando os valores originais do caixa;
+  - a tela mostra quem fez a conferencia do `Master` e quando ela ocorreu;
+  - o card `Base da conferencia` foi movido para o topo, ao lado dos filtros, como no layout solicitado.
+- Testes adicionados:
+  - cobertura para atualizar a conferencia do `Master`;
+  - cobertura para garantir que o relatorio usa os valores revisados quando existirem.
+- Impacto na sincronizacao com `pec1`:
+  - criar os campos de segunda conferencia na tabela `cashier_closures`;
+  - replicar a nova rota de atualizacao da conferencia;
+  - replicar a logica do `Master Confere` no `SalesReportController` e na tela `CashClosure.jsx`.
+
 ## Regra diaria para Refeicao no Dashboard
 
 - Arquivos alterados:

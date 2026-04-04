@@ -1368,8 +1368,17 @@ class SalesReportController extends Controller
             });
         }
 
-        $closures = $closureQuery
-            ->get()
+        $closuresCollection = $closureQuery->get();
+        $reviewerIds = $closuresCollection
+            ->pluck('master_checked_by')
+            ->filter()
+            ->unique()
+            ->values();
+        $reviewers = $reviewerIds->isNotEmpty()
+            ? User::whereIn('id', $reviewerIds)->get(['id', 'name'])->keyBy('id')
+            : collect();
+
+        $closures = $closuresCollection
             ->mapWithKeys(function ($closure) {
                 $unitKey = $closure->unit_id ?? 'none';
                 return [$closure->user_id . '-' . $unitKey => $closure];
@@ -1467,7 +1476,7 @@ class SalesReportController extends Controller
             });
 
         $records = collect($grouped)
-            ->map(function (array $record) use ($closures, $discardTotals, $discardAlertService, $discardThreshold) {
+            ->map(function (array $record) use ($closures, $discardTotals, $discardAlertService, $discardThreshold, $reviewers) {
                 $record['totals'] = array_map(fn ($value) => round($value, 2), $record['totals']);
                 $record['grand_total'] = round($record['grand_total'], 2);
                 $record['row_key'] = $record['row_key'] ?? ($record['cashier_id'] . '-' . ($record['unit_id'] ?? 'none'));
@@ -1482,24 +1491,47 @@ class SalesReportController extends Controller
                 if ($closure) {
                     $cashClosure = (float) $closure->cash_amount;
                     $cardClosure = (float) $closure->card_amount;
-                    $closureTotal = $cashClosure + $cardClosure;
+                    $hasMasterReview = $closure->master_checked_at !== null
+                        && $closure->master_cash_amount !== null
+                        && $closure->master_card_amount !== null;
+                    $effectiveCashClosure = $hasMasterReview
+                        ? (float) $closure->master_cash_amount
+                        : $cashClosure;
+                    $effectiveCardClosure = $hasMasterReview
+                        ? (float) $closure->master_card_amount
+                        : $cardClosure;
+                    $closureTotal = $effectiveCashClosure + $effectiveCardClosure;
 
                     $record['closure'] = [
+                        'id' => $closure->id,
                         'closed' => true,
-                        'cash_amount' => round($cashClosure, 2),
-                        'card_amount' => round($cardClosure, 2),
+                        'cash_amount' => round($effectiveCashClosure, 2),
+                        'card_amount' => round($effectiveCardClosure, 2),
                         'total_amount' => round($closureTotal, 2),
                         'unit_id' => $closure->unit_id,
                         'unit_name' => $closure->unit_name,
                         'closed_at' => optional($closure->closed_at)->toIso8601String(),
+                        'original_cash_amount' => round($cashClosure, 2),
+                        'original_card_amount' => round($cardClosure, 2),
+                        'master_review' => [
+                            'reviewed' => $hasMasterReview,
+                            'cash_amount' => $hasMasterReview ? round((float) $closure->master_cash_amount, 2) : null,
+                            'card_amount' => $hasMasterReview ? round((float) $closure->master_card_amount, 2) : null,
+                            'checked_at' => optional($closure->master_checked_at)->toIso8601String(),
+                            'checked_by' => $closure->master_checked_by,
+                            'checked_by_name' => $closure->master_checked_by
+                                ? ($reviewers[$closure->master_checked_by]->name ?? null)
+                                : null,
+                        ],
                         'differences' => [
-                            'cash' => round($cashSystem - $cashClosure, 2),
-                            'card' => round($cardSystem - $cardClosure, 2),
+                            'cash' => round($cashSystem - $effectiveCashClosure, 2),
+                            'card' => round($cardSystem - $effectiveCardClosure, 2),
                             'total' => round($systemTotal - $closureTotal, 2),
                         ],
                     ];
                 } else {
                     $record['closure'] = [
+                        'id' => null,
                         'closed' => false,
                         'cash_amount' => 0.0,
                         'card_amount' => 0.0,
@@ -1507,6 +1539,16 @@ class SalesReportController extends Controller
                         'unit_id' => null,
                         'unit_name' => null,
                         'closed_at' => null,
+                        'original_cash_amount' => 0.0,
+                        'original_card_amount' => 0.0,
+                        'master_review' => [
+                            'reviewed' => false,
+                            'cash_amount' => null,
+                            'card_amount' => null,
+                            'checked_at' => null,
+                            'checked_by' => null,
+                            'checked_by_name' => null,
+                        ],
                         'differences' => [
                             'cash' => round($cashSystem, 2),
                             'card' => round($cardSystem, 2),
@@ -1542,6 +1584,27 @@ class SalesReportController extends Controller
             'selectedUnit' => $selectedUnit,
             'discardDetails' => $discardDetails,
             'meta' => self::TYPE_META,
+        ]);
+    }
+
+    public function updateCashClosureMasterReview(Request $request, CashierClosure $closure): JsonResponse
+    {
+        $this->ensureMaster($request);
+
+        $validated = $request->validate([
+            'cash_amount' => ['required', 'numeric', 'min:0'],
+            'card_amount' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        $closure->forceFill([
+            'master_cash_amount' => round((float) $validated['cash_amount'], 2),
+            'master_card_amount' => round((float) $validated['card_amount'], 2),
+            'master_checked_by' => $request->user()->id,
+            'master_checked_at' => now(),
+        ])->save();
+
+        return response()->json([
+            'message' => 'Conferencia do Master atualizada com sucesso.',
         ]);
     }
 
@@ -2054,6 +2117,15 @@ class SalesReportController extends Controller
         $user = $request->user();
 
         if (!$user || !in_array((int) $user->funcao, [0, 1], true)) {
+            abort(403);
+        }
+    }
+
+    private function ensureMaster(Request $request): void
+    {
+        $user = $request->user();
+
+        if (! $user || (int) $user->funcao !== 0) {
             abort(403);
         }
     }
