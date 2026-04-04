@@ -28,6 +28,7 @@ class ProductController extends Controller
     public function index(Request $request): Response
     {
         $search = trim((string) $request->input('search', ''));
+        $vrCreditOnly = in_array(strtolower((string) $request->input('vr_credit', '0')), ['1', 'true'], true);
         $sort = (string) $request->input('sort', '');
         $direction = strtolower((string) $request->input('direction', 'asc'));
         $query = Produto::query();
@@ -52,6 +53,10 @@ class ProductController extends Controller
 
                 $builder->where('tb1_nome', 'like', $likeTerm);
             });
+        }
+
+        if ($vrCreditOnly) {
+            $query->where('tb1_vr_credit', true);
         }
 
         $allowedSorts = [
@@ -90,6 +95,7 @@ class ProductController extends Controller
             'typeLabels' => self::TYPE_LABELS,
             'statusLabels' => self::STATUS_LABELS,
             'search' => $search,
+            'vrCreditOnly' => $vrCreditOnly,
             'sort' => $sort,
             'direction' => $direction,
         ]);

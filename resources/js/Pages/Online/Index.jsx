@@ -185,10 +185,7 @@ export default function OnlineIndex({
     const messagesEndRef = useRef(null);
     const messagesContainerRef = useRef(null);
     const selectedUserIdRef = useRef(initialSelectedUserId);
-    const lastMessageMetaRef = useRef({
-        selectedUserId: initialSelectedUserId,
-        count: initialMessages.length,
-    });
+    const hasInitialConversationScrollRef = useRef(false);
 
     const selectedUser = useMemo(
         () =>
@@ -222,19 +219,17 @@ export default function OnlineIndex({
     }, [selectedUserId]);
 
     useEffect(() => {
-        const previous = lastMessageMetaRef.current;
-        const selectedChanged =
-            Number(previous.selectedUserId ?? 0) !== Number(selectedUser?.id ?? 0);
+        if (hasInitialConversationScrollRef.current || !selectedUser) {
+            return;
+        }
 
-        messagesEndRef.current?.scrollIntoView({
-            behavior: selectedChanged ? 'auto' : 'smooth',
+        hasInitialConversationScrollRef.current = true;
+        window.requestAnimationFrame(() => {
+            messagesEndRef.current?.scrollIntoView({
+                behavior: 'auto',
+            });
         });
-
-        lastMessageMetaRef.current = {
-            selectedUserId: selectedUser?.id ?? null,
-            count: messages.length,
-        };
-    }, [messages, selectedUser?.id]);
+    }, [selectedUser]);
 
     useEffect(() => {
         if (selectedUser) {
@@ -251,7 +246,7 @@ export default function OnlineIndex({
         }
     }, [editingMessageId]);
 
-    const applySnapshot = (payload, requestedUserId = null) => {
+    const applySnapshot = (payload, requestedUserId = null, shouldAutoScroll = false) => {
         const nextUsers = Array.isArray(payload?.onlineUsers) ? payload.onlineUsers : [];
         const nextOfflineUsers = Array.isArray(payload?.offlineUsers) ? payload.offlineUsers : [];
         const availableIds = nextUsers
@@ -263,6 +258,9 @@ export default function OnlineIndex({
                 : payload?.selectedUserId && availableIds.includes(Number(payload.selectedUserId))
                   ? Number(payload.selectedUserId)
                   : nextUsers[0]?.id ?? nextOfflineUsers[0]?.id ?? null;
+        const currentSelectedUserId = Number(selectedUserIdRef.current ?? 0);
+        const nextSelectedUserIdNumber = Number(nextSelectedUserId ?? 0);
+        const selectedConversationChanged = currentSelectedUserId !== nextSelectedUserIdNumber;
 
         setOnlineUsers(nextUsers);
         setOfflineUsers(nextOfflineUsers);
@@ -271,9 +269,17 @@ export default function OnlineIndex({
         if (payload?.currentUser) {
             setCurrentViewer(payload.currentUser);
         }
+
+        if ((shouldAutoScroll || selectedConversationChanged) && nextSelectedUserId) {
+            window.requestAnimationFrame(() => {
+                messagesEndRef.current?.scrollIntoView({
+                    behavior: 'auto',
+                });
+            });
+        }
     };
 
-    const loadSnapshot = async (requestedUserId = null, silent = false) => {
+    const loadSnapshot = async (requestedUserId = null, silent = false, shouldAutoScroll = false) => {
         if (!silent) {
             setLoadingSnapshot(true);
         } else {
@@ -285,7 +291,7 @@ export default function OnlineIndex({
                 params: requestedUserId ? { selected_user_id: requestedUserId } : {},
             });
 
-            applySnapshot(response.data ?? {}, requestedUserId);
+            applySnapshot(response.data ?? {}, requestedUserId, shouldAutoScroll);
             setErrorMessage('');
         } catch (error) {
             if (!silent) {
@@ -348,7 +354,7 @@ export default function OnlineIndex({
 
     const handleSelectUser = (userId) => {
         setSelectedUserId(userId);
-        loadSnapshot(userId);
+        loadSnapshot(userId, false, true);
     };
 
     const closeAnyDeskModal = () => {

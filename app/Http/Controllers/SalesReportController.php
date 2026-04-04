@@ -2043,7 +2043,7 @@ class SalesReportController extends Controller
     {
         $user = $request->user();
 
-        if (! $user || ! in_array((int) $user->funcao, [0, 1, 2], true)) {
+        if (! $user || ! in_array((int) $user->funcao, [0, 1, 2, 3], true)) {
             abort(403);
         }
     }

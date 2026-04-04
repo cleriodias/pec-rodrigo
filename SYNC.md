@@ -1,5 +1,62 @@
 # 2026-04-04
 
+## Botao para listar produtos disponiveis para VR Credito
+
+- Arquivos alterados:
+  - `app/Http/Controllers/ProductController.php`
+  - `resources/js/Pages/Products/ProductIndex.jsx`
+- Problema corrigido:
+  - a listagem do endpoint `products` nao tinha um atalho para mostrar apenas os itens marcados como disponiveis para `VR Credito`.
+- Causa real:
+  - o campo `tb1_vr_credit` existia no cadastro e na edicao do produto, mas o metodo `index()` do `ProductController` nao aceitava nenhum filtro para esse campo;
+  - no frontend, a tela `ProductIndex` tinha apenas busca e botao de cadastro, sem acao dedicada para filtrar os produtos com `VR Credito`.
+- Comportamento novo:
+  - foi adicionado um botao `VR Credito` no topo da listagem de produtos;
+  - o botao fica no lado oposto ao botao de cadastro;
+  - ao clicar, a tela passa a mostrar apenas os produtos com `tb1_vr_credit = 1`;
+  - o filtro continua convivendo com busca e ordenacao.
+- Impacto na sincronizacao com `pec1`:
+  - replicar o filtro `vr_credit` no metodo `index()` do `ProductController`;
+  - replicar o botao de filtro no topo da `ProductIndex.jsx`, mantendo-o no lado oposto ao botao de cadastro;
+  - nao alterar `resources/js/Pages/Welcome.jsx` nem `resources/js/Pages/Auth/Login.jsx`, porque fazem parte das diferencas conhecidas entre os projetos.
+
+## Correcao da permissao do reports/hoje para manter acesso do Caixa
+
+- Arquivos alterados:
+  - `app/Http/Controllers/SalesReportController.php`
+  - `resources/js/Layouts/AuthenticatedLayout.jsx`
+- Problema corrigido:
+  - apos a ampliacao anterior do endpoint `reports/hoje`, o perfil `Caixa` deixou de ver a opcao no menu e de acessar a tela.
+- Causa real:
+  - a regra anterior foi substituida em vez de ampliada;
+  - o backend passou a aceitar apenas `Master (0)`, `Gerente (1)` e `Sub-Gerente (2)`;
+  - o frontend tambem ficou limitado a esses tres perfis, removendo o comportamento antigo do `Caixa (3)`.
+- Comportamento novo:
+  - o endpoint `reports/hoje` agora fica acessivel para `Master (0)`, `Gerente (1)`, `Sub-Gerente (2)` e `Caixa (3)`;
+  - o item `Hoje` volta a aparecer no menu para o perfil `Caixa`, alem dos perfis de gestao.
+- Impacto na sincronizacao com `pec1`:
+  - ajustar a validacao do `SalesReportController` para aceitar `[0, 1, 2, 3]`;
+  - ajustar a condicao de exibicao do item `reports_hoje` no `AuthenticatedLayout.jsx` para aceitar `[0, 1, 2, 3]`;
+  - esta correcao complementa a alteracao anterior e evita regressao para o perfil `Caixa`.
+
+## Ajuste do scroll do chat no On-Line para preservar o historico
+
+- Arquivos alterados:
+  - `resources/js/Pages/Online/Index.jsx`
+- Problema corrigido:
+  - depois da mudanca anterior, a conversa do endpoint `on-line` descia automaticamente em toda atualizacao, atrapalhando quem estivesse lendo mensagens antigas.
+- Causa real:
+  - o auto-scroll ficou configurado para acontecer a cada atualizacao da lista de mensagens;
+  - isso fazia o refresh do chat puxar a barra para baixo mesmo quando o usuario estava consultando o historico.
+- Comportamento novo:
+  - o scroll automatico acontece apenas uma vez ao abrir/trocar de conversa;
+  - depois disso, novas atualizacoes nao forcao a barra para o final;
+  - se o usuario subir para ler o historico, a posicao manual passa a ser respeitada.
+- Impacto na sincronizacao com `pec1`:
+  - replicar o ajuste da funcao `loadSnapshot()` e do `applySnapshot()` em `resources/js/Pages/Online/Index.jsx`;
+  - manter o scroll automatico apenas na abertura efetiva da conversa;
+  - nao alterar `resources/js/Pages/Welcome.jsx` nem `resources/js/Pages/Auth/Login.jsx`, porque fazem parte das diferencas conhecidas entre os projetos.
+
 ## Conversa do On-Line sempre posicionada no final
 
 - Arquivos alterados:

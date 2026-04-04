@@ -172,7 +172,7 @@ export default function AuthenticatedLayout({ header, headerClassName = '', chil
     const isLanchonete = user && effectiveRole === 4;
     const isMaster = user && effectiveRole === 0;
     const isAdmin = user && [0, 1].includes(effectiveRole);
-    const canSeeHojeReport = user && [0, 1, 2].includes(effectiveRole);
+    const canSeeHojeReport = user && [0, 1, 2, 3].includes(effectiveRole);
     const canSeeUsers = user && [0, 1].includes(effectiveRole);
     const canSeeUnits = canSeeUsers;
     const canSeeReports = canSeeUnits;
