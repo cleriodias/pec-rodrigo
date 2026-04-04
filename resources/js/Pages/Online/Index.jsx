@@ -743,20 +743,7 @@ export default function OnlineIndex({
                                                             }`}
                                                             style={message.is_mine ? { color: '#475569' } : undefined}
                                                         >
-                                                            <span>
-                                                                {String(message.sender_name ?? '---').toUpperCase()} - {message.sender_role_label} | {formatBrazilDateTime(message.sent_at)}
-                                                            </span>
-                                                            {message.is_mine && (
-                                                                <span
-                                                                    className="ml-2 text-[11px] font-bold tracking-[-0.18em]"
-                                                                    style={{
-                                                                        color: message.read_at ? '#38bdf8' : '#e2e8f0',
-                                                                    }}
-                                                                    title={message.read_at ? 'Mensagem lida' : 'Mensagem entregue'}
-                                                                >
-                                                                    ✓✓
-                                                                </span>
-                                                            )}
+                                                            {String(message.sender_name ?? '---').toUpperCase()} - {message.sender_role_label} | {formatBrazilDateTime(message.sent_at)}
                                                         </div>
                                                         <div
                                                             className="prose prose-sm max-w-none text-inherit prose-p:my-0 prose-strong:text-inherit prose-em:text-inherit prose-u:text-inherit"
@@ -764,6 +751,19 @@ export default function OnlineIndex({
                                                                 __html: renderMessage(message.message),
                                                             }}
                                                         />
+                                                        {message.is_mine && (
+                                                            <div className="mt-2 flex justify-end">
+                                                                <span
+                                                                    className="text-[11px] font-bold tracking-[-0.18em]"
+                                                                    style={{
+                                                                        color: message.read_at ? '#38bdf8' : '#e2e8f0',
+                                                                    }}
+                                                                    title={message.read_at ? 'Mensagem lida' : 'Mensagem entregue'}
+                                                                >
+                                                                    ✓✓
+                                                                </span>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             ))
