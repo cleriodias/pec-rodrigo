@@ -1507,6 +1507,7 @@ class SalesReportController extends Controller
             'selectedUnitId' => $filterUnitId,
             'selectedUnit' => $selectedUnit,
             'discardDetails' => $discardDetails,
+            'meta' => self::TYPE_META,
         ]);
     }
 
