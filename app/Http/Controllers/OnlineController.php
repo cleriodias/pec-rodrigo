@@ -173,6 +173,12 @@ class OnlineController extends Controller
             abort(403);
         }
 
+        if ($message->read_at) {
+            throw ValidationException::withMessages([
+                'message' => 'Mensagens lidas nao podem ser editadas.',
+            ]);
+        }
+
         $data = $request->validate([
             'message' => ['required', 'string', 'max:2000'],
         ]);
@@ -191,6 +197,29 @@ class OnlineController extends Controller
 
         return response()->json(
             $this->buildSnapshotPayload($request, (int) $message->recipient_id)
+        );
+    }
+
+    public function destroyMessage(Request $request, ChatMessage $message): JsonResponse
+    {
+        $user = $this->ensureCanAccessOnline($request->user());
+        $this->touchPresence($request, $user);
+
+        if ((int) $message->sender_id !== (int) $user->id) {
+            abort(403);
+        }
+
+        if ($message->read_at) {
+            throw ValidationException::withMessages([
+                'message' => 'Mensagens lidas nao podem ser excluidas.',
+            ]);
+        }
+
+        $recipientId = (int) $message->recipient_id;
+        $message->delete();
+
+        return response()->json(
+            $this->buildSnapshotPayload($request, $recipientId)
         );
     }
 
@@ -460,6 +489,7 @@ class OnlineController extends Controller
                 'sender_role' => (int) $message->sender_role,
                 'sender_role_label' => self::ROLE_LABELS[(int) $message->sender_role] ?? '---',
                 'is_mine' => (int) $message->sender_id === $viewerId,
+                'can_manage' => (int) $message->sender_id === $viewerId && $message->read_at === null,
             ])
             ->all();
     }
