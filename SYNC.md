@@ -1,5 +1,23 @@
 # 2026-04-05
 
+## Atalho de Vales no endpoint reports/cash-discrepancies
+
+- Arquivos alterados:
+  - `resources/js/Pages/Reports/CashDiscrepancies.jsx`
+- Problema corrigido:
+  - a tela `reports/cash-discrepancies` exibia o botao `Vales` no cabecalho sem funcionar como atalho direto para `Ferramentas > Relatorios > Vales`.
+- Causa real:
+  - o cabecalho da pagina nao tinha link configurado para a rota `reports.vale`;
+  - a tela de discrepancias estava sem integracao direta com o relatorio de vales.
+- Comportamento novo:
+  - o botao `Vales` do cabecalho agora abre o relatorio `reports/vale`;
+  - o atalho ja envia a mesma `data` selecionada na tela como `start_date` e `end_date`;
+  - o atalho tambem envia a `unit_id` atual, preservando o contexto da loja quando houver filtro aplicado.
+- Impacto na sincronizacao com `pec1`:
+  - replicar o link do cabecalho em `resources/js/Pages/Reports/CashDiscrepancies.jsx`;
+  - importar `Link` de `@inertiajs/react` nessa pagina, se ainda nao estiver importado;
+  - enviar no atalho os parametros `start_date`, `end_date` e `unit_id` para a rota `reports.vale`.
+
 ## Botao Imprimir Vales no endpoint reports/vale
 
 - Arquivos alterados:
