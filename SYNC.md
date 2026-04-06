@@ -202,3 +202,48 @@
   - limitar o retorno da consulta a 10 registros;
   - replicar o formulario de busca em `resources/js/Pages/Reports/Hoje.jsx`;
   - copiar tambem o teste `tests/Feature/SalesReportHojeTest.php` se o projeto `pec1` ja estiver com a estrutura de testes alinhada.
+
+## Compras com complemento em cartao menor que R$ 1,00 no endpoint reports/cash-closure
+
+- Arquivos alterados:
+  - `app/Http/Controllers/SalesReportController.php`
+  - `resources/js/Pages/Reports/CashClosure.jsx`
+  - `tests/Feature/CashClosureMasterReviewTest.php`
+- Problema corrigido:
+  - a coluna `Maquina` mostrava apenas os totais e a diferenca do fechamento, sem destacar as compras em `dinheiro` que usaram complemento automatico em cartao menor que `R$ 1,00`.
+- Causa real:
+  - o backend do `cash-closure` agrupava apenas os totais por forma de pagamento e nao separava os pagamentos `dinheiro` com `dois_pgto`;
+  - a tela nao recebia uma lista por caixa/unidade com essas compras pequenas para montar o link e a modal de detalhe.
+- Comportamento novo:
+  - o backend agora entrega em cada linha do relatorio um bloco `small_card_complements` com total e itens das compras em `dinheiro` cujo `dois_pgto` esteja entre `R$ 0,01` e `R$ 0,99`;
+  - abaixo de `Diferenca` na coluna `Maquina`, cada fechamento/loja passa a exibir seu proprio link com o total desses complementos, mostrando apenas o valor sem legenda extra;
+  - ao clicar no link, abre uma modal com os registros que compoem aquele total, mostrando cupom, comanda, data/hora, total da compra, valor em dinheiro e complemento em cartao;
+  - cada linha do detalhe agora possui a acao `Detalhar cupom`, que abre o cupom completo com itens e opcao de impressao;
+  - o carregamento das `vendas` no `cash-closure` agora inclui tambem `tb1_id`, `produto_nome`, `quantidade`, `valor_unitario`, `valor_total` e `data_hora`, evitando itens zerados no detalhe do cupom;
+  - foi adicionada cobertura para garantir que o agrupamento seja feito por caixa/unidade e ignore complementos iguais ou maiores que `R$ 1,00`.
+- Impacto na sincronizacao com `pec1`:
+  - replicar no metodo `cashClosure()` do `SalesReportController` o agrupamento `small_card_complements` por caixa/unidade;
+  - replicar em `resources/js/Pages/Reports/CashClosure.jsx` o link individual em cada linha da coluna `Maquina`;
+  - replicar a modal com o detalhe das compras e o total por fechamento;
+  - incluir no payload de cada item o `receipt` completo e reaproveitar o mesmo fluxo de impressao de cupom usado nos outros relatorios;
+  - copiar tambem a cobertura do teste `tests/Feature/CashClosureMasterReviewTest.php` se o `pec1` estiver com a mesma estrutura de testes.
+
+## Formato de data DD/MM/AA no filtro do endpoint reports/cash-closure
+
+- Arquivos alterados:
+  - `resources/js/Pages/Reports/CashClosure.jsx`
+  - `AGENTS.md`
+- Problema corrigido:
+  - o filtro de data do `reports/cash-closure` dependia do `input type="date"` nativo e podia aparecer no formato `MM/DD/AAAA` conforme o navegador/sistema.
+- Causa real:
+  - o campo nativo de data nao garantia o padrao visual exigido pelo projeto;
+  - a tela ainda misturava formatos de data ISO, ano com 4 digitos e exibicao dependente do navegador.
+- Comportamento novo:
+  - o filtro de data agora aceita e exibe somente `DD/MM/AA`;
+  - a tela converte esse valor para ISO apenas no envio do filtro ao backend;
+  - as datas exibidas localmente no `CashClosure.jsx` passam a seguir o mesmo padrao curto `DD/MM/AA` e `DD/MM/AA HH:MM`;
+  - o `AGENTS.md` passa a registrar a regra global de datas no formato `DD/MM/AA`, tanto para preenchimento quanto para visualizacao.
+- Impacto na sincronizacao com `pec1`:
+  - replicar em `resources/js/Pages/Reports/CashClosure.jsx` a troca do `input type="date"` por campo controlado em `DD/MM/AA`;
+  - replicar a conversao do valor digitado para ISO antes de enviar os filtros;
+  - adicionar no `AGENTS.md` do projeto espelho a mesma regra global de formato de data.
