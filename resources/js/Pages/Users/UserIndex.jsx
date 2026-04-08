@@ -1,6 +1,6 @@
 import AlertMessage from "@/Components/Alert/AlertMessage";
-import PrimaryButton from "@/Components/Button/PrimaryButton";
 import SuccessButton from "@/Components/Button/SuccessButton";
+import PrimaryButton from "@/Components/Button/PrimaryButton";
 import WarningButton from "@/Components/Button/WarningButton";
 import ConfirmDeleteButton from "@/Components/Delete/ConfirmDeleteButton";
 import Pagination from "@/Components/Pagination";
@@ -199,13 +199,13 @@ export default function UserIndex({ auth, users, units = [], filters = {}, permi
                                         <div className="flex flex-wrap justify-center gap-1">
                                             {canManageSalaryAdvances && (
                                                 <Link href={route('salary-advances.create', { user: user.id })}>
-                                                    <PrimaryButton
+                                                    <SuccessButton
                                                         className="ms-1"
                                                         aria-label="Adiantamento salarial"
                                                         title="Adiantamento salarial"
                                                     >
                                                         <i className="bi bi-cash-coin text-lg" aria-hidden="true"></i>
-                                                    </PrimaryButton>
+                                                    </SuccessButton>
                                                 </Link>
                                             )}
                                             {canView && (

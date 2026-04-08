@@ -428,3 +428,16 @@
   - replicar a montagem do bloco `detail` por usuario, carregando todos os adiantamentos do periodo sem aplicar o filtro de loja nesse segundo conjunto;
   - replicar em `resources/js/Pages/Reports/Advances.jsx` a nova tabela por usuario, a modal de detalhe e o botao `Imprimir` dentro da modal;
   - replicar na mesma tela a troca dos filtros de data para `DD/MM/AA`, usando os utilitarios ja adicionados em `resources/js/Utils/date.js`.
+
+## Cor verde no botao de adiantamento em users
+
+- Arquivos alterados:
+  - `resources/js/Pages/Users/UserIndex.jsx`
+- Problema corrigido:
+  - o botao de adiantamento salarial na listagem de `users` estava azul, destoando da necessidade de destacar essa acao com a cor verde.
+- Causa real:
+  - o botao estava usando o componente `PrimaryButton`, que no projeto aplica a cor azul padrao.
+- Comportamento novo:
+  - o botao de adiantamento em `users` agora usa `SuccessButton`, mantendo o mesmo icone e comportamento, mas com cor verde.
+- Impacto na sincronizacao com `pec1`:
+  - replicar em `resources/js/Pages/Users/UserIndex.jsx` a troca de `PrimaryButton` para `SuccessButton` apenas no botao de adiantamento salarial.
