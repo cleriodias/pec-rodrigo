@@ -355,3 +355,46 @@
   - replicar em `resources/js/Pages/Reports/CashClosure.jsx` a troca do `input type="date"` por campo controlado em `DD/MM/AA`;
   - replicar a conversao do valor digitado para ISO antes de enviar os filtros;
   - adicionar no `AGENTS.md` do projeto espelho a mesma regra global de formato de data.
+
+## Adiantamento salarial integrado ao endpoint users
+
+- Arquivos alterados:
+  - `app/Http/Controllers/UserController.php`
+  - `app/Http/Controllers/SalaryAdvanceController.php`
+  - `app/Support/ManagementScope.php`
+  - `resources/js/Pages/Users/UserIndex.jsx`
+  - `resources/js/Pages/Finance/SalaryAdvanceCreate.jsx`
+  - `resources/js/Pages/Finance/SalaryAdvanceIndex.jsx`
+  - `resources/js/Utils/date.js`
+- Problema corrigido:
+  - o cadastro de adiantamento existia em um fluxo separado, sem integração com `users`, sem resumo de confirmação antes da gravação e com regra de cálculo incompatível com a necessidade de acompanhar apenas o mês corrente do colaborador.
+- Causa real:
+  - o `UserController` bloqueava o endpoint `users` para `Sub-Gerente`;
+  - a listagem `users` ainda exibia a coluna `Unidades` e não possuía ação de adiantamento por usuário;
+  - o `SalaryAdvanceController` validava o adiantamento somando histórico inteiro e ainda misturava esse cálculo com vendas em `tb3_vendas` com `tipo_pago = vale`;
+  - a tela `SalaryAdvanceCreate.jsx` usava um formulário genérico, sem usuário pré-selecionado, sem modal de resumo e sem lista dos lançamentos do mês corrente;
+  - a exclusão de adiantamento ainda ficava disponível fora da regra "somente Master".
+- Comportamento novo:
+  - a listagem `users` agora pode ser acessada também por `Sub-Gerente`, sempre respeitando o escopo das unidades gerenciadas;
+  - a coluna `Unidades` foi removida do `users` e cada linha ganhou um botão com ícone de dinheiro (`bi-cash-coin`) para abrir o cadastro de adiantamento do colaborador;
+  - para `Sub-Gerente`, a tela `users` exibe apenas a ação de adiantamento; ações de criar/visualizar/editar/excluir usuário continuam restritas a `Master` e `Gerente`;
+  - a tela de adiantamento agora trabalha orientada ao usuário selecionado, mostra salário, total do mês e unidade ativa, e permite trocar o colaborador pela própria busca;
+  - a data do adiantamento passou a aceitar e exibir `DD/MM/AA`, inclusive no preenchimento inicial e na validação antes de gravar;
+  - ao clicar em `Gravar`, o sistema abre uma modal de resumo com salário, valor informado, total do mês corrente, percentual do vale com base no salário e saldo projetado, com ações para confirmar ou cancelar;
+  - o backend passou a validar o limite com base apenas nos adiantamentos cadastrados no mês corrente em `salary_advances`, sem misturar vendas no vale;
+  - após gravar, o usuário permanece na mesma tela para continuar acompanhando os lançamentos do colaborador;
+  - a mesma tela exibe a lista de adiantamentos do mês corrente do colaborador, com exclusão disponível apenas para `Master`;
+  - a listagem geral de adiantamentos (`SalaryAdvanceIndex.jsx`) também passou a esconder a ação de exclusão para perfis que não sejam `Master`.
+- Regras importantes para sincronizar:
+  - nao foi criada migration nova; a tabela existente de adiantamentos continua a mesma;
+  - o calculo do resumo/limite agora considera somente `SalaryAdvance` do mes corrente (`startOfMonth()` ate `endOfMonth()`), somando o novo valor ao total ja registrado;
+  - o campo de data no frontend usa `DD/MM/AA`, mas o backend aceita converter isso para ISO antes de persistir;
+  - o `Sub-Gerente` deve ter escopo de gerenciamento aplicado via `ManagementScope`, mas sem ganhar permissao para editar/cadastrar/excluir usuarios.
+- Impacto na sincronizacao com `pec1`:
+  - replicar em `app/Support/ManagementScope.php` a inclusao do `Sub-Gerente` no escopo de gerenciamento de usuarios/unidades;
+  - replicar no `UserController` a liberacao do endpoint `users.index` para `funcao = 2` e o envio do bloco `permissions` para a tela;
+  - replicar em `resources/js/Pages/Users/UserIndex.jsx` a remocao da coluna `Unidades`, o novo botao de dinheiro e o ocultamento das demais acoes para `Sub-Gerente`;
+  - replicar em `app/Http/Controllers/SalaryAdvanceController.php` o carregamento do usuario via query `?user=`, a lista de adiantamentos do mes corrente, o resumo baseado apenas no mes corrente e a exclusao somente por `Master`;
+  - replicar em `resources/js/Pages/Finance/SalaryAdvanceCreate.jsx` o novo fluxo com busca/troca de usuario, data `DD/MM/AA`, modal de confirmacao e grade dos adiantamentos do mes corrente;
+  - replicar em `resources/js/Pages/Finance/SalaryAdvanceIndex.jsx` a ocultacao da acao de exclusao para perfis nao `Master`;
+  - replicar em `resources/js/Utils/date.js` os utilitarios `formatBrazilShortDate`, `getBrazilTodayShortInputValue`, `normalizeBrazilShortDateInput` e `shortBrazilDateInputToIso`, porque a nova tela depende deles.

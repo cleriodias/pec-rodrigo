@@ -33,6 +33,10 @@ class UserController extends Controller
                 return $next($request);
             }
 
+            if ($funcao === 2 && $routeName === 'users.index') {
+                return $next($request);
+            }
+
             if (in_array($funcao, [0, 1], true)) {
                 return $next($request);
             }
@@ -82,6 +86,13 @@ class UserController extends Controller
             'users' => $users,
             'units' => $units,
             'filters' => $filters,
+            'permissions' => [
+                'canCreate' => in_array((int) $authUser->funcao, [0, 1], true),
+                'canView' => in_array((int) $authUser->funcao, [0, 1], true),
+                'canEdit' => in_array((int) $authUser->funcao, [0, 1], true),
+                'canDelete' => in_array((int) $authUser->funcao, [0, 1], true),
+                'canManageSalaryAdvances' => in_array((int) $authUser->funcao, [0, 1, 2], true),
+            ],
         ]);
     }
 
