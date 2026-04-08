@@ -18,7 +18,11 @@ class ExpenseController extends Controller
 
         $activeUnit = $this->resolveUnit($request);
         $suppliers = Supplier::orderBy('name')->get(['id', 'name']);
-        $expensesQuery = Expense::with('supplier:id,name')
+        $expensesQuery = Expense::with([
+            'supplier:id,name',
+            'unit:tb2_id,tb2_nome',
+            'user:id,name',
+        ])
             ->orderByDesc('expense_date')
             ->orderByDesc('id');
 
@@ -32,6 +36,7 @@ class ExpenseController extends Controller
             'id',
             'supplier_id',
             'unit_id',
+            'user_id',
             'expense_date',
             'amount',
             'notes',

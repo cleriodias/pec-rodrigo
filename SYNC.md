@@ -1,3 +1,71 @@
+# 2026-04-08
+
+## Correcao do carregamento de gastos no cash-closure
+
+- Arquivos alterados:
+  - `app/Http/Controllers/SalesReportController.php`
+- Problema corrigido:
+  - havia gasto listado em `expenses`, mas ele nao aparecia no calculo do `reports/cash-closure`.
+- Causa real:
+  - o total agrupado de gastos era calculado antes do `map()` do fechamento, mas a variavel `$expenseTotals` nao tinha sido incluida no `use (...)` da closure;
+  - por isso, dentro do fechamento o valor efetivo do gasto acabava ficando zerado.
+- Comportamento novo:
+  - o `cash-closure` agora passa a enxergar corretamente os gastos agrupados e a deduzi-los do dinheiro esperado no caixa.
+- Impacto na sincronizacao com `pec1`:
+  - conferir no `SalesReportController` do projeto espelho se a closure do `cashClosure()` tambem recebeu `$expenseTotals` no `use (...)`.
+
+## Loja e usuario na lista de expenses com observacao no title
+
+- Arquivos alterados:
+  - `app/Http/Controllers/ExpenseController.php`
+  - `resources/js/Pages/Finance/ExpenseIndex.jsx`
+- Problema corrigido:
+  - a lista de `expenses` nao mostrava quem lancou o gasto nem a loja vinculada;
+  - a coluna `Observacao` ocupava largura fixa da tabela e apertava o restante da listagem.
+- Causa real:
+  - o backend carregava apenas o relacionamento com `supplier`;
+  - a tabela do frontend renderizava somente `Fornecedor`, `Data`, `Valor` e `Observacao`.
+- Comportamento novo:
+  - a listagem de gastos agora mostra `Loja` e `Usuario` em colunas dedicadas;
+  - a `Observacao` deixa de ocupar uma coluna propria;
+  - o texto da observacao passa a ficar no atributo `title` da linha, aparecendo ao passar o mouse sobre o registro.
+- Impacto na sincronizacao com `pec1`:
+  - replicar em `ExpenseController` o carregamento das relacoes `unit` e `user`;
+  - replicar em `ExpenseIndex.jsx` as colunas `Loja` e `Usuario`;
+  - remover a coluna `Observacao` e mover o texto para o `title` da linha.
+
+## Gastos deduzidos do caixa no endpoint reports/cash-closure
+
+- Arquivos alterados:
+  - `app/Http/Controllers/SalesReportController.php`
+  - `resources/js/Pages/Reports/CashClosure.jsx`
+  - `resources/js/Pages/Reports/CashDiscrepancies.jsx`
+  - `tests/Feature/CashClosureMasterReviewTest.php`
+- Problema corrigido:
+  - o `reports/cash-closure` tratava todo o dinheiro vendido no dia como valor que deveria permanecer no caixa;
+  - quando havia gasto lancado em `expenses`, o fechamento passava a aparecer como falta mesmo que o dinheiro ja tivesse saído corretamente do caixa;
+  - o `reports/cash-discrepancies` repetia a mesma distorcao e continuava listando discrepancia indevida.
+- Causa real:
+  - o backend do fechamento agrupava apenas pagamentos por `caixa + unidade + dia`;
+  - os registros de `expenses` nao eram somados nem deduzidos da base esperada em dinheiro;
+  - a tela nao recebia o total de gastos por fechamento para exibir esse abatimento.
+- Comportamento novo:
+  - o backend agora soma os `expenses` do mesmo `user_id + unit_id + dia` de cada fechamento;
+  - esse total passa a ser deduzido apenas da base de `dinheiro`, sem alterar os totais de venda por forma de pagamento;
+  - no `CashClosure.jsx`, a coluna `Dinheiro` mostra a base liquida esperada no caixa e, quando houver gasto, exibe abaixo da diferenca apenas o valor negativo deduzido, sem legenda extra;
+  - o card `Base da conferencia` e a coluna `Conferencia caixa` passam a usar `dinheiro liquido + cartao`;
+  - o `reports/cash-discrepancies` agora usa a mesma base com gastos deduzidos do dinheiro, evitando faltas falsas;
+  - o modal de detalhe das discrepancias passa a mostrar tambem o total de `Gastos` usado na conta.
+- Testes adicionados:
+  - cobertura para garantir que o `cash-closure` deduz os gastos do caixa correto;
+  - cobertura para garantir que a tela de discrepancias deixa de listar o fechamento quando o gasto explica exatamente a diferenca.
+- Impacto na sincronizacao com `pec1`:
+  - replicar em `SalesReportController` o agrupamento de `expenses` por `user_id + unit_id + data`;
+  - deduzir esse total apenas da base de `dinheiro` usada na conferencia e nas discrepancias;
+  - em `CashClosure.jsx`, trocar a base exibida de `Dinheiro` para a base liquida e mostrar o valor negativo do gasto sem legenda;
+  - alinhar `CashDiscrepancies.jsx` para usar a mesma base liquida e exibir o card `Gastos` no detalhe;
+  - copiar tambem os testes novos para evitar regressao na sincronizacao.
+
 # 2026-04-05
 
 ## Atalho de Vales no endpoint reports/cash-discrepancies

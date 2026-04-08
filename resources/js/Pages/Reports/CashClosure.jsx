@@ -168,6 +168,15 @@ const differenceTone = (value) => {
     return (value ?? 0) > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400';
 };
 
+const resolveConferenceCashBase = (record) =>
+    Number(record?.conference_base_cash ?? record?.totals?.dinheiro ?? 0);
+
+const resolveConferenceTotal = (record) =>
+    Number(
+        record?.conference_base_total ??
+            resolveConferenceCashBase(record) + Number(record?.totals?.maquina ?? 0),
+    );
+
 const hexToRgb = (value) => {
     if (typeof value !== 'string') {
         return null;
@@ -285,11 +294,7 @@ export default function CashClosure({
 
     const conferenceGrandTotal = useMemo(
         () =>
-            records.reduce(
-                (sum, record) =>
-                    sum + (record.totals?.dinheiro ?? 0) + (record.totals?.maquina ?? 0),
-                0,
-            ),
+            records.reduce((sum, record) => sum + resolveConferenceTotal(record), 0),
         [records],
     );
 
@@ -523,7 +528,10 @@ export default function CashClosure({
     );
 
     const renderPaymentCell = (record, column, options = {}) => {
-        const systemValue = record.totals?.[column.key] ?? 0;
+        const systemValue =
+            column.key === 'dinheiro'
+                ? resolveConferenceCashBase(record)
+                : record.totals?.[column.key] ?? 0;
 
         if (!['dinheiro', 'maquina'].includes(column.key)) {
             return renderSystemAlignedCell('Sistema', systemValue);
@@ -543,6 +551,8 @@ export default function CashClosure({
             column.key === 'maquina' &&
             options.showCardDifferenceLink &&
             Number(record?.small_card_complements?.total ?? 0) > 0;
+        const showExpenseValue =
+            column.key === 'dinheiro' && Number(record?.expense_total ?? 0) > 0;
 
         return (
             <div className="space-y-1 text-right">
@@ -563,6 +573,11 @@ export default function CashClosure({
                     <p className={`text-sm font-semibold ${diffClass}`}>
                         {formatCurrency(diffValue)}
                     </p>
+                    {showExpenseValue && (
+                        <p className="mt-1 text-xs font-semibold text-amber-600 dark:text-amber-300">
+                            {formatCurrency(-Number(record?.expense_total ?? 0))}
+                        </p>
+                    )}
                     {showCardComplementLink && (
                         <button
                             type="button"
@@ -579,9 +594,7 @@ export default function CashClosure({
 
     const renderConferenceCell = (record) => {
         const closure = record.closure ?? null;
-        const cashSystem = record.totals?.dinheiro ?? 0;
-        const cardSystem = record.totals?.maquina ?? 0;
-        const systemTotal = cashSystem + cardSystem;
+        const systemTotal = resolveConferenceTotal(record);
         const closureTotal = closure?.total_amount ?? 0;
         const diffTotal = closure?.differences?.total ?? systemTotal;
         const diffClass = differenceTone(diffTotal);
@@ -707,7 +720,7 @@ export default function CashClosure({
                 Totais por caixa ({selectedUnit?.name ?? 'Todas as unidades'}) - Data do fechamento: {formatShortDate(dateInputValue)}
             </h3>
             <p className="mt-2 text-sm text-gray-500 dark:text-gray-300">
-                A diferenca do caixa considera somente dinheiro e cartao. Vale, refeicao e faturar aparecem apenas como informativos de venda.
+                A diferenca do caixa considera somente dinheiro e cartao. Gastos do dia deduzem o dinheiro esperado no caixa. Vale, refeicao e faturar aparecem apenas como informativos de venda.
             </p>
             <div className="mt-4 overflow-x-auto">
                 {records.length === 0 ? (

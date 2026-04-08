@@ -175,13 +175,16 @@ export default function ExpenseIndex({ suppliers = [], expenses = [], activeUnit
                                                 Fornecedor
                                             </th>
                                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
+                                                Loja
+                                            </th>
+                                            <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
+                                                Usuario
+                                            </th>
+                                            <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
                                                 Data
                                             </th>
                                             <th className="px-3 py-2 text-right font-medium text-gray-600 dark:text-gray-300">
                                                 Valor
-                                            </th>
-                                            <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
-                                                Observacao
                                             </th>
                                             <th className="px-3 py-2 text-center font-medium text-gray-600 dark:text-gray-300">
                                                 Acoes
@@ -190,18 +193,21 @@ export default function ExpenseIndex({ suppliers = [], expenses = [], activeUnit
                                     </thead>
                                     <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                                         {expenses.map((expense) => (
-                                            <tr key={expense.id}>
+                                            <tr key={expense.id} title={expense.notes ?? ''}>
                                                 <td className="px-3 py-2 text-gray-800 dark:text-gray-100">
                                                     {expense.supplier?.name ?? '---'}
+                                                </td>
+                                                <td className="px-3 py-2 text-gray-700 dark:text-gray-200">
+                                                    {expense.unit?.tb2_nome ?? '---'}
+                                                </td>
+                                                <td className="px-3 py-2 text-gray-700 dark:text-gray-200">
+                                                    {expense.user?.name ?? '---'}
                                                 </td>
                                                 <td className="px-3 py-2 text-gray-700 dark:text-gray-200">
                                                     {formatDate(expense.expense_date)}
                                                 </td>
                                                 <td className="px-3 py-2 text-right font-semibold text-gray-900 dark:text-white">
                                                     {formatCurrency(expense.amount)}
-                                                </td>
-                                                <td className="px-3 py-2 text-gray-600 dark:text-gray-300">
-                                                    {expense.notes ?? '--'}
                                                 </td>
                                                 <td className="px-3 py-2 text-center">
                                                     <button
