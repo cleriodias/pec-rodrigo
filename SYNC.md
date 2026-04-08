@@ -1,5 +1,23 @@
 # 2026-04-08
 
+## Exclusao de gastos restrita ao usuario que gravou
+
+- Arquivos alterados:
+  - `app/Http/Controllers/ExpenseController.php`
+  - `resources/js/Pages/Finance/ExpenseIndex.jsx`
+- Problema corrigido:
+  - qualquer usuario com acesso ao endpoint `expenses` na mesma loja podia excluir gastos gravados por outra pessoa.
+- Causa real:
+  - o backend validava apenas a `unit_id` do gasto na exclusao;
+  - a listagem mostrava o botao `Excluir` para todos os registros.
+- Comportamento novo:
+  - somente o proprio usuario que gravou o gasto pode exclui-lo;
+  - a listagem agora recebe o campo `can_delete`;
+  - o botao `Excluir` aparece apenas nas linhas do proprio autor do gasto.
+- Impacto na sincronizacao com `pec1`:
+  - replicar no `ExpenseController` a validacao de exclusao por `user_id`;
+  - replicar em `ExpenseIndex.jsx` o uso do campo `can_delete` para esconder o botao dos demais usuarios.
+
 ## Correcao do carregamento de gastos no cash-closure
 
 - Arquivos alterados:

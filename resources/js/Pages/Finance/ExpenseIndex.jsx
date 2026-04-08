@@ -210,13 +210,19 @@ export default function ExpenseIndex({ suppliers = [], expenses = [], activeUnit
                                                     {formatCurrency(expense.amount)}
                                                 </td>
                                                 <td className="px-3 py-2 text-center">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDelete(expense.id)}
-                                                        className="rounded-lg border border-red-200 px-3 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-200 dark:border-red-500/60 dark:text-red-300 dark:hover:bg-red-500/10"
-                                                    >
-                                                        Excluir
-                                                    </button>
+                                                    {expense.can_delete ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDelete(expense.id)}
+                                                            className="rounded-lg border border-red-200 px-3 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-200 dark:border-red-500/60 dark:text-red-300 dark:hover:bg-red-500/10"
+                                                        >
+                                                            Excluir
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                                                            --
+                                                        </span>
+                                                    )}
                                                 </td>
                                             </tr>
                                         ))}
