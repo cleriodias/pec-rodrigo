@@ -8,6 +8,7 @@ use App\Models\Venda;
 use App\Models\SalaryAdvance;
 use App\Support\ManagementScope;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redirect;
@@ -358,7 +359,25 @@ class UserController extends Controller
         $dailyLimit = $this->resolveRefeicaoDailyLimit(now());
 
         $users = User::query();
-        ManagementScope::applyManagedUserScope($users, $request->user());
+        $authUser = $request->user();
+
+        if ((int) $authUser->funcao === 3) {
+            $activeUnitId = (int) ($request->session()->get('active_unit.id') ?? $authUser->tb2_id ?? 0);
+
+            if ($activeUnitId <= 0) {
+                return response()->json([]);
+            }
+
+            $users->where(function (Builder $query) use ($activeUnitId) {
+                $query
+                    ->where('users.tb2_id', $activeUnitId)
+                    ->orWhereHas('units', function (Builder $unitQuery) use ($activeUnitId) {
+                        $unitQuery->where('tb2_unidades.tb2_id', $activeUnitId);
+                    });
+            });
+        } else {
+            ManagementScope::applyManagedUserScope($users, $authUser);
+        }
 
         $users = $users
             ->where('name', 'like', '%' . $safeTerm . '%')

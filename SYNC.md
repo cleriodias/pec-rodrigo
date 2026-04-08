@@ -284,6 +284,29 @@
   - replicar o novo campo no formulario de `resources/js/Pages/Reports/Hoje.jsx`;
   - copiar a cobertura de teste correspondente, se o `pec1` estiver com a mesma base de testes.
 
+## Busca de colaborador no Dashboard para Vale/Refeicao
+
+- Arquivos alterados:
+  - `app/Http/Controllers/UserController.php`
+  - `tests/Feature/SaleRefeicaoRulesTest.php`
+- Problema corrigido:
+  - o `Caixa` recebia "Nenhum usuario encontrado." ao buscar colaborador no modal de `Vale` ou `Refeicao`, mesmo quando o nome existia.
+- Causa real:
+  - a rota `users.search` foi liberada para `Caixa`, mas a busca passou a aplicar `ManagementScope::applyManagedUserScope`;
+  - esse escopo retorna consulta vazia para perfis fora da gestao (`funcao 3`), entao o endpoint sempre devolvia lista vazia para o `Caixa`;
+  - a regressao apareceu junto das alteracoes da regra de `Refeicao`, porque a busca foi mexida para devolver os campos de saldo/uso diario.
+- Comportamento novo:
+  - quando o usuario logado for `Caixa`, a busca de colaborador no dashboard passa a filtrar pela unidade ativa da sessao;
+  - `Master` e `Gerente` continuam usando o escopo de gestao existente;
+  - a busca do `Caixa` nao traz colaboradores de outra unidade.
+- Testes ajustados:
+  - o teste da busca de usuario em `Refeicao` agora inclui sessao com unidade ativa;
+  - o teste tambem garante que um colaborador de outra unidade nao apareca para o `Caixa`.
+- Impacto na sincronizacao com `pec1`:
+  - replicar a mesma bifurcacao no `UserController::search`;
+  - para `Caixa`, usar a unidade ativa da sessao (`active_unit.id`) com fallback para `tb2_id`;
+  - manter `ManagementScope::applyManagedUserScope` apenas para perfis de gestao.
+
 ## Busca limitada no endpoint reports/hoje
 
 - Arquivos alterados:
