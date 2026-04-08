@@ -1453,7 +1453,7 @@ class SalesReportController extends Controller
         }
 
         $dateKey = $date->toDateString();
-        $expenseTotals = $this->groupExpensesByCashierUnit($dateKey, $filterUnitId);
+        $expenseData = $this->groupExpenseDataByCashierUnit($dateKey, $filterUnitId);
         $discardEntries = ProductDiscard::query()
             ->with(['product:tb1_id,tb1_nome,tb1_vlr_venda', 'user:id,tb2_id'])
             ->whereDate('created_at', $dateKey)
@@ -1508,7 +1508,7 @@ class SalesReportController extends Controller
             });
 
         $records = collect($grouped)
-            ->map(function (array $record) use ($closures, $discardTotals, $discardAlertService, $discardThreshold, $reviewers, $expenseTotals) {
+            ->map(function (array $record) use ($closures, $discardTotals, $discardAlertService, $discardThreshold, $reviewers, $expenseData) {
                 $record['totals'] = array_map(fn ($value) => round($value, 2), $record['totals']);
                 $record['grand_total'] = round($record['grand_total'], 2);
                 $record['row_key'] = $record['row_key'] ?? ($record['cashier_id'] . '-' . ($record['unit_id'] ?? 'none'));
@@ -1520,9 +1520,10 @@ class SalesReportController extends Controller
                         ->all(),
                 ];
 
+                $expenseMeta = $expenseData[$record['row_key']] ?? ['total' => 0.0, 'items' => []];
                 $cashSystem = $record['totals']['dinheiro'] ?? 0.0;
                 $cardSystem = $record['totals']['maquina'] ?? 0.0;
-                $expenseTotal = (float) ($expenseTotals[$record['row_key']] ?? 0.0);
+                $expenseTotal = (float) ($expenseMeta['total'] ?? 0.0);
                 $conferenceCashBase = max($cashSystem - $expenseTotal, 0.0);
                 $systemTotal = $conferenceCashBase + $cardSystem;
 
@@ -1599,6 +1600,10 @@ class SalesReportController extends Controller
                 }
 
                 $record['expense_total'] = round($expenseTotal, 2);
+                $record['expense_details'] = collect($expenseMeta['items'] ?? [])
+                    ->sortByDesc('expense_date')
+                    ->values()
+                    ->all();
                 $record['conference_base_cash'] = round($conferenceCashBase, 2);
                 $record['conference_base_total'] = round($systemTotal, 2);
 
@@ -2855,6 +2860,60 @@ class SalesReportController extends Controller
             ->get(['user_id', 'unit_id', 'amount'])
             ->groupBy(fn (Expense $expense) => $expense->user_id . '-' . ($expense->unit_id ?? 'none'))
             ->map(fn (Collection $group) => round((float) $group->sum('amount'), 2));
+    }
+
+    private function groupExpenseDataByCashierUnit(
+        string $referenceDate,
+        ?int $filterUnitId = null,
+        ?Collection $allowedUnitIds = null,
+        ?int $filterCashierId = null
+    ): Collection {
+        $query = Expense::query()
+            ->with([
+                'supplier:id,name',
+                'unit:tb2_id,tb2_nome',
+                'user:id,name',
+            ])
+            ->whereDate('expense_date', $referenceDate)
+            ->whereNotNull('user_id');
+
+        if ($filterUnitId) {
+            $query->where('unit_id', $filterUnitId);
+        } elseif ($allowedUnitIds instanceof Collection && $allowedUnitIds->isNotEmpty()) {
+            $query->where(function ($subQuery) use ($allowedUnitIds) {
+                $subQuery->whereIn('unit_id', $allowedUnitIds)
+                    ->orWhereNull('unit_id');
+            });
+        }
+
+        if ($filterCashierId) {
+            $query->where('user_id', $filterCashierId);
+        }
+
+        return $query
+            ->orderByDesc('expense_date')
+            ->orderByDesc('id')
+            ->get(['id', 'supplier_id', 'unit_id', 'user_id', 'expense_date', 'amount', 'notes'])
+            ->groupBy(fn (Expense $expense) => $expense->user_id . '-' . ($expense->unit_id ?? 'none'))
+            ->map(function (Collection $group) {
+                return [
+                    'total' => round((float) $group->sum('amount'), 2),
+                    'items' => $group
+                        ->map(function (Expense $expense) {
+                            return [
+                                'id' => $expense->id,
+                                'supplier' => $expense->supplier?->name ?? '---',
+                                'unit_name' => $expense->unit?->tb2_nome ?? '---',
+                                'user_name' => $expense->user?->name ?? '---',
+                                'expense_date' => $expense->expense_date?->toDateString(),
+                                'amount' => round((float) $expense->amount, 2),
+                                'notes' => $expense->notes,
+                            ];
+                        })
+                        ->values()
+                        ->all(),
+                ];
+            });
     }
 
 }

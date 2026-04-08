@@ -1,5 +1,27 @@
 # 2026-04-08
 
+## Modal de detalhe dos gastos no reports/cash-closure
+
+- Arquivos alterados:
+  - `app/Http/Controllers/SalesReportController.php`
+  - `resources/js/Pages/Reports/CashClosure.jsx`
+  - `tests/Feature/CashClosureMasterReviewTest.php`
+- Problema corrigido:
+  - o `reports/cash-closure` mostrava o valor total dos gastos deduzidos no `Dinheiro`, mas nao permitia abrir o detalhe dos lancamentos que compunham esse total.
+- Causa real:
+  - o backend enviava apenas `expense_total` por `caixa + unidade + dia`;
+  - o frontend renderizava o valor negativo dos gastos apenas como texto, sem modal nem acao de detalhe.
+- Comportamento novo:
+  - o backend agora envia tambem `expense_details` por fechamento, com fornecedor, data, valor, observacao, usuario e loja;
+  - o valor negativo dos gastos na coluna `Dinheiro` virou um botao clicavel;
+  - ao clicar, abre uma modal `Detalhe dos gastos` com o total e a lista dos gastos que foram deduzidos daquele fechamento.
+- Testes adicionados:
+  - a cobertura de gastos no `cash-closure` agora tambem valida o payload `expense_details`.
+- Impacto na sincronizacao com `pec1`:
+  - replicar no `SalesReportController` o payload `expense_details` agrupado por `user_id + unit_id + data`;
+  - replicar em `CashClosure.jsx` a abertura da modal ao clicar no valor negativo dos gastos;
+  - copiar tambem o ajuste do teste para evitar regressao no detalhe dos gastos.
+
 ## Exclusao de gastos restrita ao usuario que gravou
 
 - Arquivos alterados:
