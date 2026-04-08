@@ -740,9 +740,14 @@ class SalesReportController extends Controller
         [$filterUnitId, $filterUnits, $selectedUnit] = $this->resolveReportUnit($request);
         [$start, $end, $startDate, $endDate] = $this->resolveDateRange($request);
 
-        $rows = SalaryAdvance::query()
-            ->with('user:id,name,tb2_id')
+        $filteredAdvances = SalaryAdvance::query()
+            ->with(['user:id,name,tb2_id', 'unit:tb2_id,tb2_nome'])
             ->whereBetween('advance_date', [$startDate, $endDate])
+            ->when(! ManagementScope::isMaster($request->user()), function ($query) use ($request) {
+                $query->whereHas('user', function ($userQuery) use ($request) {
+                    ManagementScope::applyManagedUserScope($userQuery, $request->user());
+                });
+            })
             ->when($filterUnitId, function ($query) use ($filterUnitId) {
                 $query->where(function ($sub) use ($filterUnitId) {
                     $sub->where('unit_id', $filterUnitId)
@@ -766,16 +771,70 @@ class SalesReportController extends Controller
                 'advance_date',
                 'amount',
                 'reason',
-            ])
-            ->map(function (SalaryAdvance $advance) {
+            ]);
+
+        $userIds = $filteredAdvances
+            ->pluck('user_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $detailAdvances = $userIds->isEmpty()
+            ? collect()
+            : SalaryAdvance::query()
+                ->with(['user:id,name,tb2_id', 'unit:tb2_id,tb2_nome'])
+                ->whereBetween('advance_date', [$startDate, $endDate])
+                ->whereIn('user_id', $userIds)
+                ->orderBy('advance_date')
+                ->orderBy('id')
+                ->get([
+                    'id',
+                    'user_id',
+                    'unit_id',
+                    'advance_date',
+                    'amount',
+                    'reason',
+                ]);
+
+        $detailByUser = $detailAdvances->groupBy('user_id');
+
+        $rows = $filteredAdvances
+            ->groupBy('user_id')
+            ->map(function (Collection $group, $userId) use ($detailByUser, $startDate, $endDate) {
+                $first = $group->first();
+                $detailRecords = $detailByUser
+                    ->get($userId, collect())
+                    ->map(function (SalaryAdvance $advance) {
+                        return [
+                            'id' => $advance->id,
+                            'advance_date' => $advance->advance_date?->toDateString(),
+                            'amount' => round((float) $advance->amount, 2),
+                            'reason' => $advance->reason,
+                            'unit_name' => $advance->unit?->tb2_nome ?? '---',
+                        ];
+                    })
+                    ->values();
+
                 return [
-                    'id' => $advance->id,
-                    'user_name' => $advance->user?->name ?? '---',
-                    'advance_date' => $advance->advance_date?->toDateString(),
-                    'amount' => round((float) $advance->amount, 2),
-                    'reason' => $advance->reason,
+                    'id' => 'user-' . $userId,
+                    'user_id' => (int) $userId,
+                    'user_name' => $first?->user?->name ?? '---',
+                    'records_count' => $group->count(),
+                    'total_amount' => round((float) $group->sum('amount'), 2),
+                    'detail_records_count' => $detailRecords->count(),
+                    'detail_total_amount' => round((float) $detailRecords->sum('amount'), 2),
+                    'detail' => [
+                        'user_id' => (int) $userId,
+                        'user_name' => $first?->user?->name ?? '---',
+                        'start_date' => $startDate,
+                        'end_date' => $endDate,
+                        'records_count' => $detailRecords->count(),
+                        'total_amount' => round((float) $detailRecords->sum('amount'), 2),
+                        'records' => $detailRecords->all(),
+                    ],
                 ];
             })
+            ->sortBy('user_name')
             ->values();
 
         return Inertia::render('Reports/Advances', [

@@ -398,3 +398,33 @@
   - replicar em `resources/js/Pages/Finance/SalaryAdvanceCreate.jsx` o novo fluxo com busca/troca de usuario, data `DD/MM/AA`, modal de confirmacao e grade dos adiantamentos do mes corrente;
   - replicar em `resources/js/Pages/Finance/SalaryAdvanceIndex.jsx` a ocultacao da acao de exclusao para perfis nao `Master`;
   - replicar em `resources/js/Utils/date.js` os utilitarios `formatBrazilShortDate`, `getBrazilTodayShortInputValue`, `normalizeBrazilShortDateInput` e `shortBrazilDateInputToIso`, porque a nova tela depende deles.
+
+## Relatorio de adiantamentos agrupado por usuario com modal de detalhe
+
+- Arquivos alterados:
+  - `app/Http/Controllers/SalesReportController.php`
+  - `resources/js/Pages/Reports/Advances.jsx`
+- Problema corrigido:
+  - o endpoint `reports/adiantamentos` listava cada adiantamento como uma linha isolada, sem consolidar valores por colaborador e sem oferecer detalhamento/modal/impressao do periodo.
+- Causa real:
+  - o metodo `adiantamentos()` retornava diretamente cada `SalaryAdvance`, sem `groupBy` por usuario;
+  - a tela `Advances.jsx` apenas renderizava tabela simples por lancamento, usando o total bruto das linhas;
+  - nao existia payload dedicado para detalhe por colaborador, nem HTML de impressao no padrao compacto usado pelos cupons;
+  - o filtro de loja era aplicado de forma unica ao relatorio, sem uma segunda visao que pudesse ignorar loja no detalhamento do colaborador.
+- Comportamento novo:
+  - o relatorio agora mostra uma linha por usuario, com quantidade de lancamentos filtrados e total filtrado por colaborador;
+  - cada linha ganhou o botao `Ver detalhe`;
+  - ao clicar, abre uma modal com cabeçalho do colaborador, periodo, quantidade de lancamentos e valor total;
+  - o detalhe da modal ignora o filtro de loja e carrega todos os adiantamentos do usuario dentro do periodo informado;
+  - dentro da modal existe o botao `Imprimir`, que gera um detalhamento em formato compacto tipo cupom, com usuario, periodo, quantidade, total e lista de todos os lancamentos do periodo;
+  - o filtro de data da tela passou a aceitar e exibir `DD/MM/AA`.
+- Regras importantes para sincronizar:
+  - o agrupamento principal continua respeitando o filtro de loja do relatorio;
+  - somente o bloco `detail` de cada usuario ignora a loja e usa todos os `SalaryAdvance` do periodo para aquele colaborador;
+  - cada item do detalhe inclui `data`, `valor`, `observacao` e `loja`, justamente porque o detalhe passa a mesclar lancamentos de lojas diferentes;
+  - a impressao foi implementada localmente em `Advances.jsx` com HTML proprio, no mesmo estilo estreito de cupom usado nos outros relatorios.
+- Impacto na sincronizacao com `pec1`:
+  - replicar no metodo `adiantamentos()` do `SalesReportController` a troca de linhas individuais por agrupamento `groupBy('user_id')`;
+  - replicar a montagem do bloco `detail` por usuario, carregando todos os adiantamentos do periodo sem aplicar o filtro de loja nesse segundo conjunto;
+  - replicar em `resources/js/Pages/Reports/Advances.jsx` a nova tabela por usuario, a modal de detalhe e o botao `Imprimir` dentro da modal;
+  - replicar na mesma tela a troca dos filtros de data para `DD/MM/AA`, usando os utilitarios ja adicionados em `resources/js/Utils/date.js`.
