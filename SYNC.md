@@ -1,3 +1,51 @@
+# 09/04/26
+
+## Status de unidades com bloqueio em reports e filtros
+
+- Arquivos alterados:
+  - `database/migrations/2026_04_09_080000_add_tb2_status_to_tb2_unidades_table.php`
+  - `app/Models/Unidade.php`
+  - `database/seeders/UnitSeeder.php`
+  - `app/Support/ManagementScope.php`
+  - `app/Http/Controllers/UnitController.php`
+  - `app/Http/Controllers/UnitSwitchController.php`
+  - `app/Http/Controllers/Auth/AuthenticatedSessionController.php`
+  - `app/Http/Controllers/SalesReportController.php`
+  - `app/Http/Controllers/AnyDesckController.php`
+  - `app/Http/Middleware/EnsureActiveUnit.php`
+  - `routes/web.php`
+  - `resources/js/Pages/Units/UnitCreate.jsx`
+  - `resources/js/Pages/Units/UnitEdit.jsx`
+  - `resources/js/Pages/Units/UnitIndex.jsx`
+  - `resources/js/Pages/Units/UnitShow.jsx`
+- Problema corrigido:
+  - nao existia status persistido para unidades;
+  - por isso unidades inativas continuavam aparecendo em `reports`, seletores e filtros de unidade.
+- Causa real:
+  - a tabela `tb2_unidades` nao tinha coluna de status;
+  - as consultas que montavam as opcoes de unidade em `reports`, login, troca de unidade e filtros administrativos buscavam todas as unidades sem distinguir ativa/inativa;
+  - alguns relatorios consolidados ainda somavam dados de qualquer `id_unidade` quando o filtro estava em `Todas as unidades`.
+- Comportamento novo:
+  - foi criada a coluna `tb2_status` em `tb2_unidades`, com padrao `1`;
+  - o model `Unidade` agora possui `scopeActive()`;
+  - o CRUD de unidades passou a permitir marcar a unidade como `Ativa` ou `Inativa`;
+  - a listagem e a visualizacao de unidades agora exibem o status;
+  - `reports`, `switch-unit`, login e demais filtros centrais agora carregam apenas unidades ativas;
+  - os relatorios consolidados passaram a limitar os dados ao conjunto de unidades ativas disponiveis ao usuario, evitando que loja inativa reapareca mesmo sem filtro explicito.
+- Regras importantes para sincronizar:
+  - replicar a migration `2026_04_09_080000_add_tb2_status_to_tb2_unidades_table.php`;
+  - em `Unidade.php`, copiar `fillable`, `casts` e `scopeActive()`;
+  - em `ManagementScope.php`, `managedUnits()` deve retornar apenas unidades ativas;
+  - em `SalesReportController.php`, nao basta esconder o filtro: tambem e necessario limitar as queries dos relatorios quando estiver em `Todas as unidades`;
+  - em `AuthenticatedSessionController.php` e `EnsureActiveUnit.php`, a unidade da sessao/login precisa ser validada como ativa;
+  - em `UnitSwitchController.php`, somente unidades ativas devem ser oferecidas para troca de sessao;
+  - o CRUD de unidades precisa enviar e salvar `tb2_status`.
+- Impacto na sincronizacao com `pec1`:
+  - replicar integralmente a migration nova e as mudancas de backend em `Unidade.php`, `ManagementScope.php`, `UnitController.php`, `UnitSwitchController.php`, `AuthenticatedSessionController.php`, `SalesReportController.php`, `AnyDesckController.php` e `EnsureActiveUnit.php`;
+  - replicar tambem as telas `resources/js/Pages/Units/UnitCreate.jsx`, `UnitEdit.jsx`, `UnitIndex.jsx` e `UnitShow.jsx`;
+  - em `routes/web.php`, copiar o filtro de unidades ativas para a home apenas se a home do espelho continuar exibindo unidades publicamente;
+  - como `pec1` tem `Welcome.jsx` e `Login.jsx` diferentes, a regra importante e manter o backend entregando e aceitando apenas unidades ativas, adaptando a interface local sem perder essa restricao.
+
 # 2026-04-08
 
 ## Modal de detalhe dos gastos no reports/cash-closure

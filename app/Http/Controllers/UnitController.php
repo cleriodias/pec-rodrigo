@@ -77,6 +77,7 @@ class UnitController extends Controller
             'tb2_fone' => $data['tb2_fone'],
             'tb2_cnpj' => $data['tb2_cnpj'],
             'tb2_localizacao' => $data['tb2_localizacao'],
+            'tb2_status' => (int) $data['tb2_status'],
         ]);
 
         return Redirect::route('units.show', ['unit' => $unit->tb2_id])
@@ -107,6 +108,7 @@ class UnitController extends Controller
             'tb2_fone' => $data['tb2_fone'],
             'tb2_cnpj' => $data['tb2_cnpj'],
             'tb2_localizacao' => $data['tb2_localizacao'],
+            'tb2_status' => (int) $data['tb2_status'],
         ]);
 
         return Redirect::route('units.show', ['unit' => $unit->tb2_id])
@@ -138,6 +140,7 @@ class UnitController extends Controller
                 'tb2_fone' => 'required|string|max:20',
                 'tb2_cnpj' => 'required|string|max:20',
                 'tb2_localizacao' => 'required|url|max:512',
+                'tb2_status' => 'required|integer|in:0,1',
             ],
             [
                 'tb2_nome.required' => 'Informe o nome da unidade.',
@@ -147,6 +150,8 @@ class UnitController extends Controller
                 'tb2_cnpj.required' => 'Informe o CNPJ.',
                 'tb2_localizacao.required' => 'Informe o link do Google Maps.',
                 'tb2_localizacao.url' => 'O link de localiza\u00E7\u00E3o deve ser uma URL v\u00E1lida.',
+                'tb2_status.required' => 'Informe o status da unidade.',
+                'tb2_status.in' => 'O status da unidade e invalido.',
             ]
         );
     }
