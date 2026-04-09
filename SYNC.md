@@ -1,5 +1,64 @@
 # 09/04/26
 
+## Filtro de unidade e periodo na tela expenses
+
+- Arquivos alterados:
+  - `app/Http/Controllers/ExpenseController.php`
+  - `resources/js/Pages/Finance/ExpenseIndex.jsx`
+- Problema corrigido:
+  - a tela `expenses` mostrava a listagem sem bloco de filtro acima da tabela;
+  - nao havia filtro por loja nem por periodo de datas;
+  - o total da listagem nao aparecia nesse topo operacional;
+  - a consulta ficava sempre presa a `activeUnit`, mesmo para Master e Gerente.
+- Causa real:
+  - o `ExpenseController@index` nao lia `unit_id`, `start_date` nem `end_date` da query string;
+  - o frontend `ExpenseIndex.jsx` nao possuia formulario de filtro para a listagem;
+  - a tela nao diferenciava a experiencia de Master/Gerente em relacao aos demais perfis autorizados.
+- Comportamento novo:
+  - acima da listagem de `expenses` agora existe um bloco com `Loja`, `Inicio`, `Fim`, `Total` e botao `Filtrar`;
+  - esse bloco aparece somente para `Master` e `Gerente`;
+  - Master e Gerente podem ver gastos de todas as lojas permitidas e filtrar por unidade e periodo;
+  - os demais perfis que acessam `expenses` continuam restritos a unidade ativa, sem esse bloco extra;
+  - o total exibido no topo acompanha exatamente a listagem filtrada.
+- Ajuste posterior:
+  - `Inicio` e `Fim` agora chegam pre-preenchidos com a data atual quando a tela abre sem query string;
+  - a ordem visual do filtro foi travada com `Loja` sempre em primeiro lugar.
+  - a listagem tambem passou a ordenar por nome da loja antes da data, para refletir a expectativa de "ordem por loja".
+- Regras importantes para sincronizar:
+  - em `ExpenseController.php`, nao usar mais apenas `activeUnit` para todo mundo: `Master` e `Gerente` precisam consultar `unit_id` e intervalo via query string;
+  - a lista de unidades do filtro deve vir de `ManagementScope::managedUnits(...)`;
+  - em `ExpenseIndex.jsx`, o bloco acima da tabela deve existir somente quando o backend enviar permissao de filtro;
+  - manter `store` e `destroy` retornando para a tela preservando o contexto atual da listagem.
+
+## Gastos e colunas por tipo em reports/sales-today e reports/sales-period
+
+- Arquivos alterados:
+  - `app/Http/Controllers/SalesReportController.php`
+  - `resources/js/Pages/Reports/SalesToday.jsx`
+  - `resources/js/Pages/Reports/SalesPeriod.jsx`
+- Ajuste posterior:
+  - em `expenseTotalsByDay()`, a chave de `expense_date` precisa ser convertida para string (`Y-m-d`) antes do `mapWithKeys()`, porque o cast do model `Expense` entrega `expense_date` como `Carbon`;
+  - sem essa conversao, o PHP gera `Illegal offset type` ao montar o mapa diario de gastos.
+- Problema corrigido:
+  - `reports/sales-today` e `reports/sales-period` nao exibiam um card com os gastos do filtro atual;
+  - em `reports/sales-period`, a tabela `Totais diarios` mostrava apenas `Dia` e `Total`, sem o detalhamento por forma de pagamento nem `Gastos`;
+  - os cards de `reports/sales-period` ficavam em cinza, sem seguir as mesmas cores da legenda/grafico.
+- Causa real:
+  - os metodos `today()` e `period()` montavam os dados apenas com `VendaPagamento`, sem consultar `Expense` no mesmo intervalo e filtro de unidade;
+  - `dailyTotals` era gerado somente com `date`, `label` e `total`;
+  - o frontend de `SalesPeriod.jsx` nao aplicava `item.color` nos cards, apesar de o backend ja enviar essas cores em `chartData`.
+- Comportamento novo:
+  - `reports/sales-today` agora recebe e exibe um card `Gastos` conforme a data/unidade filtradas;
+  - `reports/sales-period` agora recebe e exibe o card `Gastos` conforme o filtro;
+  - a tabela `Totais diarios` passou a mostrar `Dinheiro`, `Maquina`, `Vale`, `Refeicao`, `Faturar`, `Gastos` e `Total`;
+  - os cards de `reports/sales-period` agora usam as mesmas cores da legenda/grafico, no mesmo padrao visual de `reports/sales-today`;
+  - `Gastos` permanece separado do total de vendas e do grafico, servindo como valor informativo do filtro sem alterar o significado do total vendido.
+- Regras importantes para sincronizar:
+  - em `SalesReportController.php`, copiar os novos helpers que somam gastos por intervalo, gastos por dia e totais diarios enriquecidos;
+  - em `period()`, nao voltar para o `groupBy()->sum()` simples: os valores diarios de `Dinheiro` e `Maquina` dependem da mesma quebra usada pelo relatorio principal;
+  - em `SalesToday.jsx` e `SalesPeriod.jsx`, o card `Gastos` fica separado dos itens do grafico; nao incluir `gastos` no `chartData`, para nao alterar pizza/legenda;
+  - em `SalesPeriod.jsx`, manter os cards coloridos com `item.color` igual ao padrao de `SalesToday.jsx`.
+
 ## Status de unidades com bloqueio em reports e filtros
 
 - Arquivos alterados:

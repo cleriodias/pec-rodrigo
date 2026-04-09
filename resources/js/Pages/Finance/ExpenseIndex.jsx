@@ -17,7 +17,15 @@ const formatDate = (value) => {
     return formatBrazilDate(value);
 };
 
-export default function ExpenseIndex({ suppliers = [], expenses = [], activeUnit = null }) {
+export default function ExpenseIndex({
+    suppliers = [],
+    expenses = [],
+    activeUnit = null,
+    canFilterList = false,
+    filterUnits = [],
+    filters = {},
+    listTotalAmount = 0,
+}) {
     const { flash } = usePage().props;
     const defaultSupplier = suppliers.length ? String(suppliers[0].id) : '';
     const today = getBrazilTodayInputValue();
@@ -28,11 +36,43 @@ export default function ExpenseIndex({ suppliers = [], expenses = [], activeUnit
         amount: '',
         notes: '',
     });
+    const {
+        data: filterData,
+        setData: setFilterData,
+        get,
+        processing: filterProcessing,
+    } = useForm({
+        start_date: filters.start_date ?? '',
+        end_date: filters.end_date ?? '',
+        unit_id: filters.unit_id ?? 'all',
+    });
+
+    const buildFilterParams = () => {
+        if (!canFilterList) {
+            return {};
+        }
+
+        return {
+            start_date: filterData.start_date,
+            end_date: filterData.end_date,
+            unit_id: filterData.unit_id,
+        };
+    };
 
     const handleSubmit = (event) => {
         event.preventDefault();
-        post(route('expenses.store'), {
+        post(route('expenses.store', buildFilterParams()), {
             onSuccess: () => reset('amount', 'notes'),
+        });
+    };
+
+    const handleFilterSubmit = (event) => {
+        event.preventDefault();
+        get(route('expenses.index'), {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            data: buildFilterParams(),
         });
     };
 
@@ -43,7 +83,7 @@ export default function ExpenseIndex({ suppliers = [], expenses = [], activeUnit
         if (!window.confirm('Confirma excluir este gasto?')) {
             return;
         }
-        router.delete(route('expenses.destroy', expenseId));
+        router.delete(route('expenses.destroy', { expense: expenseId, ...buildFilterParams() }));
     };
 
     const headerContent = (
@@ -165,7 +205,85 @@ export default function ExpenseIndex({ suppliers = [], expenses = [], activeUnit
                         </form>
                     </div>
 
+                    {canFilterList && (
+                        <form
+                            onSubmit={handleFilterSubmit}
+                            className="rounded-2xl bg-white p-5 shadow dark:bg-gray-800"
+                        >
+                            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
+                                <div>
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                        Loja
+                                    </label>
+                                    <select
+                                        value={filterData.unit_id}
+                                        onChange={(event) => setFilterData('unit_id', event.target.value)}
+                                        className="mt-2 w-full rounded-2xl border border-gray-300 px-4 py-3 text-gray-800 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                                    >
+                                        <option value="all">Todas</option>
+                                        {filterUnits.map((unit) => (
+                                            <option key={unit.id} value={unit.id}>
+                                                {unit.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                        Inicio
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={filterData.start_date}
+                                        onChange={(event) => setFilterData('start_date', event.target.value)}
+                                        className="mt-2 w-full rounded-2xl border border-gray-300 px-4 py-3 text-gray-800 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                        Fim
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={filterData.end_date}
+                                        onChange={(event) => setFilterData('end_date', event.target.value)}
+                                        className="mt-2 w-full rounded-2xl border border-gray-300 px-4 py-3 text-gray-800 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                                    />
+                                </div>
+
+                                <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-indigo-700 shadow-sm dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide">
+                                        Total
+                                    </p>
+                                    <p className="mt-1 text-lg font-bold">
+                                        {formatCurrency(listTotalAmount)}
+                                    </p>
+                                </div>
+
+                                <div className="flex items-end">
+                                    <button
+                                        type="submit"
+                                        disabled={filterProcessing}
+                                        className="w-full rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow hover:bg-indigo-700 disabled:opacity-60"
+                                    >
+                                        Filtrar
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    )}
+
                     <div className="rounded-2xl bg-white p-6 shadow dark:bg-gray-800">
+                        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                                Listagem de gastos
+                            </h3>
+                            <span className="text-xs font-semibold text-gray-500 dark:text-gray-300">
+                                {expenses.length} registro(s)
+                            </span>
+                        </div>
                         <div className="overflow-x-auto">
                             {expenses.length ? (
                                 <table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-700">

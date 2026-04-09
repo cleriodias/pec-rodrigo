@@ -5,8 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\Expense;
 use App\Models\Supplier;
 use App\Models\Unidade;
+use App\Support\ManagementScope;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -14,34 +17,72 @@ class ExpenseController extends Controller
 {
     public function index(Request $request): Response
     {
-        $this->ensureManager($request->user());
+        $user = $request->user();
+        $this->ensureManager($user);
 
         $activeUnit = $this->resolveUnit($request);
         $suppliers = Supplier::orderBy('name')->get(['id', 'name']);
+        $canFilterList = ManagementScope::isAdmin($user);
+        $today = Carbon::today()->toDateString();
+        $filterUnits = collect();
+        $selectedUnitId = null;
+        $filters = [
+            'start_date' => trim((string) $request->query('start_date', $today)),
+            'end_date' => trim((string) $request->query('end_date', $today)),
+            'unit_id' => 'all',
+        ];
         $expensesQuery = Expense::with([
             'supplier:id,name',
             'unit:tb2_id,tb2_nome',
             'user:id,name',
         ])
+            ->leftJoin('tb2_unidades', 'tb2_unidades.tb2_id', '=', 'expenses.unit_id')
+            ->orderBy('tb2_unidades.tb2_nome')
             ->orderByDesc('expense_date')
             ->orderByDesc('id');
 
-        if ($activeUnit) {
+        if ($canFilterList) {
+            $filterUnits = ManagementScope::managedUnits($user, ['tb2_id', 'tb2_nome'])
+                ->map(fn (Unidade $unit) => [
+                    'id' => (int) $unit->tb2_id,
+                    'name' => $unit->tb2_nome,
+                ])
+                ->values();
+
+            $selectedUnitId = $this->resolveSelectedUnitId($request->query('unit_id'), $filterUnits);
+            $filters['unit_id'] = $selectedUnitId !== null ? (string) $selectedUnitId : 'all';
+
+            if ($selectedUnitId !== null) {
+                $expensesQuery->where('unit_id', $selectedUnitId);
+            } elseif ($filterUnits->isNotEmpty()) {
+                $expensesQuery->whereIn('unit_id', $filterUnits->pluck('id'));
+            } else {
+                $expensesQuery->whereRaw('1 = 0');
+            }
+
+            if ($filters['start_date'] !== '') {
+                $expensesQuery->whereDate('expense_date', '>=', $filters['start_date']);
+            }
+
+            if ($filters['end_date'] !== '') {
+                $expensesQuery->whereDate('expense_date', '<=', $filters['end_date']);
+            }
+        } elseif ($activeUnit) {
             $expensesQuery->where('unit_id', $activeUnit['id']);
         } else {
             $expensesQuery->whereRaw('1 = 0');
         }
 
-        $currentUserId = (int) $request->user()->id;
+        $currentUserId = (int) $user->id;
 
         $expenses = $expensesQuery->get([
-            'id',
-            'supplier_id',
-            'unit_id',
-            'user_id',
-            'expense_date',
-            'amount',
-            'notes',
+            'expenses.id',
+            'expenses.supplier_id',
+            'expenses.unit_id',
+            'expenses.user_id',
+            'expenses.expense_date',
+            'expenses.amount',
+            'expenses.notes',
         ])->map(function (Expense $expense) use ($currentUserId) {
             $expense->setAttribute('can_delete', (int) $expense->user_id === $currentUserId);
 
@@ -52,6 +93,10 @@ class ExpenseController extends Controller
             'suppliers' => $suppliers,
             'expenses' => $expenses,
             'activeUnit' => $activeUnit,
+            'canFilterList' => $canFilterList,
+            'filterUnits' => $filterUnits,
+            'filters' => $filters,
+            'listTotalAmount' => round((float) $expenses->sum('amount'), 2),
         ]);
     }
 
@@ -76,9 +121,7 @@ class ExpenseController extends Controller
             'user_id' => $request->user()->id,
         ]));
 
-        return redirect()
-            ->route('expenses.index')
-            ->with('success', 'Gasto cadastrado com sucesso!');
+        return back()->with('success', 'Gasto cadastrado com sucesso!');
     }
 
     public function destroy(Request $request, Expense $expense): RedirectResponse
@@ -96,9 +139,7 @@ class ExpenseController extends Controller
 
         $expense->delete();
 
-        return redirect()
-            ->route('expenses.index')
-            ->with('success', 'Gasto removido com sucesso!');
+        return back()->with('success', 'Gasto removido com sucesso!');
     }
 
     private function ensureManager($user): void
@@ -145,5 +186,22 @@ class ExpenseController extends Controller
             'id' => (int) $unitId,
             'name' => $unit?->tb2_nome ?? ('Unidade #' . $unitId),
         ];
+    }
+
+    private function resolveSelectedUnitId(mixed $value, Collection $filterUnits): ?int
+    {
+        if ($value === null || $value === '' || $value === 'all') {
+            return null;
+        }
+
+        $unitId = (int) $value;
+
+        if ($unitId <= 0) {
+            return null;
+        }
+
+        return $filterUnits->contains(fn (array $unit) => (int) $unit['id'] === $unitId)
+            ? $unitId
+            : null;
     }
 }
