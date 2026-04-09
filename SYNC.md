@@ -1,5 +1,51 @@
 # 09/04/26
 
+## Controle de Pagamentos em Ferramentas
+
+- Arquivos alterados:
+  - `database/migrations/2026_04_09_220000_create_tb24_controle_pagamentos_table.php`
+  - `app/Models/ControlePagamento.php`
+  - `app/Http/Controllers/ControlePagamentoController.php`
+  - `routes/web.php`
+  - `resources/js/Pages/Settings/Config.jsx`
+  - `resources/js/Pages/Settings/Menu.jsx`
+  - `resources/js/Pages/Settings/ControlePagamentos.jsx`
+  - `tests/Feature/ControlePagamentoTest.php`
+- Problema corrigido:
+  - nao existia em `Ferramentas` nenhuma opcao para configurar pagamentos recorrentes;
+  - o sistema nao possuia cadastro com frequencia, parcelas, valor por parcela e calculo automatico da data final.
+- Causa real:
+  - faltavam rota, controller, model, migration e tela Inertia para esse fluxo;
+  - tambem nao havia regra centralizada para validar coerencia entre recorrencia e `data_inicio`.
+- Comportamento novo:
+  - `Ferramentas` agora possui a opcao `Controle de Pagamentos`;
+  - a tela permite cadastrar `descricao`, `frequencia` (`Semanal`, `Quinzenal`, `Mensal`), `valor total`, `quantidade de parcelas` e `data inicio`;
+  - para `Semanal`, o usuario escolhe o `dia da semana`;
+  - para `Mensal`, o usuario escolhe o `dia do mes`;
+  - `valor por parcela` e `data fim calculada` aparecem no resumo antes de salvar;
+  - os registros salvos ficam listados na mesma tela, com opcao de exclusao.
+- Regra importante de negocio:
+  - a `data_inicio` passou a ser a primeira parcela real;
+  - em recorrencia `semanal`, a `data_inicio` precisa cair exatamente no `dia da semana` selecionado;
+  - em recorrencia `mensal`, a `data_inicio` precisa usar o mesmo `dia do mes` informado;
+  - em recorrencia `quinzenal`, a `data_inicio` vira a primeira parcela e as demais sao somadas de 14 em 14 dias;
+  - no calculo mensal, quando o mes seguinte nao tiver o `dia_mes` escolhido (ex.: 31), usar o ultimo dia disponivel daquele mes.
+- Regras importantes para sincronizar:
+  - replicar integralmente a migration `2026_04_09_220000_create_tb24_controle_pagamentos_table.php`;
+  - manter o nome da tabela como `tb24_controle_pagamentos`, para preservar o sequencial `tb`;
+  - copiar o backend de `ControlePagamentoController.php`, principalmente os metodos `validateFrequencyFields()` e `calculateEndDate()`;
+  - a validacao da data deve continuar aceitando `DD/MM/AA` e retornando erro quando a frequencia nao bater com a `data_inicio`;
+  - em `routes/web.php`, registrar as tres rotas: listagem, criacao e exclusao;
+  - em `resources/js/Pages/Settings/ControlePagamentos.jsx`, manter o resumo em tempo real e a logica de preview da data fim alinhada com o backend;
+  - em `resources/js/Pages/Settings/Config.jsx` e `resources/js/Pages/Settings/Menu.jsx`, incluir a entrada `Controle de Pagamentos` apontando para a nova rota.
+- Ajuste posterior:
+  - cada controle agora projeta a cronologia completa das parcelas na propria resposta do `index`;
+  - a classificacao usa a data atual do servidor:
+    - `Vencido`: parcela com vencimento antes de hoje;
+    - `Por vencer`: parcela com vencimento entre hoje e os proximos 7 dias;
+    - `Nao venceu`: parcela com vencimento depois dessa janela;
+  - a tela passou a ter botao `Cronologia`, abrindo modal com resumo e tabela das parcelas.
+
 ## Filtro de unidade e periodo na tela expenses
 
 - Arquivos alterados:
