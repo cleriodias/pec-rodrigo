@@ -49,6 +49,21 @@ const replaceColorTag = (value) =>
         return `<span style="color:${normalized}">${content}</span>`;
     });
 
+const replaceLinkTag = (value) =>
+    value.replace(/\[link=([^\]]+)\]([\s\S]*?)\[\/link\]/gi, (match, href, content) => {
+        const normalizedHref = String(href ?? '').trim();
+        const isInternalLink = normalizedHref.startsWith('/');
+        const isExternalLink = /^https?:\/\//i.test(normalizedHref);
+
+        if (!isInternalLink && !isExternalLink) {
+            return content;
+        }
+
+        const extraAttributes = isExternalLink ? ' target="_blank" rel="noopener noreferrer"' : '';
+
+        return `<a href="${normalizedHref}" class="font-semibold text-blue-600 underline underline-offset-2"${extraAttributes}>${content}</a>`;
+    });
+
 const renderMessage = (value) => {
     let formatted = escapeHtml(value);
 
@@ -58,6 +73,7 @@ const renderMessage = (value) => {
         formatted = replaceSimpleTag(formatted, 'i', '<em>', '</em>');
         formatted = replaceSimpleTag(formatted, 'u', '<u>', '</u>');
         formatted = replaceColorTag(formatted);
+        formatted = replaceLinkTag(formatted);
 
         if (formatted === previous) {
             break;

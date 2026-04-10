@@ -183,7 +183,7 @@ export default function ControlePagamentos({ paymentControls = [], timelineRefer
                         Controle de Pagamentos
                     </h2>
                     <p className="text-sm text-gray-500 dark:text-gray-300">
-                        Cadastre recorrencias de pagamento com parcelas, valor unitario e data fim calculada.
+                        Cadastre recorrencias de pagamento com parcelas, valor unitario e data fim calculada. Cada usuario ve e gerencia apenas os proprios controles.
                     </p>
                 </div>
             }
@@ -431,7 +431,7 @@ export default function ControlePagamentos({ paymentControls = [], timelineRefer
                                 Controles cadastrados
                             </h3>
                             <p className="text-sm text-gray-500 dark:text-gray-300">
-                                Consulte a configuracao salva para cada pagamento recorrente.
+                                Consulte apenas os controles de pagamento cadastrados por voce.
                             </p>
                         </div>
 
