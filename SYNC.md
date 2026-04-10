@@ -119,3 +119,22 @@
   - `php -l tests/Feature/ControlePagamentoTest.php`: ok;
   - `npm run build`: ok;
   - `php artisan test --filter=ControlePagamentoTest` falhou neste ambiente antes de executar as assercoes porque a suite tentou conectar no MySQL remoto definido no `.env` atual e retornou `SQLSTATE[HY000] [2002]`.
+
+## 10/04/26 - Correção do link no chat do Sistema
+
+- causa do problema:
+  - a mensagem automatica do `Sistema` dependia da marcacao `[link=...]...[/link]`;
+  - em alguns cenarios a bolha do chat ainda exibia essa marcacao como texto puro, entao o usuario via o caminho mas nao conseguia clicar.
+
+- o que foi ajustado:
+  - `resources/js/Pages/Online/Index.jsx` passou a converter automaticamente:
+    - marcacoes `[link=...]...[/link]`;
+    - URLs `http://` e `https://`;
+    - caminhos internos iniciando com `/`;
+  - `app/Support/PaymentControlNotificationService.php` agora adiciona tambem uma linha de fallback `Link direto: ...`, usando a URL completa do sistema para o `Controle de Pagamentos`;
+  - o teste de `ControlePagamentoTest` foi atualizado para validar esse fallback novo.
+
+- arquivos alterados:
+  - `resources/js/Pages/Online/Index.jsx`
+  - `app/Support/PaymentControlNotificationService.php`
+  - `tests/Feature/ControlePagamentoTest.php`

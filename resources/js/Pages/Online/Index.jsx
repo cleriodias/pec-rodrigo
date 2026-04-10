@@ -49,20 +49,37 @@ const replaceColorTag = (value) =>
         return `<span style="color:${normalized}">${content}</span>`;
     });
 
+const buildAnchorTag = (href, content) => {
+    const normalizedHref = String(href ?? '').trim();
+    const isInternalLink = normalizedHref.startsWith('/');
+    const isExternalLink = /^https?:\/\//i.test(normalizedHref);
+
+    if (!isInternalLink && !isExternalLink) {
+        return content;
+    }
+
+    const extraAttributes = isExternalLink ? ' target="_blank" rel="noopener noreferrer"' : '';
+
+    return `<a href="${normalizedHref}" class="font-semibold text-blue-600 underline underline-offset-2"${extraAttributes}>${content}</a>`;
+};
+
 const replaceLinkTag = (value) =>
     value.replace(/\[link=([^\]]+)\]([\s\S]*?)\[\/link\]/gi, (match, href, content) => {
-        const normalizedHref = String(href ?? '').trim();
-        const isInternalLink = normalizedHref.startsWith('/');
-        const isExternalLink = /^https?:\/\//i.test(normalizedHref);
-
-        if (!isInternalLink && !isExternalLink) {
-            return content;
-        }
-
-        const extraAttributes = isExternalLink ? ' target="_blank" rel="noopener noreferrer"' : '';
-
-        return `<a href="${normalizedHref}" class="font-semibold text-blue-600 underline underline-offset-2"${extraAttributes}>${content}</a>`;
+        return buildAnchorTag(href, content);
     });
+
+const replaceAutoLinks = (value) => {
+    let formatted = value.replace(/(^|[\s>])((https?:\/\/[^\s<]+))/gi, (match, prefix, url) => {
+        return `${prefix}${buildAnchorTag(url, url)}`;
+    });
+
+    formatted = formatted.replace(
+        /(^|[\s>])((\/[a-zA-Z0-9\-._~/?#[\]@!$&'()*+,;=%]+))/gi,
+        (match, prefix, path) => `${prefix}${buildAnchorTag(path, path)}`,
+    );
+
+    return formatted;
+};
 
 const renderMessage = (value) => {
     let formatted = escapeHtml(value);
@@ -74,6 +91,7 @@ const renderMessage = (value) => {
         formatted = replaceSimpleTag(formatted, 'u', '<u>', '</u>');
         formatted = replaceColorTag(formatted);
         formatted = replaceLinkTag(formatted);
+        formatted = replaceAutoLinks(formatted);
 
         if (formatted === previous) {
             break;

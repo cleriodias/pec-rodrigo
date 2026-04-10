@@ -349,5 +349,7 @@ class ControlePagamentoTest extends TestCase
         $this->assertStringContainsString('Servico em 3 dias', $message->message);
         $this->assertStringNotContainsString('Pagamento de outro usuario', $message->message);
         $this->assertStringContainsString('[link=/settings/controle-pagamentos]Abrir Controle de Pagamentos[/link]', $message->message);
+        $this->assertStringContainsString('Link direto:', $message->message);
+        $this->assertStringContainsString('/settings/controle-pagamentos', $message->message);
     }
 }

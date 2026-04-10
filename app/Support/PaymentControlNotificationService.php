@@ -9,6 +9,7 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\URL;
 
 class PaymentControlNotificationService
 {
@@ -125,6 +126,7 @@ class PaymentControlNotificationService
 
         $lines[] = '';
         $lines[] = '[link=/settings/controle-pagamentos]Abrir Controle de Pagamentos[/link]';
+        $lines[] = 'Link direto: ' . URL::to('/settings/controle-pagamentos');
 
         return implode("\n", $lines);
     }
