@@ -1,5 +1,25 @@
 # 09/04/26
 
+## Ajuste visual em settings/controle-pagamentos
+
+- Arquivos alterados:
+  - `resources/js/Pages/Settings/ControlePagamentos.jsx`
+  - `SYNC.md`
+- Problema corrigido:
+  - o campo `Data inicio` nao oferecia calendario na tela `settings/controle-pagamentos`;
+  - o formulario estava com distribuicao vertical diferente do layout de referencia aprovado.
+- Causa real:
+  - `resources/js/Pages/Settings/ControlePagamentos.jsx` usava `input` textual com mascara manual para `data_inicio`, sem elemento nativo de calendario;
+  - a composicao dos campos estava separada em blocos genericos de 2 colunas, sem a grade compacta usada no layout desejado.
+- Comportamento novo:
+  - `Data inicio` agora usa um campo com calendario nativo, mantendo a data exibida em `DD/MM/AA`;
+  - o formulario foi reorganizado para o layout com `Descricao` em largura total, linha com `Frequencia`, `Data inicio` e `Dia da semana`, e linha seguinte com `Dia do mes`, `Valor total`, `Quantidade de parcelas` e botao `Salvar controle`;
+  - o resumo lateral foi reequilibrado visualmente para acompanhar o novo formulario.
+- Regras importantes para sincronizar:
+  - manter `data_inicio` salvo no mesmo fluxo atual; a mudanca foi somente no frontend da tela;
+  - o valor visual de `Data inicio` continua curto (`DD/MM/AA`), mas o calendario nativo trabalha internamente com ISO para abrir corretamente;
+  - o botao `Salvar controle` passou a usar o componente central `PrimaryButton`, evitando cor fixa local no JSX.
+
 ## Controle de Pagamentos em Ferramentas
 
 - Arquivos alterados:
