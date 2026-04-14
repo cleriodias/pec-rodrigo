@@ -1,3 +1,32 @@
+## 14/04/26 - Totais de `Vale` e `Adiantamento` no card `Periodo considerado` em `settings/contra-cheque`
+
+- causa do problema:
+  - o backend da tela `settings/contra-cheque` ja enviava `summary.advances_total` e `summary.vales_total`;
+  - porem o frontend do card `Periodo considerado` montava apenas `Colaboradores`, `Salarios` e `Saldo a receber`;
+  - com isso, os totais de `Vale` e `Adiantamento` nao apareciam no resumo superior, mesmo estando disponiveis nos dados.
+
+- o que foi ajustado:
+  - adicionado o card `Adiantamento` no resumo superior;
+  - adicionado o card `Vale` no resumo superior;
+  - ajustada a grade do bloco para acomodar os 5 cards sem quebrar o layout.
+
+- frontend envolvido:
+  - `resources/js/Pages/Settings/ContraCheque.jsx`
+    - `summaryCards` agora inclui `summary.advances_total`;
+    - `summaryCards` agora inclui `summary.vales_total`;
+    - a grade do bloco `Periodo considerado` passou de 3 cards para 5 cards.
+
+- arquivos alterados:
+  - `resources/js/Pages/Settings/ContraCheque.jsx`
+
+- observacoes para sincronizar em `pec1`:
+  - sincronizar exatamente:
+    - `resources/js/Pages/Settings/ContraCheque.jsx`
+  - nao depende de migration;
+  - nao depende de rota nova;
+  - nao altera banco;
+  - o backend nao precisou ser alterado porque os totais ja eram enviados por `app/Http/Controllers/PayrollController.php`.
+
 ## 13/04/26 - Filtros adicionados em `settings/contra-cheque`
 
 - causa do problema:
