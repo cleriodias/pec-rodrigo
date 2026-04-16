@@ -616,3 +616,63 @@
 
 - validacao:
   - `npm run build`: ok.
+
+## 16/04/26 - Produto sem codigo de barras usando o proprio `tb1_id`
+
+- causa do problema:
+  - o cadastro de produto nao permitia indicar explicitamente que um item nao possui codigo de barras;
+  - quando isso acontecia, o sistema acabava usando codigos improvisados ou o usuario precisava informar um valor ficticio;
+  - na base atual existiam varios `tb1_codbar` curtos, inclusive casos no padrao `SEM-*`, o que deixava o comportamento inconsistente entre cadastro novo e produtos antigos.
+
+- regra aplicada:
+  - quando o usuario marcar que o produto nao possui codigo de barras, o sistema grava o proprio `tb1_id` no campo `tb1_codbar`;
+  - produtos de balanca continuam sem codigo de barras proprio, mas agora tambem usam o proprio `tb1_id` em `tb1_codbar`;
+  - na correcao do banco, todo produto com `tb1_codbar` menor que `7` caracteres passa a receber `CAST(tb1_id AS CHAR)`.
+
+- backend envolvido:
+  - `app/Http/Controllers/ProductController.php`
+    - adicionada a flag de request `sem_codigo_barras`;
+    - `tb1_codbar` deixa de ser obrigatorio quando essa flag estiver marcada;
+    - a geracao final do codigo passou a ser centralizada em `resolveProductBarcode`;
+    - quando o produto estiver sem codigo proprio, o controller grava `tb1_codbar` com o proprio `tb1_id`;
+    - a validacao de colisao de codigo passou a considerar tambem esse codigo gerado com base no ID;
+    - `nextSafeProductId` passou a ignorar IDs cujo valor textual ja esteja ocupado em `tb1_codbar`.
+  - `database/migrations/2026_04_16_190000_sync_short_product_barcodes_with_id.php`
+    - nova migration de saneamento;
+    - atualiza `tb1_produto.tb1_codbar` para `CAST(tb1_id AS CHAR)` quando `CHAR_LENGTH(TRIM(tb1_codbar)) < 7`;
+    - o `down` ficou sem reversao automatica porque os valores antigos nao sao recuperaveis.
+
+- frontend envolvido:
+  - `resources/js/Pages/Products/ProductCreate.jsx`
+    - adicionado checkbox `Produto sem codigo de barras`;
+    - quando marcado, o campo manual de codigo deixa de ser exibido;
+    - a tela informa que o sistema copiara o `tb1_id` para `tb1_codbar`;
+    - para produtos de balanca o checkbox fica sempre ativo e bloqueado.
+  - `resources/js/Pages/Products/ProductEdit.jsx`
+    - recebeu a mesma regra visual do cadastro;
+    - quando o produto estiver sem codigo proprio, a tela exibe apenas a orientacao e nao mostra input manual para `tb1_codbar`;
+    - para produtos de balanca, a mensagem agora deixa claro que `tb1_codbar` acompanha o proprio `tb1_id`.
+
+- testes:
+  - `tests/Feature/ProductManagementTest.php`
+    - atualizado para refletir o fim do padrao `SEM-*`;
+    - adicionado cenario cobrindo produto comum marcado como sem codigo de barras, validando `tb1_codbar = tb1_id`.
+
+- arquivos alterados:
+  - `app/Http/Controllers/ProductController.php`
+  - `resources/js/Pages/Products/ProductCreate.jsx`
+  - `resources/js/Pages/Products/ProductEdit.jsx`
+  - `tests/Feature/ProductManagementTest.php`
+  - `SYNC.md`
+  - `database/migrations/2026_04_16_190000_sync_short_product_barcodes_with_id.php`
+
+- observacoes para sincronizar em `pec1`:
+  - sincronizar exatamente:
+    - `app/Http/Controllers/ProductController.php`
+    - `resources/js/Pages/Products/ProductCreate.jsx`
+    - `resources/js/Pages/Products/ProductEdit.jsx`
+    - `tests/Feature/ProductManagementTest.php`
+    - `database/migrations/2026_04_16_190000_sync_short_product_barcodes_with_id.php`
+  - aplicar a migration tambem em `pec1`;
+  - a copia em `pec1` pode ter pequenas diferencas visuais nas telas `Welcome.jsx` e `Login.jsx`, mas isso nao interfere nesta sincronizacao;
+  - o ponto critico da sincronizacao e manter a mesma regra no controller e no formulario: `sem_codigo_barras` precisa resultar em `tb1_codbar = tb1_id`.
