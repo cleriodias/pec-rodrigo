@@ -1,3 +1,67 @@
+## 16/04/26 - Nomes de produtos convertidos e protegidos em maiusculo
+
+- causa do problema:
+  - o campo `tb1_nome` era salvo exatamente como digitado;
+  - isso permitia cadastro e alteracao com letras minusculas, deixando a base inconsistente.
+
+- o que foi ajustado:
+  - o backend passou a normalizar `tb1_nome` para maiusculo antes de salvar;
+  - as telas de cadastro e edicao passaram a converter o nome para maiusculo enquanto o usuario digita;
+  - os registros ja existentes em `tb1_produto` tambem foram convertidos para maiusculo.
+
+- backend envolvido:
+  - `app/Http/Controllers/ProductController.php`
+    - adicionada normalizacao central do nome com `mb_strtoupper`;
+    - `store` e `update` passam a salvar o nome sempre em maiusculo via `prepareProductData`.
+
+- frontend envolvido:
+  - `resources/js/Pages/Products/ProductCreate.jsx`
+    - o campo `tb1_nome` agora converte para maiusculo no `onChange`.
+  - `resources/js/Pages/Products/ProductEdit.jsx`
+    - o campo `tb1_nome` agora converte para maiusculo no `onChange`.
+
+- arquivos alterados:
+  - `app/Http/Controllers/ProductController.php`
+  - `resources/js/Pages/Products/ProductCreate.jsx`
+  - `resources/js/Pages/Products/ProductEdit.jsx`
+  - `SYNC.md`
+
+- observacoes para sincronizar em `pec1`:
+  - sincronizar exatamente:
+    - `app/Http/Controllers/ProductController.php`
+    - `resources/js/Pages/Products/ProductCreate.jsx`
+    - `resources/js/Pages/Products/ProductEdit.jsx`
+  - nao depende de migration;
+  - nao altera estrutura de banco;
+  - e importante replicar tambem a conversao dos registros ja existentes no banco de `pec1`.
+
+## 16/04/26 - Nome do produto limitado a 25 caracteres em `products`
+
+- causa do problema:
+  - na listagem `products`, nomes longos de produtos estavam sendo exibidos por completo;
+  - isso aumentava visualmente a largura da coluna e prejudicava a leitura rapida da tabela.
+
+- o que foi ajustado:
+  - o nome do produto passou a exibir no maximo `25` caracteres;
+  - quando o nome ultrapassa esse limite, a listagem mostra reticencias;
+  - adicionado `title` com o nome completo para consulta no hover.
+
+- frontend envolvido:
+  - `resources/js/Pages/Products/ProductIndex.jsx`
+    - adicionada regra de truncamento visual do nome;
+    - mantido o valor completo no `title`.
+
+- arquivos alterados:
+  - `resources/js/Pages/Products/ProductIndex.jsx`
+  - `SYNC.md`
+
+- observacoes para sincronizar em `pec1`:
+  - sincronizar exatamente:
+    - `resources/js/Pages/Products/ProductIndex.jsx`
+  - nao depende de migration;
+  - nao altera banco;
+  - nao altera backend.
+
 ## 16/04/26 - Codigo de barras movido para baixo do nome em `products`
 
 - causa do problema:
