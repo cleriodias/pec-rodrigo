@@ -1,3 +1,31 @@
+## 16/04/26 - Codigo de barras movido para baixo do nome em `products`
+
+- causa do problema:
+  - na listagem `products`, o codigo de barras aparecia em uma coluna propria;
+  - isso deixava a tabela mais larga e dava destaque excessivo ao codigo, quando o desejado era um visual mais compacto.
+
+- o que foi ajustado:
+  - removida a coluna exclusiva `Codigo de barras` da tabela;
+  - o codigo de barras passou a ser exibido logo abaixo do nome do produto;
+  - o codigo agora usa fonte menor e aparencia mais discreta.
+
+- frontend envolvido:
+  - `resources/js/Pages/Products/ProductIndex.jsx`
+    - removido o header da coluna de codigo de barras;
+    - removida a celula separada do codigo de barras;
+    - o nome do produto passou a renderizar o codigo abaixo dele em `text-xs`.
+
+- arquivos alterados:
+  - `resources/js/Pages/Products/ProductIndex.jsx`
+  - `SYNC.md`
+
+- observacoes para sincronizar em `pec1`:
+  - sincronizar exatamente:
+    - `resources/js/Pages/Products/ProductIndex.jsx`
+  - nao depende de migration;
+  - nao altera banco;
+  - nao altera backend.
+
 ## 16/04/26 - Correcao de IDs de produtos fora do padrao e bloqueio preventivo no cadastro
 
 - causa do problema:
