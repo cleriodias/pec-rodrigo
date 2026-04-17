@@ -7,6 +7,7 @@ use App\Http\Controllers\ControlePagamentoController;
 use App\Http\Controllers\DatabaseToolsController;
 use App\Http\Controllers\DiscardSettingsController;
 use App\Http\Controllers\ExpenseController;
+use App\Http\Controllers\FiscalConfigurationController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductDiscardController;
 use App\Http\Controllers\ProductStockController;
@@ -145,6 +146,18 @@ Route::middleware('auth')->group(function () {
         ->name('settings.payment-control.destroy');
     Route::get('/settings/folha-pagamento', [PayrollController::class, 'index'])
         ->name('settings.payroll');
+    Route::get('/settings/fiscal', [FiscalConfigurationController::class, 'index'])
+        ->name('settings.fiscal');
+    Route::post('/settings/fiscal', [FiscalConfigurationController::class, 'update'])
+        ->name('settings.fiscal.update');
+    Route::post('/settings/fiscal/reprocess', [FiscalConfigurationController::class, 'reprocess'])
+        ->name('settings.fiscal.reprocess');
+    Route::post('/settings/fiscal/notas/{notaFiscal}/regenerate', [FiscalConfigurationController::class, 'regenerateInvoice'])
+        ->name('settings.fiscal.invoices.regenerate');
+    Route::get('/settings/fiscal/notas/{notaFiscal}/xml', [FiscalConfigurationController::class, 'downloadXml'])
+        ->name('settings.fiscal.invoices.xml');
+    Route::post('/settings/fiscal/notas/{notaFiscal}/transmit', [FiscalConfigurationController::class, 'transmit'])
+        ->name('settings.fiscal.invoices.transmit');
     Route::get('/settings/contra-cheque', [PayrollController::class, 'contraCheque'])
         ->name('settings.contra-cheque');
     Route::get('/settings/avisos', [NoticeController::class, 'index'])

@@ -8,6 +8,7 @@ use App\Models\Unidade;
 use App\Models\User;
 use App\Models\Venda;
 use App\Models\VendaPagamento;
+use App\Support\FiscalInvoicePreparationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -41,7 +42,7 @@ class SaleController extends Controller
         return response()->json(['items' => $items]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, FiscalInvoicePreparationService $fiscalInvoicePreparationService): JsonResponse
     {
         $user = $request->user();
         $unit = $request->session()->get('active_unit');
@@ -479,6 +480,8 @@ class SaleController extends Controller
             }
         }
 
+        $invoice = $fiscalInvoicePreparationService->prepareForPayment($payment);
+
         $receiptItems = array_map(
             static function (array $item) use ($comandaCodigo): array {
                 if ($comandaCodigo === null) {
@@ -515,6 +518,15 @@ class SaleController extends Controller
                     'dois_pgto' => $payment->dois_pgto,
                     'tipo_pagamento' => $payment->tipo_pagamento,
                 ],
+                'fiscal' => $invoice ? [
+                    'id' => $invoice->tb27_id,
+                    'status' => $invoice->tb27_status,
+                    'mensagem' => $invoice->tb27_mensagem,
+                    'modelo' => $invoice->tb27_modelo,
+                    'ambiente' => $invoice->tb27_ambiente,
+                    'serie' => $invoice->tb27_serie,
+                    'numero' => $invoice->tb27_numero,
+                ] : null,
             ],
         ]);
     }

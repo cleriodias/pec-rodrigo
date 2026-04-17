@@ -676,3 +676,1063 @@
   - aplicar a migration tambem em `pec1`;
   - a copia em `pec1` pode ter pequenas diferencas visuais nas telas `Welcome.jsx` e `Login.jsx`, mas isso nao interfere nesta sincronizacao;
   - o ponto critico da sincronizacao e manter a mesma regra no controller e no formulario: `sem_codigo_barras` precisa resultar em `tb1_codbar = tb1_id`.
+
+## 16/04/26 - Base estrutural para emissao fiscal NF-e/NFC-e
+
+- causa do problema:
+  - o sistema fechava a venda normalmente, mas nao possuia nenhuma camada fiscal para transformar esse fechamento em nota eletronica;
+  - faltavam tres blocos essenciais:
+    - configuracao fiscal por unidade;
+    - cadastro fiscal minimo de produto;
+    - vinculo entre a venda concluida e um registro fiscal preparado para futura transmissao a SEFAZ;
+  - sem isso, mesmo com certificado e API depois, a emissao ficaria travada por falta de estrutura e validacao interna.
+
+- o que foi criado nesta etapa:
+  - estrutura de banco para configuracao fiscal por unidade;
+  - estrutura de banco para registrar a nota fiscal ligada ao fechamento da venda;
+  - ampliacao do cadastro de produto com campos fiscais minimos;
+  - tela administrativa de configuracao fiscal;
+  - preparacao automatica de registro fiscal quando a venda e finalizada;
+  - validacao interna para marcar se a nota esta:
+    - `pendente_configuracao`;
+    - `erro_validacao`;
+    - `pendente_emissao`.
+
+- banco de dados:
+  - `database/migrations/2026_04_16_200000_add_fiscal_fields_to_tb1_produto_table.php`
+    - adiciona em `tb1_produto`:
+      - `tb1_ncm`
+      - `tb1_cest`
+      - `tb1_cfop`
+      - `tb1_unidade_comercial`
+      - `tb1_unidade_tributavel`
+      - `tb1_origem`
+      - `tb1_csosn`
+      - `tb1_cst`
+      - `tb1_aliquota_icms`
+  - `database/migrations/2026_04_16_201000_create_tb26_configuracoes_fiscais_table.php`
+    - cria `tb26_configuracoes_fiscais`;
+    - tabela por unidade (`tb2_id` unico);
+    - guarda ambiente, serie, proximo numero, CRT, CSC, tipo de certificado, caminho do certificado, senha criptografada e dados completos do emitente.
+  - `database/migrations/2026_04_16_202000_create_tb27_notas_fiscais_table.php`
+    - cria `tb27_notas_fiscais`;
+    - liga uma nota ao fechamento (`tb4_id`);
+    - guarda status, payload montado, erros de validacao, chave, protocolo, XML e datas operacionais.
+
+- backend:
+  - `app/Models/ConfiguracaoFiscal.php`
+    - novo model da tabela `tb26_configuracoes_fiscais`;
+    - senha do certificado com cast `encrypted`.
+  - `app/Models/NotaFiscal.php`
+    - novo model da tabela `tb27_notas_fiscais`.
+  - `app/Support/FiscalInvoicePreparationService.php`
+    - novo servico para preparar a nota a partir do fechamento;
+    - monta payload interno da emissao;
+    - valida configuracao da unidade;
+    - valida se os produtos tem cadastro fiscal minimo;
+    - define o status inicial da nota;
+    - reserva numeracao somente quando a unidade ja tiver algum tipo de emissao habilitado.
+  - `app/Http/Controllers/SaleController.php`
+    - ao finalizar a venda, agora chama `FiscalInvoicePreparationService`;
+    - o JSON de retorno da venda passou a trazer bloco `fiscal` com status, mensagem, modelo, ambiente, serie e numero.
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+    - novo controller para tela de configuracao fiscal;
+    - permite selecionar unidade;
+    - salvar ambiente, serie, CRT, CSC, dados do emitente;
+    - fazer upload do certificado `A1` (`.pfx`/`.p12`);
+    - remover certificado atual;
+    - listar as ultimas notas preparadas da unidade.
+  - `app/Http/Controllers/ProductController.php`
+    - validacao e persistencia dos novos campos fiscais do produto;
+    - inclusao das opcoes de origem fiscal no formulario.
+  - `app/Models/Produto.php`
+    - fillable/casts atualizados com os novos campos fiscais.
+  - `app/Models/VendaPagamento.php`
+    - adicionada relacao `notaFiscal()`.
+  - `app/Models/Unidade.php`
+    - adicionada relacao `configuracaoFiscal()`.
+  - `routes/web.php`
+    - novas rotas:
+      - `settings.fiscal`
+      - `settings.fiscal.update`
+
+- frontend:
+  - `resources/js/Pages/Settings/Config.jsx`
+    - adicionada entrada `Configuracao Fiscal` no menu de ferramentas.
+  - `resources/js/Pages/Settings/FiscalConfig.jsx`
+    - nova tela de configuracao fiscal;
+    - selecao de unidade;
+    - bloco de emissao e numeracao;
+    - bloco de credenciais fiscais;
+    - upload de certificado;
+    - bloco de dados do emitente;
+    - tabela com as ultimas notas preparadas.
+  - `resources/js/Pages/Products/ProductCreate.jsx`
+    - nova secao `Cadastro fiscal`.
+  - `resources/js/Pages/Products/ProductEdit.jsx`
+    - nova secao `Cadastro fiscal`.
+
+- testes e validacao:
+  - `tests/Unit/FiscalInvoicePreparationServiceTest.php`
+    - novo teste unitario cobrindo:
+      - falta de configuracao fiscal;
+      - configuracao completa e produto valido;
+      - produto sem cadastro fiscal minimo.
+  - `php artisan test tests/Unit/FiscalInvoicePreparationServiceTest.php`: ok.
+  - `npm run build`: ok.
+  - `php artisan test`: nao validado integralmente por bloqueio de conexao com o MySQL externo do ambiente de teste.
+
+- comportamento importante desta etapa:
+  - isto ainda nao transmite nota para a SEFAZ;
+  - esta entrega prepara a base para a futura integracao oficial;
+  - a venda agora ja nasce com um registro fiscal interno;
+  - se a unidade ou o produto estiverem incompletos, a nota fica sinalizada com pendencia em vez de falhar silenciosamente.
+
+- observacoes para sincronizar em `pec1`:
+  - sincronizar exatamente estes arquivos:
+    - `app/Http/Controllers/FiscalConfigurationController.php`
+    - `app/Http/Controllers/ProductController.php`
+    - `app/Http/Controllers/SaleController.php`
+    - `app/Models/ConfiguracaoFiscal.php`
+    - `app/Models/NotaFiscal.php`
+    - `app/Models/Produto.php`
+    - `app/Models/Unidade.php`
+    - `app/Models/VendaPagamento.php`
+    - `app/Support/FiscalInvoicePreparationService.php`
+    - `database/migrations/2026_04_16_200000_add_fiscal_fields_to_tb1_produto_table.php`
+    - `database/migrations/2026_04_16_201000_create_tb26_configuracoes_fiscais_table.php`
+    - `database/migrations/2026_04_16_202000_create_tb27_notas_fiscais_table.php`
+    - `resources/js/Pages/Products/ProductCreate.jsx`
+    - `resources/js/Pages/Products/ProductEdit.jsx`
+    - `resources/js/Pages/Settings/Config.jsx`
+    - `resources/js/Pages/Settings/FiscalConfig.jsx`
+    - `routes/web.php`
+    - `tests/Unit/FiscalInvoicePreparationServiceTest.php`
+  - a sincronizacao desta etapa nao depende de `Welcome.jsx` nem `Login.jsx`;
+  - ponto critico:
+    - copiar o service, o controller fiscal e as tres migrations juntos;
+    - se copiar so a tela ou so o controller, a venda vai referenciar estruturas que ainda nao existem;
+    - a migration `tb27_notas_fiscais` depende de `tb26_configuracoes_fiscais`;
+    - a regra nova da venda depende da relacao `notaFiscal()` em `VendaPagamento`.
+
+## 16/04/26 - Associacao explicita entre loja e certificado fiscal
+
+- causa do ajuste:
+  - foi confirmado que cada loja possui CNPJ proprio;
+  - consequentemente cada loja tambem possui certificado digital proprio;
+  - embora a configuracao fiscal ja estivesse vinculada por `tb2_id`, ainda faltava deixar isso explicito no cadastro e na validacao:
+    - qual certificado pertence a qual loja;
+    - qual CNPJ esta vinculado ao certificado;
+    - impedir que uma loja salve ou use o certificado de outra.
+
+- o que foi ajustado:
+  - `database/migrations/2026_04_16_203000_add_certificate_identity_to_tb26_configuracoes_fiscais_table.php`
+    - adiciona em `tb26_configuracoes_fiscais`:
+      - `tb26_certificado_nome`
+      - `tb26_certificado_cnpj`
+  - `app/Models/ConfiguracaoFiscal.php`
+    - fillable atualizado com os novos campos.
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+    - a tela agora recebe tambem o CNPJ normalizado da loja;
+    - passou a salvar `nome do certificado` e `CNPJ do certificado`;
+    - antes de gravar, valida se o CNPJ base do certificado e o mesmo CNPJ base da loja selecionada;
+    - se nao for, retorna erro no campo `tb26_certificado_cnpj`.
+  - `app/Support/FiscalInvoicePreparationService.php`
+    - o payload interno da nota agora inclui os dados identificadores do certificado;
+    - a validacao fiscal passou a exigir `nome do certificado` e `CNPJ do certificado`;
+    - na preparacao da nota, tambem confere se o certificado pertence ao mesmo CNPJ base da loja da venda.
+  - `resources/js/Pages/Settings/FiscalConfig.jsx`
+    - adicionados os campos:
+      - `Nome do certificado`
+      - `CNPJ do certificado`
+    - adicionada uma caixa de resumo visual com:
+      - loja;
+      - CNPJ da loja;
+      - nome do certificado;
+      - CNPJ do certificado;
+      - arquivo vinculado.
+  - `tests/Unit/FiscalInvoicePreparationServiceTest.php`
+    - novo cenario cobrindo tentativa de usar certificado de outra loja.
+
+- regra importante:
+  - a associacao operacional correta agora e:
+    - `loja/unidade -> configuracao fiscal -> certificado proprio`
+  - a validacao considera o CNPJ base:
+    - se o certificado nao pertencer ao mesmo CNPJ base da loja, a configuracao e bloqueada;
+    - se por algum motivo isso escapar, a preparacao da nota tambem marca erro.
+
+- validacao:
+  - `php artisan test tests/Unit/FiscalInvoicePreparationServiceTest.php`: ok.
+  - `npm run build`: ok.
+
+- arquivos alterados:
+  - `database/migrations/2026_04_16_203000_add_certificate_identity_to_tb26_configuracoes_fiscais_table.php`
+  - `app/Models/ConfiguracaoFiscal.php`
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+  - `app/Support/FiscalInvoicePreparationService.php`
+  - `resources/js/Pages/Settings/FiscalConfig.jsx`
+  - `tests/Unit/FiscalInvoicePreparationServiceTest.php`
+  - `SYNC.md`
+
+- observacoes para sincronizar em `pec1`:
+  - copiar esses arquivos junto com a base fiscal criada anteriormente;
+  - aplicar tambem a migration nova `2026_04_16_203000_add_certificate_identity_to_tb26_configuracoes_fiscais_table.php`;
+  - ponto critico da sincronizacao:
+    - nao copiar so a tela;
+    - o controller e o service precisam ir juntos para manter a validacao consistente entre cadastro e preparo da nota.
+
+## 16/04/26 - Inspecao automatica do A1 e XML assinado localmente para NFC-e
+
+- causa do ajuste:
+  - a base fiscal ja sabia qual loja e qual certificado deveriam ser usados;
+  - faltava transformar isso em algo operacional:
+    - abrir o certificado A1;
+    - validar senha e identidade do certificado;
+    - identificar nome, CNPJ e validade do certificado;
+    - gerar XML fiscal assinado localmente;
+    - permitir reprocessar notas que ficaram pendentes antes da configuracao completa.
+  - tambem ficou claro que `NF-e` modelo `55` ainda nao pode ser emitida automaticamente com a estrutura atual, porque a venda nao armazena destinatario fiscal; por isso a assinatura local desta etapa foi focada em `NFC-e`.
+
+- o que foi criado:
+  - `app/Support/FiscalCertificateService.php`
+    - novo servico para abrir certificado `A1` (`.pfx`/`.p12`);
+    - le o PKCS12 com `openssl`;
+    - extrai:
+      - certificado publico;
+      - chave privada;
+      - nome do certificado;
+      - CNPJ do certificado;
+      - validade;
+    - normaliza o certificado para uso em `XMLDSig`.
+  - `app/Support/FiscalNfceXmlService.php`
+    - novo servico para montar XML `NFC-e` modelo `65`;
+    - gera:
+      - chave de acesso;
+      - bloco `ide`;
+      - emitente;
+      - itens;
+      - impostos basicos;
+      - totais;
+      - pagamento;
+      - informacao adicional;
+    - assina o XML localmente com o certificado da loja.
+  - `app/Support/FiscalInvoicePreparationService.php`
+    - passou a carregar o certificado real da unidade;
+    - passou a tentar gerar XML assinado quando a nota for `NFC-e` e estiver validada;
+    - status novo:
+      - `xml_assinado`
+    - adicionada rotina de `reprocessamento` das notas pendentes da unidade;
+    - validacao nova:
+      - certificado vencido bloqueia;
+      - `NF-e` modelo `55` fica com erro explicando que ainda falta destinatario fiscal;
+      - nesta etapa a geracao automatica foi preparada para `CRT 1` com `CSOSN 102/103/300/400`.
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+    - upload do certificado agora exige senha quando necessario;
+    - ao enviar o arquivo, o sistema tenta abrir o `A1`;
+    - se conseguir:
+      - preenche automaticamente nome do certificado;
+      - preenche automaticamente CNPJ do certificado;
+      - grava a validade;
+    - se falhar:
+      - remove o arquivo salvo;
+      - retorna erro no formulario;
+    - nova acao para reprocessar notas pendentes da unidade;
+    - nova acao para baixar o XML assinado da nota.
+  - `resources/js/Pages/Settings/FiscalConfig.jsx`
+    - mostra validade do certificado no resumo da associacao loja/certificado;
+    - adiciona acao `Reprocessar notas pendentes`;
+    - exibe botao `Baixar XML` quando a nota ja tem `tb27_xml_envio`.
+
+- banco de dados:
+  - `database/migrations/2026_04_16_204000_add_certificate_validity_to_tb26_configuracoes_fiscais_table.php`
+    - adiciona `tb26_certificado_valido_ate` em `tb26_configuracoes_fiscais`.
+
+- regras importantes desta etapa:
+  - a assinatura local esta preparada para `NFC-e`;
+  - `NF-e` modelo `55` continua bloqueada automaticamente ate existir destinatario fiscal na venda;
+  - o certificado da loja agora nao e apenas um arquivo salvo:
+    - ele e aberto;
+    - identificado;
+    - validado;
+    - e usado para assinar o XML localmente.
+
+- testes e validacao:
+  - `tests/Unit/FiscalInvoicePreparationServiceTest.php`
+    - ajustado para o novo fluxo de validacao;
+    - continua cobrindo configuracao, produto fiscal e certificado de outra loja.
+  - `tests/Unit/FiscalCertificateServiceTest.php`
+    - novo teste unitario cobrindo extracao de nome e CNPJ do certificado.
+  - `php artisan test tests/Unit/FiscalInvoicePreparationServiceTest.php tests/Unit/FiscalCertificateServiceTest.php`: ok.
+  - `npm run build`: ok.
+  - `php -l` nos novos servicos/controladores/migrations: ok.
+
+- arquivos alterados:
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+  - `app/Models/ConfiguracaoFiscal.php`
+  - `app/Support/FiscalCertificateService.php`
+  - `app/Support/FiscalInvoicePreparationService.php`
+  - `app/Support/FiscalNfceXmlService.php`
+  - `database/migrations/2026_04_16_204000_add_certificate_validity_to_tb26_configuracoes_fiscais_table.php`
+  - `resources/js/Pages/Settings/FiscalConfig.jsx`
+  - `routes/web.php`
+  - `tests/Unit/FiscalInvoicePreparationServiceTest.php`
+  - `tests/Unit/FiscalCertificateServiceTest.php`
+  - `SYNC.md`
+
+- observacoes para sincronizar em `pec1`:
+  - sincronizar esta etapa junto com toda a base fiscal anterior;
+  - aplicar tambem:
+    - `2026_04_16_204000_add_certificate_validity_to_tb26_configuracoes_fiscais_table.php`
+  - ponto critico:
+    - `FiscalCertificateService`, `FiscalNfceXmlService` e `FiscalInvoicePreparationService` precisam ir juntos;
+    - o controller fiscal tambem precisa ser sincronizado no mesmo pacote, porque agora ele depende da inspecao real do certificado;
+    - sem isso, a tela vai salvar o arquivo, mas nao vai preencher identidade/validade nem conseguir assinar o XML.
+
+## 16/04/26 - Transmissao inicial da NFC-e para a SEFAZ com endpoint por UF
+
+- causa do ajuste:
+  - a etapa anterior ja deixava a nota em `xml_assinado`, mas ainda faltava o envio real para a SEFAZ;
+  - havia tambem dois riscos tecnicos que impediriam a transmissao funcionar corretamente:
+    - usar o endpoint `?wsdl` como se fosse URL de envio;
+    - montar o lote XML escapado como texto dentro do SOAP, em vez de enviar o XML como nodo valido.
+
+- o que foi criado:
+  - `app/Support/FiscalWebserviceResolverService.php`
+    - novo servico para resolver os endpoints da NFC-e por `UF` e `ambiente`;
+    - nesta etapa o mapeamento inicial foi preparado para `GO`;
+    - agora diferencia:
+      - URL real de envio;
+      - URL do `WSDL`;
+      - operacao SOAP de autorizacao.
+  - `app/Support/FiscalNfceTransmissionService.php`
+    - novo servico para transmissao da `NFC-e`;
+    - carrega o certificado da loja;
+    - monta o lote `enviNFe`;
+    - monta o envelope SOAP com o XML anexado corretamente;
+    - envia para o webservice da SEFAZ com `cURL` e certificado `PEM` temporario;
+    - interpreta a resposta da autorizacao e atualiza:
+      - status;
+      - mensagem;
+      - recibo;
+      - protocolo;
+      - chave;
+      - XML de retorno;
+      - data da emissao.
+
+- ajustes no controller fiscal:
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+    - a listagem da tela passa a receber os endpoints resolvidos da unidade;
+    - a tela mostra o endpoint real de envio e tambem o `WSDL`;
+    - nova acao para transmitir manualmente uma nota em `xml_assinado`;
+    - se a transmissao falhar, o erro volta para a tela como feedback ao usuario em vez de estourar excecao bruta.
+
+- ajustes no frontend:
+  - `resources/js/Pages/Settings/FiscalConfig.jsx`
+    - a tabela de notas agora mostra:
+      - botao `Baixar XML`;
+      - botao `Transmitir` para notas em `xml_assinado`;
+    - o resumo da loja/certificado mostra:
+      - endpoint de envio;
+      - `WSDL` de autorizacao.
+
+- ajustes de rota:
+  - `routes/web.php`
+    - adicionadas as rotas:
+      - `settings.fiscal.reprocess`
+      - `settings.fiscal.invoices.xml`
+      - `settings.fiscal.invoices.transmit`
+
+- testes e validacao:
+  - `tests/Unit/FiscalWebserviceResolverServiceTest.php`
+    - novo teste unitario validando:
+      - URL de envio sem `?wsdl`;
+      - URL do `WSDL` separada;
+      - excecao para `UF` ainda nao mapeada.
+  - os testes anteriores de certificado e preparacao fiscal continuam sendo executados em conjunto nesta etapa.
+
+- regra importante desta etapa:
+  - a transmissao automatica continua focada em `NFC-e`;
+  - `NF-e` modelo `55` ainda permanece bloqueada no preparo automatico porque a venda atual nao guarda destinatario fiscal;
+  - o mapeamento oficial de endpoint ainda nao cobre todas as `UFs`, entao lojas fora do mapeamento atual vao exibir erro explicito na tela ate que a `UF` seja adicionada no resolver.
+
+- arquivos alterados:
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+  - `app/Support/FiscalNfceTransmissionService.php`
+  - `app/Support/FiscalWebserviceResolverService.php`
+  - `resources/js/Pages/Settings/FiscalConfig.jsx`
+  - `routes/web.php`
+  - `tests/Unit/FiscalWebserviceResolverServiceTest.php`
+  - `SYNC.md`
+
+  - observacoes para sincronizar em `pec1`:
+  - copiar este pacote junto com toda a base fiscal anterior;
+  - ponto critico:
+    - o servico de transmissao depende do servico de certificado e do XML assinado localmente;
+    - nao adianta sincronizar apenas o botao `Transmitir` da tela;
+    - o resolver de endpoint precisa ir junto, porque a transmissao agora nao usa mais a URL `?wsdl` para o `POST`;
+    - se a loja do `pec1` estiver em outra `UF`, incluir o novo mapeamento oficial no `FiscalWebserviceResolverService.php` antes de tentar emitir em producao.
+
+## 16/04/26 - Correcao do upload de certificado A1 com MIME generico no Windows
+
+- causa do problema:
+  - alguns certificados `A1` validos em `.pfx` estavam sendo enviados corretamente pelo navegador;
+  - porem o PHP no Windows identificava esses arquivos com MIME generico `application/octet-stream`;
+  - a validacao anterior usava `mimes:pfx,p12`, entao o Laravel rejeitava o upload antes mesmo da inspecao real com `openssl`.
+
+- o que foi ajustado:
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+    - a validacao do campo `tb26_certificado_arquivo_upload` deixou de depender do MIME detectado;
+    - agora o backend aceita o upload pela extensao real do arquivo:
+      - `.pfx`
+      - `.p12`
+    - a verificacao pesada do certificado continua sendo feita depois pela inspecao real do arquivo com `FiscalCertificateService`.
+
+- efeito pratico:
+  - certificados `A1` validos enviados em Windows nao ficam mais bloqueados por `application/octet-stream`;
+  - se o arquivo tiver extensao invalida, continua sendo rejeitado;
+  - se a extensao for valida, mas o certificado/senha estiver errado, a falha continua aparecendo na etapa de inspecao real.
+
+- arquivos alterados:
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+  - `SYNC.md`
+
+- observacoes para sincronizar em `pec1`:
+  - sincronizar junto com a base fiscal anterior;
+  - este ajuste nao substitui a migration fiscal pendente `2026_04_16_204000_add_certificate_validity_to_tb26_configuracoes_fiscais_table.php`, que tambem precisa estar aplicada para o salvamento completo do certificado.
+
+## 16/04/26 - Acoes por linha em `Ultimas notas preparadas`
+
+- causa do ajuste:
+  - a tabela `Ultimas notas preparadas` mostrava apenas o estado fiscal e duas acoes tecnicas:
+    - `Baixar XML`
+    - `Transmitir`
+  - no uso diario faltavam duas operacoes importantes:
+    - reimprimir o cupom da venda vinculada;
+    - regenerar apenas uma nota que ficou com erro, sem precisar reprocessar todas da loja.
+
+- o que foi ajustado:
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+    - a listagem das notas agora monta tambem o payload do cupom por linha;
+    - cada nota passa a enviar `receipt` para o frontend;
+    - cada nota passa a informar `pode_regenerar` para os status que aceitam nova preparacao;
+    - criada a acao `regenerateInvoice()` para reexecutar `prepareForPayment()` somente da nota selecionada.
+  - `routes/web.php`
+    - adicionada a rota:
+      - `settings.fiscal.invoices.regenerate`
+  - `resources/js/Pages/Settings/FiscalConfig.jsx`
+    - adicionada a coluna `Cupom` com o botao `Imprimir cupom`;
+    - adicionada a coluna `Regenerar` com o botao `Regenerar nota`;
+    - a impressao reutiliza o HTML padrao de cupom de `resources/js/Utils/receipt.js`;
+    - quando o navegador bloquear pop-up, a tela mostra erro visivel.
+
+- regra pratica:
+  - `Imprimir cupom` apenas reabre a representacao da venda ja concluida;
+  - `Regenerar nota` refaz o preparo fiscal apenas daquela venda;
+  - a regeneracao individual fica disponivel para notas com status:
+    - `pendente_configuracao`
+    - `erro_validacao`
+    - `erro_transmissao`
+    - `pendente_emissao`
+
+- arquivos alterados:
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+  - `resources/js/Pages/Settings/FiscalConfig.jsx`
+  - `routes/web.php`
+  - `SYNC.md`
+
+  - observacoes para sincronizar em `pec1`:
+  - sincronizar os tres arquivos acima em conjunto;
+  - o botao de impressao depende do utilitario ja existente `resources/js/Utils/receipt.js`;
+  - se copiar apenas a tela sem o controller, a tabela nao recebera o payload `receipt` e os botoes vao ficar incompletos.
+
+## 16/04/26 - Cadastro de produto bloqueando falta de NCM, CFOP e CSOSN/CST
+
+- causa do problema:
+  - o cadastro de produto aceitava salvar campos fiscais essenciais como opcionais;
+  - a cobranca desses dados so acontecia depois, na preparacao da nota fiscal;
+  - com isso, produtos como `PAO DE SAL` podiam ser cadastrados normalmente e so falhavam no momento da emissao.
+
+- o que foi ajustado:
+  - `app/Http/Controllers/ProductController.php`
+    - adicionada validacao complementar no backend para bloquear salvamento sem:
+      - `NCM`;
+      - `CFOP`;
+      - pelo menos um entre `CSOSN` ou `CST`.
+    - agora o produto nao segue para gravacao se esses dados fiscais minimos estiverem faltando.
+  - `resources/js/Pages/Products/ProductCreate.jsx`
+    - a secao `Cadastro fiscal` agora destaca visualmente que:
+      - `NCM` e `CFOP` sao obrigatorios;
+      - `CSOSN` ou `CST` precisam ser informados.
+    - adicionados marcadores visuais `*` nos campos fiscais essenciais.
+  - `resources/js/Pages/Products/ProductEdit.jsx`
+    - recebeu o mesmo reforco visual e obrigatoriedade do cadastro.
+
+- efeito pratico:
+  - novos produtos nao poderao mais entrar no sistema sem os dados fiscais minimos exigidos pela emissao;
+  - a falha deixa de aparecer so na nota e passa a ser tratada na origem, no cadastro do produto.
+
+- arquivos alterados:
+  - `app/Http/Controllers/ProductController.php`
+  - `resources/js/Pages/Products/ProductCreate.jsx`
+  - `resources/js/Pages/Products/ProductEdit.jsx`
+  - `SYNC.md`
+
+- observacoes para sincronizar em `pec1`:
+  - sincronizar os tres arquivos juntos;
+  - este ajuste nao depende de migration;
+  - ele apenas endurece a validacao e o formulario para impedir novos produtos fiscalmente incompletos.
+
+## 16/04/26 - NFC-e com `infNFeSupl`, `qrCode` e `urlChave` para corrigir rejeicao de schema
+
+- causa do problema:
+  - o gerador de XML da `NFC-e` montava `ide`, `emit`, `det`, `total`, `pag` e assinatura;
+  - porem o XML estava saindo sem o bloco suplementar `infNFeSupl`;
+  - para `NFC-e`, esse bloco carrega `qrCode` e `urlChave`, e sua ausencia deixava o documento incompleto para o leiaute esperado pela SEFAZ;
+  - como efeito pratico, notas como a `#20145` podiam chegar ao envio e retornar `Falha no Schema XML do lote de NFe`.
+
+- o que foi ajustado:
+  - `app/Support/FiscalNfceXmlService.php`
+    - passou a depender de `FiscalWebserviceResolverService`;
+    - agora resolve os enderecos oficiais da `UF` antes de finalizar o XML;
+    - adiciona o bloco `infNFeSupl` dentro da `NFe`;
+    - preenche:
+      - `qrCode`
+      - `urlChave`
+    - o `qrCode` foi montado no formato simplificado da versao `3` para emissao `on-line`:
+      - `...?p=<chave_acesso>|3|<tpAmb>`
+  - `app/Support/FiscalWebserviceResolverService.php`
+    - manteve a URL de consulta por `QR Code` da `NFC-e`;
+    - passou a diferenciar a URL de consulta por chave (`urlChave`) da URL do `qrCode`;
+    - para `GO`, `urlChave` agora aponta para `.../sites/nfe/consulta-completa`.
+  - `tests/Unit/FiscalWebserviceResolverServiceTest.php`
+    - passou a validar tambem `qr_code_url` e `consultation_url`.
+  - `tests/Unit/FiscalNfceXmlServiceTest.php`
+    - novo teste cobrindo a criacao de `infNFeSupl` com `qrCode` e `urlChave`.
+  - `tests/Unit/FiscalInvoicePreparationServiceTest.php`
+    - ajustado para a nova dependencia do gerador de XML.
+
+- efeito pratico:
+  - a `NFC-e` agora sai com a parte suplementar esperada pelo leiaute;
+  - o XML assinado fica estruturalmente mais proximo do padrao exigido para transmissao;
+  - isso ataca diretamente a causa mais provavel da rejeicao de schema observada no envio.
+
+- validacao:
+  - `php -l app/Support/FiscalNfceXmlService.php`: ok.
+  - `php -l app/Support/FiscalWebserviceResolverService.php`: ok.
+  - `php artisan test tests/Unit/FiscalWebserviceResolverServiceTest.php tests/Unit/FiscalNfceXmlServiceTest.php tests/Unit/FiscalInvoicePreparationServiceTest.php`: ok.
+
+- arquivos alterados:
+  - `app/Support/FiscalNfceXmlService.php`
+  - `app/Support/FiscalWebserviceResolverService.php`
+  - `tests/Unit/FiscalWebserviceResolverServiceTest.php`
+  - `tests/Unit/FiscalInvoicePreparationServiceTest.php`
+  - `SYNC.md`
+
+- arquivos criados:
+  - `tests/Unit/FiscalNfceXmlServiceTest.php`
+
+- observacoes para sincronizar em `pec1`:
+  - sincronizar estes arquivos em conjunto;
+  - ponto critico:
+    - se copiar apenas o `FiscalNfceXmlService.php` sem o `FiscalWebserviceResolverService.php`, o XML vai tentar buscar chaves de endpoint que ainda nao existem;
+    - se copiar apenas o resolver sem o XML service, o sistema continua transmitindo a `NFC-e` sem `infNFeSupl`;
+  - depois da sincronizacao, reprocessar a nota que falhou para que um novo XML seja gerado com `qrCode` e `urlChave`.
+
+## 16/04/26 - Endurecimento do XML da NFC-e contra rejeicao de schema
+
+- causa do ajuste:
+  - mesmo apos incluir `infNFeSupl`, a SEFAZ continuou retornando `Falha no Schema XML do lote de NFe`;
+  - isso indicou que o XML ainda podia conter algum campo estruturalmente valido na interface, mas invalido no schema:
+    - campos numericos com mascara em cadastros antigos;
+    - `CEP`, `cMun`, `NCM`, `CEST` e `CFOP` enviados sem saneamento final no momento da geracao do XML;
+    - retorno da SEFAZ ainda muito generico, sem destacar o `cStat`.
+
+- o que foi ajustado:
+  - `app/Support/FiscalNfceXmlService.php`
+    - passou a normalizar novamente, na hora de gerar o XML, os campos sensiveis ao schema;
+    - agora `cMunFG`, `cMun`, `CEP`, `NCM`, `CEST`, `CFOP` e `orig` sao tratados para sair sem mascara;
+    - quando algum desses campos obrigatorios nao fecha exatamente no tamanho fiscal esperado, o service interrompe a geracao com erro explicito antes do envio;
+    - isso protege tambem notas geradas a partir de cadastros antigos que ja estavam salvos com mascara.
+  - `app/Support/FiscalNfceTransmissionService.php`
+    - melhorado o parse da resposta para incluir o `cStat` na mensagem final;
+    - quando existir `SOAP Fault`, a razao do fault passa a ser considerada no texto de erro.
+  - `tests/Unit/FiscalNfceXmlServiceTest.php`
+    - novo cenario cobrindo normalizacao de `cMun`, `CEP`, `NCM`, `CEST` e `CFOP`.
+  - `tests/Unit/FiscalNfceTransmissionServiceTest.php`
+    - novo teste cobrindo a mensagem de erro com prefixo `cStat`.
+
+- efeito pratico:
+  - o XML da `NFC-e` fica mais resistente a rejeicoes de schema causadas por mascara ou formato salvo em registros antigos;
+  - quando a SEFAZ rejeitar novamente, a mensagem salva no sistema fica mais diagnostica.
+
+- validacao:
+  - `php -l app/Support/FiscalNfceXmlService.php`: ok.
+  - `php -l app/Support/FiscalNfceTransmissionService.php`: ok.
+  - `php -l tests/Unit/FiscalNfceXmlServiceTest.php`: ok.
+  - `php -l tests/Unit/FiscalNfceTransmissionServiceTest.php`: ok.
+  - `php artisan test tests/Unit/FiscalWebserviceResolverServiceTest.php tests/Unit/FiscalNfceXmlServiceTest.php tests/Unit/FiscalNfceTransmissionServiceTest.php tests/Unit/FiscalInvoicePreparationServiceTest.php`: ok.
+
+- arquivos alterados:
+  - `app/Support/FiscalNfceXmlService.php`
+  - `app/Support/FiscalNfceTransmissionService.php`
+  - `tests/Unit/FiscalNfceXmlServiceTest.php`
+  - `SYNC.md`
+
+- arquivos criados:
+  - `tests/Unit/FiscalNfceTransmissionServiceTest.php`
+
+- observacoes para sincronizar em `pec1`:
+  - sincronizar estes arquivos junto com as etapas fiscais anteriores;
+  - depois da sincronizacao, regenerar a nota com erro para que o XML seja montado novamente com os campos saneados;
+  - se ainda houver rejeicao `225`, o sistema agora deve devolver uma mensagem mais informativa para a proxima investigacao.
+
+## 17/04/26 - Travamento de UF x codigo IBGE e correcao pontual da configuracao fiscal da loja
+
+- causa do problema:
+  - ao inspecionar o XML real da nota `#20145`, foi confirmado que a emissao estava em `homologacao`, mas com dados geograficos inconsistentes;
+  - a configuracao fiscal da loja estava assim:
+    - `UF = GO`
+    - `municipio = AGUAS LINDAS`
+    - `codigo_municipio = 5300108`
+  - o codigo `5300108` pertence a `Brasilia/DF`, nao a `Aguas Lindas de Goias/GO`;
+  - isso fazia a nota sair com:
+    - `cUF = 53`
+    - `cMun = 5300108`
+    - endpoint de `GO/homologacao`
+  - essa mistura de `UF/IBGE` foi a primeira inconsistencia concreta confirmada no XML salvo da nota rejeitada.
+
+- o que foi ajustado no codigo:
+  - `app/Support/FiscalMunicipalityCodeService.php`
+    - novo servico com o mapa de prefixos IBGE por `UF`;
+    - usado para conferir se os 2 primeiros digitos do codigo do municipio pertencem a `UF` informada.
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+    - antes de salvar a configuracao fiscal, agora valida a combinacao:
+      - `tb26_uf`
+      - `tb26_codigo_municipio`
+    - se o codigo nao pertencer a `UF`, o salvamento e bloqueado com mensagem explicita.
+  - `app/Support/FiscalInvoicePreparationService.php`
+    - a preparacao da nota tambem passou a validar essa compatibilidade;
+    - isso protege notas geradas a partir de configuracoes antigas que ja estavam erradas no banco.
+  - `tests/Unit/FiscalMunicipalityCodeServiceTest.php`
+    - novo teste cobrindo a regra do prefixo IBGE por `UF`.
+  - `tests/Unit/FiscalInvoicePreparationServiceTest.php`
+    - novo cenario cobrindo configuracao com `GO` + codigo de municipio de `DF`.
+
+- correcao aplicada diretamente no banco deste projeto:
+  - configuracao fiscal `tb26_id = 1` / loja `tb2_id = 3`
+    - `tb26_codigo_municipio`: de `5300108` para `5200258`
+    - `tb26_municipio`: de `AGUAS LINDAS` para `AGUAS LINDAS DE GOIAS`
+  - esta foi uma correcao de dado, nao de estrutura;
+  - por isso nao foi criada migration nova.
+
+- efeito pratico:
+  - a nota `#20145` foi reprocessada apos a correcao de dados;
+  - ela voltou para status `xml_assinado`;
+  - o novo XML ficou com:
+    - `cUF = 52`
+    - `cMunFG = 5200258`
+    - `cMun = 5200258`
+    - `xMun = AGUAS LINDAS DE GOIAS`
+
+- validacao:
+  - `php -l app/Support/FiscalMunicipalityCodeService.php`: ok.
+  - `php -l app/Http/Controllers/FiscalConfigurationController.php`: ok.
+  - `php -l app/Support/FiscalInvoicePreparationService.php`: ok.
+  - `php -l tests/Unit/FiscalMunicipalityCodeServiceTest.php`: ok.
+  - `php -l tests/Unit/FiscalInvoicePreparationServiceTest.php`: ok.
+  - `php artisan test tests/Unit/FiscalMunicipalityCodeServiceTest.php tests/Unit/FiscalInvoicePreparationServiceTest.php tests/Unit/FiscalWebserviceResolverServiceTest.php tests/Unit/FiscalNfceXmlServiceTest.php tests/Unit/FiscalNfceTransmissionServiceTest.php`: ok.
+
+- arquivos alterados:
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+  - `app/Support/FiscalInvoicePreparationService.php`
+  - `tests/Unit/FiscalInvoicePreparationServiceTest.php`
+  - `SYNC.md`
+
+- arquivos criados:
+  - `app/Support/FiscalMunicipalityCodeService.php`
+  - `tests/Unit/FiscalMunicipalityCodeServiceTest.php`
+
+- observacoes para sincronizar em `pec1`:
+  - sincronizar os arquivos de codigo acima;
+  - no banco do `pec1`, verificar se existe configuracao fiscal com `UF` diferente do prefixo do codigo IBGE;
+  - se houver loja equivalente a esta:
+    - corrigir `tb26_codigo_municipio` para `5200258`
+    - corrigir `tb26_municipio` para `AGUAS LINDAS DE GOIAS`
+  - depois da sincronizacao, reprocessar as notas fiscais pendentes/erro da loja para gerar XML novo com o municipio correto.
+
+## 17/04/26 - Normalizacao da inscricao estadual do emitente para evitar schema 225
+
+- causa do problema:
+  - mesmo apos corrigir `UF` e `codigo_municipio`, a nota `#20145` continuou retornando `cStat 225`;
+  - ao inspecionar o XML real salvo da nota, foi confirmado que o campo `IE` do emitente ainda estava saindo com mascara:
+    - `20.303.012-5`
+  - a documentacao oficial da NF-e indica que a `IE` do emitente deve ser enviada apenas com algarismos, sem pontuacao, ou com a literal `ISENTO` quando aplicavel;
+  - isso mantinha o XML sujeito a rejeicao por schema.
+
+- o que foi ajustado no codigo:
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+    - o campo `tb26_ie` agora e normalizado no salvamento;
+    - se vier como `ISENTO`, preserva `ISENTO`;
+    - se vier com mascara, salva apenas os digitos.
+  - `app/Support/FiscalNfceXmlService.php`
+    - o XML da `NFC-e` agora nunca envia `IE` com pontuacao;
+    - se a inscricao estadual estiver invalida, a geracao para antes do envio com erro explicito.
+  - `app/Support/FiscalInvoicePreparationService.php`
+    - a preparacao da nota passou a validar a `IE` da unidade;
+    - aceita:
+      - apenas digitos com 2 a 14 posicoes;
+      - ou `ISENTO`.
+  - `tests/Unit/FiscalNfceXmlServiceTest.php`
+    - passou a validar que `IE` com mascara e serializada no XML sem pontuacao.
+  - `tests/Unit/FiscalInvoicePreparationServiceTest.php`
+    - novo cenario cobrindo `IE` invalida na configuracao fiscal.
+
+- correcao aplicada diretamente no banco deste projeto:
+  - configuracao fiscal `tb26_id = 1` / loja `tb2_id = 3`
+    - `tb26_ie`: de `20.303.012-5` para `203030125`
+  - apos isso, a nota `#20145` foi reprocessada para gerar novo XML com `IE` sem mascara.
+
+- efeito pratico:
+  - a configuracao fiscal passa a armazenar `IE` em formato compativel com o schema;
+  - notas novas e reprocessadas nao herdam mais pontuacao antiga no campo do emitente;
+  - a investigacao da `#20145` ficou mais objetiva, porque o XML regenerado agora elimina mais uma causa concreta de schema.
+
+- validacao:
+  - `php -l app/Http/Controllers/FiscalConfigurationController.php`: ok.
+  - `php -l app/Support/FiscalNfceXmlService.php`: ok.
+  - `php -l app/Support/FiscalInvoicePreparationService.php`: ok.
+  - `php -l tests/Unit/FiscalNfceXmlServiceTest.php`: ok.
+  - `php -l tests/Unit/FiscalInvoicePreparationServiceTest.php`: ok.
+  - `php artisan test tests/Unit/FiscalMunicipalityCodeServiceTest.php tests/Unit/FiscalInvoicePreparationServiceTest.php tests/Unit/FiscalWebserviceResolverServiceTest.php tests/Unit/FiscalNfceXmlServiceTest.php tests/Unit/FiscalNfceTransmissionServiceTest.php`: ok.
+
+- arquivos alterados:
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+  - `app/Support/FiscalNfceXmlService.php`
+  - `app/Support/FiscalInvoicePreparationService.php`
+  - `tests/Unit/FiscalNfceXmlServiceTest.php`
+  - `tests/Unit/FiscalInvoicePreparationServiceTest.php`
+  - `SYNC.md`
+
+- observacoes para sincronizar em `pec1`:
+  - sincronizar os arquivos acima junto com a blindagem de `UF x codigo IBGE`;
+  - no banco do `pec1`, verificar se a `IE` da configuracao fiscal da loja equivalente tambem esta com mascara;
+  - se estiver, remover a pontuacao antes de reprocessar as notas fiscais pendentes/erro.
+
+## 17/04/26 - Ajuste do bloco de pagamento fiscal para `maquina`, `vale` e `refeicao`
+
+- causa do problema:
+  - depois de corrigir `UF`, `codigo IBGE` e `IE`, o `cStat 225` da nota `#20145` continuou;
+  - ao inspecionar o XML real da nota, foi confirmado que:
+    - a venda estava com `tipo_pagamento = maquina`;
+    - o XML estava saindo com `<tPag>99</tPag>` e sem `<xPag>`;
+  - alem disso, pagamentos `vale` tambem caiam no fallback generico `99`, em vez de usar o codigo fiscal proprio.
+
+- o que foi ajustado:
+  - `app/Support/FiscalNfceXmlService.php`
+    - o bloco `pag/detPag` deixou de usar apenas um resolvedor de codigo simples;
+    - agora existe um resolvedor completo de pagamento fiscal com:
+      - codigo (`tPag`);
+      - descricao (`xPag`) quando necessaria.
+    - mapeamento aplicado:
+      - `dinheiro` -> `01`
+      - `vale` -> `10`
+      - `refeicao` -> `11`
+      - `faturar` -> `90`
+      - `maquina` -> `99` com `xPag = MAQUINA`
+      - tipos desconhecidos -> `99` com `xPag` gerado a partir do nome informado.
+  - `tests/Unit/FiscalNfceXmlServiceTest.php`
+    - novo cenario cobrindo:
+      - `maquina` gerando `tPag 99` com `xPag`;
+      - `vale` gerando `tPag 10` sem `xPag`.
+
+- efeito pratico:
+  - o XML fiscal deixa de usar fallback generico silencioso para meios de pagamento conhecidos;
+  - o grupo de pagamento fica mais aderente ao leiaute fiscal atual, especialmente nos casos em que o sistema interno usa o label `maquina`.
+
+- validacao:
+  - `php -l app/Support/FiscalNfceXmlService.php`: ok.
+  - `php -l tests/Unit/FiscalNfceXmlServiceTest.php`: ok.
+  - `php artisan test tests/Unit/FiscalMunicipalityCodeServiceTest.php tests/Unit/FiscalInvoicePreparationServiceTest.php tests/Unit/FiscalWebserviceResolverServiceTest.php tests/Unit/FiscalNfceXmlServiceTest.php tests/Unit/FiscalNfceTransmissionServiceTest.php`: ok.
+
+- arquivos alterados:
+  - `app/Support/FiscalNfceXmlService.php`
+  - `tests/Unit/FiscalNfceXmlServiceTest.php`
+  - `SYNC.md`
+
+- observacoes para sincronizar em `pec1`:
+  - sincronizar este ajuste junto com as correcoes anteriores do XML fiscal;
+  - depois da sincronizacao, reprocessar notas emitidas com `tipo_pagamento = maquina` para que o novo `detPag` seja reconstruido no XML.
+
+## 17/04/26 - Correcao da ordem `Signature` x `infNFeSupl` na raiz da NFC-e
+
+- causa do problema:
+  - mesmo depois de corrigir `UF`, `codigo IBGE`, `IE` e o bloco de pagamento, a nota `#20145` continuou retornando `cStat 225`;
+  - ao revisar o gerador do XML da `NFC-e`, foi identificado um detalhe estrutural na raiz do documento `NFe`;
+  - o fluxo estava montando a raiz nesta ordem:
+    - `infNFe`
+    - `infNFeSupl`
+    - `Signature`
+  - para a `NFC-e`, esse tipo de inversao entre a assinatura digital e o bloco suplementar e um candidato forte a rejeicao de schema, porque a ordem dos nos faz parte do leiaute validado pela SEFAZ.
+
+- o que foi ajustado:
+  - `app/Support/FiscalNfceXmlService.php`
+    - a assinatura digital agora e anexada antes do bloco suplementar;
+    - a raiz do `NFe` passa a ser montada nesta ordem:
+      - `infNFe`
+      - `Signature`
+      - `infNFeSupl`
+  - `tests/Unit/FiscalNfceXmlServiceTest.php`
+    - novo teste cobrindo explicitamente a ordem dos nos da raiz do `NFe`;
+    - o teste garante que `infNFeSupl` nunca mais fique antes de `Signature`.
+
+- efeito pratico:
+  - o XML assinado da `NFC-e` fica mais aderente ao leiaute estrutural esperado;
+  - isso ataca um ponto tipico de rejeicao `225` que nao aparece na interface e nem nos dados cadastrais.
+
+- validacao:
+  - pendente reprocessar e retransmitir a nota `#20145` assim que a conexao com o banco externo responder novamente;
+  - o teste unitario passou a proteger a ordem correta do XML em nivel de codigo.
+
+- arquivos alterados:
+  - `app/Support/FiscalNfceXmlService.php`
+  - `tests/Unit/FiscalNfceXmlServiceTest.php`
+  - `SYNC.md`
+
+- observacoes para sincronizar em `pec1`:
+  - sincronizar estes arquivos junto com as etapas fiscais anteriores;
+  - depois da sincronizacao, reprocessar qualquer nota `NFC-e` que tenha sido gerada antes desta correcao, porque o XML antigo continua com a ordem estrutural errada.
+
+## 17/04/26 - Botao `Cupom R$0,00` com DANFE NFC-e 80mm em `settings/fiscal`
+
+- causa do ajuste:
+  - na lista `Ultimas notas preparadas`, o botao ainda usava o utilitario de recibo interno da venda;
+  - isso fazia o clique abrir apenas um comprovante simples, sem estrutura fiscal, sem chave de acesso e sem `QR Code`;
+  - alem disso, o rotulo do botao nao mostrava o valor da nota.
+
+- o que foi ajustado:
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+    - a listagem das notas passou a enviar:
+      - `total` da nota;
+      - `protocolo`;
+      - `recibo`;
+      - payload `fiscal_receipt` proprio da nota fiscal;
+    - criado um montador especifico para cupom fiscal 80mm;
+    - o payload fiscal agora inclui:
+      - emitente;
+      - endereco;
+      - CNPJ;
+      - IE;
+      - serie e numero;
+      - ambiente;
+      - status;
+      - itens;
+      - total;
+      - chave de acesso;
+      - protocolo;
+      - recibo;
+      - `qrCode` e `urlChave` extraidos do XML assinado.
+  - `resources/js/Utils/receipt.js`
+    - mantido o recibo interno antigo para as outras telas;
+    - criado `buildFiscalReceiptHtml()` para imprimir um cupom fiscal estilo `DANFE NFC-e` em largura `80mm`;
+    - o HTML fiscal mostra:
+      - cabecalho fiscal;
+      - emitente;
+      - itens;
+      - pagamento;
+      - total;
+      - chave de acesso;
+      - `QR Code`;
+      - observacao de previa quando a nota ainda nao estiver autorizada.
+  - `resources/js/Pages/Settings/FiscalConfig.jsx`
+    - o botao deixou de se chamar `Imprimir cupom`;
+    - agora o rotulo segue o formato:
+      - `Cupom R$ 0,00`
+    - o clique passou a abrir o cupom fiscal da nota, nao o recibo interno da venda;
+    - a rotina de impressao foi ajustada para deixar o proprio HTML fiscal controlar o momento da impressao.
+
+- efeito pratico:
+  - a area fiscal passa a imprimir um cupom muito mais proximo do que se espera de uma `NFC-e` em impressora `80mm`;
+  - o botao ja mostra o valor da nota na propria lista;
+  - notas ainda nao autorizadas continuam imprimiveis como previa fiscal para conferencia.
+
+- validacao:
+  - validar com:
+    - `php -l app/Http/Controllers/FiscalConfigurationController.php`
+    - `cmd /c npm run build`
+  - recomendacao pratica:
+    - abrir `settings/fiscal`;
+    - clicar em um `Cupom R$...`;
+    - conferir impressao em navegador e impressora `80mm`.
+
+- arquivos alterados:
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+  - `resources/js/Pages/Settings/FiscalConfig.jsx`
+  - `resources/js/Utils/receipt.js`
+  - `SYNC.md`
+
+- observacoes para sincronizar em `pec1`:
+  - sincronizar os tres arquivos juntos;
+  - se copiar apenas a tela sem o controller, o frontend nao recebera o payload `fiscal_receipt`;
+  - se copiar apenas o controller sem o novo utilitario, o botao vai existir mas a impressao fiscal nao sera montada.
+
+## 17/04/26 - Item `Transmitir` no dropdown do dashboard com modal de notas pendentes
+
+- causa do ajuste:
+  - o dropdown do dashboard mostrava apenas atalhos estaticos;
+  - nao existia nenhum resumo imediato das notas prontas para transmissao;
+  - para transmitir uma nota fiscal, o usuario precisava navegar manualmente ate `settings/fiscal` e localizar a nota na lista.
+
+- o que foi ajustado:
+  - `app/Http/Middleware/HandleInertiaRequests.php`
+    - passou a compartilhar globalmente um resumo das notas com status `xml_assinado`;
+    - o resumo e limitado ao escopo das lojas que o usuario administrador pode gerenciar;
+    - cada item compartilhado inclui:
+      - loja;
+      - venda;
+      - modelo;
+      - serie/numero;
+      - valor;
+      - data;
+      - status;
+      - mensagem;
+      - rota para `Transmitir`;
+      - rota para abrir `settings/fiscal`.
+  - `resources/js/Layouts/AuthenticatedLayout.jsx`
+    - adicionado no dropdown desktop o item:
+      - `Transmitir (N)`
+    - adicionado o mesmo atalho no menu mobile;
+    - ao clicar, abre uma modal global com a lista das notas pendentes para transmissao;
+    - cada registro da modal possui:
+      - dados resumidos da nota;
+      - botao `Abrir fiscal`;
+      - botao `Transmitir`.
+
+- regra aplicada:
+  - o resumo so aparece para perfis administrativos (`MASTER` e `GERENTE`);
+  - entram na fila apenas notas com status `xml_assinado`, ou seja, ja prontas para envio;
+  - `MASTER` enxerga todas as lojas;
+  - `GERENTE` enxerga apenas as lojas dentro do proprio escopo de gestao.
+
+- efeito pratico:
+  - o dashboard passa a funcionar tambem como painel rapido de transmissao fiscal;
+  - o usuario nao precisa mais sair do fluxo principal para descobrir quantas notas estao pendentes de envio;
+  - a transmissao continua reaproveitando a mesma rota fiscal ja existente, sem duplicar logica.
+
+- validacao:
+  - validar com:
+    - `php -l app/Http/Middleware/HandleInertiaRequests.php`
+    - `cmd /c npm run build`
+  - conferir visualmente:
+    - dropdown desktop;
+    - menu mobile;
+    - abertura da modal;
+    - clique em `Transmitir`.
+
+- arquivos alterados:
+  - `app/Http/Middleware/HandleInertiaRequests.php`
+  - `resources/js/Layouts/AuthenticatedLayout.jsx`
+  - `SYNC.md`
+
+- observacoes para sincronizar em `pec1`:
+  - sincronizar os dois arquivos de codigo juntos;
+  - se copiar apenas o layout sem o middleware, o item `Transmitir` aparecera sem dados;
+  - se copiar apenas o middleware sem o layout, o resumo global sera enviado mas nao sera exibido no menu.
+
+## 17/04/26 - Correcao do caminho de armazenamento do certificado fiscal
+
+- causa do problema:
+  - ao regenerar a nota, o sistema retornava:
+    - `Arquivo do certificado nao encontrado no armazenamento local.`
+  - a investigacao mostrou que o disco `local` ja aponta para `storage/app/private`;
+  - porem o upload do certificado estava sendo salvo com o prefixo:
+    - `private/fiscal-certificados/...`
+  - isso criava um caminho redundante dentro do proprio disco:
+    - `storage/app/private/private/fiscal-certificados/...`
+  - alem disso, lojas com configuracao antiga poderiam ficar com o path legado salvo no banco.
+
+- o que foi ajustado:
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+    - o upload do certificado passou a salvar no caminho correto do disco `local`:
+      - `fiscal-certificados/<tb2_id>/...`
+    - com isso, o arquivo deixa de cair no subdiretorio redundante `private/private`.
+  - `app/Support/FiscalCertificateService.php`
+    - a leitura do certificado passou a aceitar:
+      - caminho novo: `fiscal-certificados/...`
+      - caminho legado: `private/fiscal-certificados/...`
+    - isso preserva compatibilidade com configuracoes antigas ja gravadas no banco;
+    - a mensagem de erro de arquivo ausente agora inclui o caminho fiscal salvo para facilitar o diagnostico.
+  - `tests/Unit/FiscalCertificateServiceTest.php`
+    - novo teste cobrindo a resolucao do path atual e do legado para o mesmo arquivo no storage.
+
+- efeito pratico:
+  - novos uploads ficam salvos no lugar correto;
+  - leituras antigas nao quebram por causa da mudanca de prefixo;
+  - quando o arquivo realmente nao existir no storage, o erro fica mais objetivo.
+
+- validacao:
+  - validar com:
+    - `php -l app/Http/Controllers/FiscalConfigurationController.php`
+    - `php -l app/Support/FiscalCertificateService.php`
+    - `php artisan test tests/Unit/FiscalCertificateServiceTest.php`
+  - observacao operacional:
+    - se a configuracao fiscal apontar para um arquivo inexistente de fato, sera necessario reenviar o certificado da loja para repor o arquivo fisico.
+
+- arquivos alterados:
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+  - `app/Support/FiscalCertificateService.php`
+  - `tests/Unit/FiscalCertificateServiceTest.php`
+  - `SYNC.md`
+
+- observacoes para sincronizar em `pec1`:
+  - sincronizar estes arquivos em conjunto;
+  - se o `pec1` ja tiver configuracoes gravadas com prefixo `private/`, o novo service continua aceitando;
+  - para novos uploads no `pec1`, o caminho salvo passara a ser o formato corrigido sem o prefixo duplicado.
+
+## 17/04/26 - Reposicao do arquivo fisico do certificado da loja 3 e regeneracao da venda `20145`
+
+- causa do problema:
+  - mesmo apos a correcao de codigo do caminho fiscal, a venda `20145` continuava falhando ao regenerar;
+  - a configuracao fiscal da loja `tb2_id = 3` apontava para:
+    - `private/fiscal-certificados/3/certificado-20260416164839.pfx`
+  - porem o arquivo fisico nao existia no storage local da aplicacao;
+  - o unico `.pfx` disponivel no ambiente estava na raiz do projeto.
+
+- o que foi corrigido diretamente neste ambiente:
+  - copiado o arquivo:
+    - `PAOECAFEBARRAGEM01LTDA_12345678.pfx`
+  - para os caminhos:
+    - `storage/app/private/fiscal-certificados/3/certificado-20260416164839.pfx`
+    - `storage/app/private/private/fiscal-certificados/3/certificado-20260416164839.pfx`
+  - o segundo caminho foi mantido apenas como compatibilidade imediata com o path legado salvo no banco.
+
+- ajuste de dado aplicado no banco deste projeto:
+  - configuracao fiscal da loja `tb2_id = 3`
+    - `tb26_certificado_arquivo`:
+      - de `private/fiscal-certificados/3/certificado-20260416164839.pfx`
+      - para `fiscal-certificados/3/certificado-20260416164839.pfx`
+
+- validacao executada:
+  - a configuracao da loja voltou a abrir o certificado com sucesso;
+  - leitura confirmada do certificado:
+    - CNPJ: `62074417000156`
+    - nome: `PAO E CAFE BARRAGEM 01 LTDA:62074417000156`
+  - a venda `20145` foi reprocessada no fluxo real;
+  - a nota fiscal vinculada voltou para:
+    - `xml_assinado`
+    - mensagem: `XML fiscal assinado localmente e aguardando transmissao para a SEFAZ.`
+
+- efeito pratico:
+  - o erro `Arquivo do certificado nao encontrado no armazenamento local` deixou de bloquear a regeneracao da nota desta loja;
+  - a proxima etapa operacional volta a ser a transmissao da nota.
+
+- arquivos alterados nesta correcao operacional:
+  - `SYNC.md`
+
+- arquivos criados/copied no ambiente:
+  - `storage/app/private/fiscal-certificados/3/certificado-20260416164839.pfx`
+  - `storage/app/private/private/fiscal-certificados/3/certificado-20260416164839.pfx`
+
+- observacoes para sincronizar em `pec1`:
+  - alem do codigo, verificar se o arquivo fisico do certificado tambem existe no storage do `pec1`;
+  - se o banco do `pec1` apontar para um `.pfx` inexistente, repor o arquivo antes de tentar regenerar as notas;
+  - se houver o mesmo certificado em local externo ao storage, copiar para `storage/app/private/fiscal-certificados/<tb2_id>/...` e alinhar `tb26_certificado_arquivo` para o caminho sem o prefixo legado `private/`.
