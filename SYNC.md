@@ -2016,3 +2016,55 @@
 - Efeito esperado:
   - `settings/fiscal` deve voltar a abrir em producao sem cair por esse erro de diagnostico;
   - a partir disso, a tela passa a mostrar o estado real da configuracao fiscal da unidade.
+## 17/04/26 - Remocao de CNAE solto no emitente da NFC-e para reduzir rejeicao de schema 225
+
+- Arquivos alterados:
+  - `app/Support/FiscalNfceXmlService.php`
+  - `tests/Unit/FiscalNfceXmlServiceTest.php`
+
+- Causa identificada:
+  - o XML da NFC-e ainda podia sair com `CNAE` no bloco `emit` mesmo quando a configuracao fiscal da loja nao tinha `IM`;
+  - no layout fiscal, esse grupo do emitente nao deve ir incompleto;
+  - isso deixava o XML da nota estruturalmente suspeito para o schema e mantinha o `cStat 225 - Rejeicao: Falha no Schema XML do lote de NFe`.
+
+- O que foi feito:
+  - `FiscalNfceXmlService` passou a enviar `IM` e `CNAE` somente quando a `IM` estiver preenchida;
+  - se a loja nao tiver `IM`, o XML deixa de mandar `CNAE` isolado no emitente;
+  - os testes unitarios passaram a cobrir os dois cenarios:
+    - sem `IM`, `CNAE` nao aparece;
+    - com `IM`, `CNAE` continua sendo enviado junto.
+
+- Validacao:
+  - `php artisan test tests/Unit/FiscalNfceXmlServiceTest.php`
+
+- Efeito esperado:
+  - as notas NFC-e geradas para lojas sem `IM` deixam de levar um grupo parcial no emitente;
+  - isso reduz mais uma causa concreta de schema invalido antes da transmissao para a SEFAZ.
+
+- Observacoes para sincronizar em `pec1`:
+  - sincronizar exatamente `app/Support/FiscalNfceXmlService.php` e `tests/Unit/FiscalNfceXmlServiceTest.php`;
+  - nao depende de migration;
+  - depois da sincronizacao, regenerar as notas pendentes que estavam com XML assinado antigo para que o novo XML seja reconstruido sem `CNAE` solto.
+
+## 17/04/26 - Ajuste operacional do storage do certificado para reprocessar a nota 20145
+
+- Arquivos alterados:
+  - `SYNC.md`
+
+- Causa identificada:
+  - depois que a configuracao fiscal da loja `tb2_id = 3` foi salva novamente em outro ambiente, o banco compartilhado passou a apontar para o caminho `fiscal-certificados/3/certificado-20260417020907.pfx`;
+  - neste ambiente local, o storage ainda tinha apenas o arquivo anterior `certificado-20260416164839.pfx`;
+  - com isso, a nota `20145` nao conseguia nem regenerar o XML, porque parava em `Arquivo do certificado nao encontrado no armazenamento local`.
+
+- O que foi feito neste ambiente:
+  - copiado o certificado fisico existente para o novo nome esperado pelo banco compartilhado:
+    - `storage/app/private/fiscal-certificados/3/certificado-20260417020907.pfx`
+  - mantida tambem a compatibilidade no caminho legado:
+    - `storage/app/private/private/fiscal-certificados/3/certificado-20260417020907.pfx`
+  - apos esse alinhamento, a `20145` voltou a regenerar normalmente e o XML novo foi assinado sem `CNAE`.
+
+- Observacoes para sincronizar em `pec1`:
+  - se o banco compartilhado apontar para um nome de certificado que nao exista fisicamente no storage do ambiente, a regeneracao da nota vai falhar antes da transmissao;
+  - nesses casos, conferir o valor atual de `tb26_certificado_arquivo` no banco e alinhar o arquivo fisico correspondente em:
+    - `storage/app/private/fiscal-certificados/<tb2_id>/...`
+  - esse ajuste foi operacional, nao estrutural; nao depende de migration nem de alteracao adicional de codigo.

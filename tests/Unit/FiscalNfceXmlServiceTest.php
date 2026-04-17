@@ -115,6 +115,43 @@ class FiscalNfceXmlServiceTest extends TestCase
         $this->assertStringContainsString('<NCM>19059090</NCM>', $xml);
         $this->assertStringContainsString('<CEST>1704901</CEST>', $xml);
         $this->assertStringContainsString('<CFOP>5102</CFOP>', $xml);
+        $this->assertStringNotContainsString('<CNAE>', $xml);
+    }
+
+    public function test_append_emitter_only_includes_cnae_when_municipal_registration_exists(): void
+    {
+        $service = new FiscalNfceXmlService(new FiscalWebserviceResolverService());
+        $reflection = new ReflectionClass($service);
+        $appendEmitter = $reflection->getMethod('appendEmitter');
+        $appendEmitter->setAccessible(true);
+
+        $document = new DOMDocument('1.0', 'UTF-8');
+        $infNfe = $document->createElement('infNFe');
+        $document->appendChild($infNfe);
+
+        $config = new ConfiguracaoFiscal([
+            'tb26_razao_social' => 'EMPRESA TESTE LTDA',
+            'tb26_nome_fantasia' => 'EMPRESA TESTE',
+            'tb26_logradouro' => 'RUA 1',
+            'tb26_numero' => '10',
+            'tb26_bairro' => 'CENTRO',
+            'tb26_codigo_municipio' => '5208707',
+            'tb26_municipio' => 'GOIANIA',
+            'tb26_uf' => 'GO',
+            'tb26_cep' => '74000000',
+            'tb26_ie' => '123456789',
+            'tb26_im' => '998877',
+            'tb26_cnae' => '4721102',
+            'tb26_crt' => 1,
+        ]);
+
+        $appendEmitter->invoke($service, $document, $infNfe, $config, '11222333000144');
+
+        $xml = $document->saveXML();
+
+        $this->assertNotFalse($xml);
+        $this->assertStringContainsString('<IM>998877</IM>', $xml);
+        $this->assertStringContainsString('<CNAE>4721102</CNAE>', $xml);
     }
 
     public function test_append_payment_adds_xpag_for_maquina_and_specific_codes_for_vale(): void

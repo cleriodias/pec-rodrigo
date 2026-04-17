@@ -150,8 +150,15 @@ class FiscalNfceXmlService
         $this->appendOptionalTextElement($document, $address, 'fone', $this->onlyDigits($configuration->tb26_telefone));
 
         $this->appendTextElement($document, $emit, 'IE', $this->requiredStateRegistration($configuration->tb26_ie, 'Inscricao estadual'));
-        $this->appendOptionalTextElement($document, $emit, 'IM', $configuration->tb26_im);
-        $this->appendOptionalTextElement($document, $emit, 'CNAE', $configuration->tb26_cnae);
+        $municipalRegistration = trim((string) $configuration->tb26_im);
+        $cnae = trim((string) $configuration->tb26_cnae);
+
+        // Evita schema invalido no emitente: CNAE nao deve ser enviado sozinho sem IM.
+        if ($municipalRegistration !== '') {
+            $this->appendTextElement($document, $emit, 'IM', $municipalRegistration);
+            $this->appendOptionalTextElement($document, $emit, 'CNAE', $cnae);
+        }
+
         $this->appendTextElement($document, $emit, 'CRT', (string) $configuration->tb26_crt);
     }
 
