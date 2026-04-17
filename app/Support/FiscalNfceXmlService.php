@@ -357,14 +357,14 @@ class FiscalNfceXmlService
     private function signDocument(DOMDocument $document, DOMElement $infNfe, array $certificateData): void
     {
         try {
-            $privateKey = new XMLSecurityKey(XMLSecurityKey::RSA_SHA1, ['type' => 'private']);
+            $privateKey = new XMLSecurityKey(XMLSecurityKey::RSA_SHA256, ['type' => 'private']);
             $privateKey->loadKey((string) $certificateData['private_key_pem'], false);
 
             $signature = new XMLSecurityDSig('');
             $signature->setCanonicalMethod(XMLSecurityDSig::C14N);
             $signature->addReference(
                 $infNfe,
-                XMLSecurityDSig::SHA1,
+                XMLSecurityDSig::SHA256,
                 [
                     'http://www.w3.org/2000/09/xmldsig#enveloped-signature',
                     XMLSecurityDSig::C14N,

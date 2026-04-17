@@ -2270,3 +2270,30 @@
     - `composer.lock`
   - depois de sincronizar o codigo, executar `composer install` no `pec1` para instalar `xmlseclibs`;
   - nao remover a correcao anterior da ordem `infNFe -> infNFeSupl -> Signature`, porque ela continua sendo necessaria para evitar o `225`.
+
+## 17/04/26 - Nova tentativa de autorizacao com xmlseclibs em RSA-SHA256
+
+- Arquivos alterados:
+  - `app/Support/FiscalNfceXmlService.php`
+
+- Causa investigada:
+  - mesmo apos migrar a assinatura para `xmlseclibs`, a SEFAZ continuou retornando `cStat 202`;
+  - isso reduziu o foco para algoritmo de assinatura/digest ou formato do `KeyInfo`;
+  - a tentativa anterior de `SHA-256` tinha sido feita ainda na assinatura manual, entao ela nao era conclusiva depois da troca para `xmlseclibs`.
+
+- O que foi feito:
+  - `FiscalNfceXmlService` passou a assinar com:
+    - `XMLSecurityKey::RSA_SHA256`
+    - `XMLSecurityDSig::SHA256`
+  - foram mantidos:
+    - a ordem correta da raiz `infNFe -> infNFeSupl -> Signature`;
+    - a canonicalizacao `C14N`;
+    - o uso de `xmlseclibs` para montagem do bloco XMLDSig.
+
+- Efeito esperado:
+  - verificar se o autorizador reconhece melhor a autoria/integridade quando a mesma assinatura padrao da biblioteca usa `RSA-SHA256` e `Digest SHA256`;
+  - esse teste e mais fiel do que a tentativa antiga em `SHA-256`, porque agora o XMLDSig nao esta mais sendo montado manualmente.
+
+- Observacoes para sincronizar em `pec1`:
+  - sincronizar este ajuste apenas junto com a etapa anterior da migracao para `xmlseclibs`;
+  - nao aplicar este trecho isoladamente em cima da assinatura manual antiga.
