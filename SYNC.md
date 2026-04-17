@@ -2142,3 +2142,36 @@
   - sincronizar exatamente os arquivos listados acima;
   - depois da sincronizacao, regenerar as notas antigas para que o XML seja refeito com a ordem correta;
   - se o banco compartilhado estiver apontando para um nome de certificado inexistente no storage local, alinhar tambem o arquivo fisico antes de testar transmissao.
+
+## 17/04/26 - Tentativa de migracao da assinatura da NFC-e para SHA-256
+
+- Arquivos alterados:
+  - `app/Support/FiscalNfceXmlService.php`
+  - `tests/Unit/FiscalNfceXmlServiceTest.php`
+
+- Causa investigada:
+  - depois da correcao do schema, a transmissao passou de `cStat 225` para `cStat 202 - Rejeicao: Falha no reconhecimento da autoria ou integridade do arquivo digital`;
+  - o candidato mais forte no codigo era que a assinatura ainda usava `SHA-1`.
+
+- O que foi feito:
+  - `FiscalNfceXmlService` foi ajustado para:
+    - `DigestValue` com `sha256`;
+    - `SignatureMethod` com `rsa-sha256`;
+    - `DigestMethod` com `sha256`;
+    - `openssl_sign(..., OPENSSL_ALGO_SHA256)`;
+  - o teste unitario do XML foi mantido consistente com a nova montagem.
+
+- Validacao:
+  - `php -l app/Support/FiscalNfceXmlService.php`
+  - `php artisan test tests/Unit/FiscalNfceXmlServiceTest.php`
+
+- Resultado operacional observado:
+  - o XML novo passou a sair com referencias claras de `sha256` na assinatura e no digest;
+  - porem, ao retransmitir a venda `20145`, o retorno voltou de `cStat 202` para:
+    - `cStat 225 - Rejeicao: Falha no Schema XML do lote de NFe`
+  - isso indica que a mudanca para SHA-256, do jeito atual, nao e a correcao final e introduziu nova incompatibilidade com o schema/assinatura aceitos neste fluxo.
+
+- Observacoes para sincronizar em `pec1`:
+  - sincronizar esta etapa somente se o outro projeto tambem estiver seguindo a mesma investigacao;
+  - esta mudanca ainda nao resolveu a transmissao final;
+  - o ponto util desta etapa foi diagnostico: confirmou que o problema nao era apenas "usar SHA-1", porque a troca direta para SHA-256 reintroduziu erro de schema.

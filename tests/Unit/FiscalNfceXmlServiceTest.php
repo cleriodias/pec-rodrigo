@@ -263,7 +263,7 @@ class FiscalNfceXmlServiceTest extends TestCase
 
         $certificateData = $this->createCertificateData();
 
-        $result = $service->buildSignedXml($invoice, $payment, $configuration, $certificateData);
+        $result = $service->buildSignedXml($invoice, $payment, $config, $certificateData);
 
         $document = new DOMDocument();
         $loaded = @$document->loadXML($result['xml']);

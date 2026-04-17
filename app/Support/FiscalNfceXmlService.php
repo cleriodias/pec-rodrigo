@@ -355,7 +355,7 @@ class FiscalNfceXmlService
     private function signDocument(DOMDocument $document, DOMElement $infNfe, array $certificateData): void
     {
         $referenceUri = '#' . $infNfe->getAttribute('Id');
-        $digestValue = base64_encode(sha1($infNfe->C14N(false, false), true));
+        $digestValue = base64_encode(hash('sha256', $infNfe->C14N(false, false), true));
 
         $signatureDocument = new DOMDocument('1.0', 'UTF-8');
         $signatureDocument->preserveWhiteSpace = false;
@@ -372,7 +372,7 @@ class FiscalNfceXmlService
         $signedInfo->appendChild($canonicalizationMethod);
 
         $signatureMethod = $signatureDocument->createElement('SignatureMethod');
-        $signatureMethod->setAttribute('Algorithm', 'http://www.w3.org/2000/09/xmldsig#rsa-sha1');
+        $signatureMethod->setAttribute('Algorithm', 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256');
         $signedInfo->appendChild($signatureMethod);
 
         $reference = $signatureDocument->createElement('Reference');
@@ -391,7 +391,7 @@ class FiscalNfceXmlService
         $transforms->appendChild($transformCanonical);
 
         $digestMethod = $signatureDocument->createElement('DigestMethod');
-        $digestMethod->setAttribute('Algorithm', 'http://www.w3.org/2000/09/xmldsig#sha1');
+        $digestMethod->setAttribute('Algorithm', 'http://www.w3.org/2001/04/xmlenc#sha256');
         $reference->appendChild($digestMethod);
 
         $this->appendTextElement($signatureDocument, $reference, 'DigestValue', $digestValue);
@@ -405,7 +405,7 @@ class FiscalNfceXmlService
 
         $signatureValue = '';
 
-        if (! openssl_sign($signedInfoCanonical, $signatureValue, $privateKey, OPENSSL_ALGO_SHA1)) {
+        if (! openssl_sign($signedInfoCanonical, $signatureValue, $privateKey, OPENSSL_ALGO_SHA256)) {
             throw new RuntimeException('Falha ao assinar o XML fiscal com o certificado da loja.');
         }
 
