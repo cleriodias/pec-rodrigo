@@ -3,12 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\CashierClosure;
+use App\Models\NotaFiscal;
 use App\Models\Produto;
 use App\Models\Unidade;
 use App\Models\User;
 use App\Models\Venda;
 use App\Models\VendaPagamento;
 use App\Support\FiscalInvoicePreparationService;
+use App\Support\FiscalNfceTransmissionService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -518,16 +520,45 @@ class SaleController extends Controller
                     'dois_pgto' => $payment->dois_pgto,
                     'tipo_pagamento' => $payment->tipo_pagamento,
                 ],
-                'fiscal' => $invoice ? [
-                    'id' => $invoice->tb27_id,
-                    'status' => $invoice->tb27_status,
-                    'mensagem' => $invoice->tb27_mensagem,
-                    'modelo' => $invoice->tb27_modelo,
-                    'ambiente' => $invoice->tb27_ambiente,
-                    'serie' => $invoice->tb27_serie,
-                    'numero' => $invoice->tb27_numero,
-                ] : null,
+                'fiscal' => $this->buildFiscalSummary($invoice),
             ],
+        ]);
+    }
+
+    public function transmitFiscalInvoice(
+        Request $request,
+        NotaFiscal $notaFiscal,
+        FiscalNfceTransmissionService $fiscalNfceTransmissionService,
+    ): JsonResponse {
+        $user = $request->user();
+        $activeUnitId = $this->resolveActiveUnitId($request);
+
+        if (! $user) {
+            abort(403, 'Acesso negado.');
+        }
+
+        if ($activeUnitId === null || (int) $notaFiscal->tb2_id !== $activeUnitId) {
+            abort(403, 'A nota fiscal nao pertence a loja ativa do caixa.');
+        }
+
+        if (! in_array((int) $user->funcao, [0, 1, 3], true)) {
+            abort(403, 'Acesso negado.');
+        }
+
+        try {
+            $notaFiscal = $fiscalNfceTransmissionService->transmit($notaFiscal);
+        } catch (\RuntimeException $exception) {
+            $notaFiscal->refresh();
+
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'fiscal' => $this->buildFiscalSummary($notaFiscal),
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => sprintf('Nota fiscal da venda %d enviada para a SEFAZ.', (int) $notaFiscal->tb4_id),
+            'fiscal' => $this->buildFiscalSummary($notaFiscal),
         ]);
     }
 
@@ -952,5 +983,26 @@ class SaleController extends Controller
     private function formatCurrencyForMessage(float $value): string
     {
         return 'R$ ' . number_format($value, 2, ',', '.');
+    }
+
+    private function buildFiscalSummary(?NotaFiscal $invoice): ?array
+    {
+        if (! $invoice) {
+            return null;
+        }
+
+        return [
+            'id' => $invoice->tb27_id,
+            'status' => $invoice->tb27_status,
+            'mensagem' => $invoice->tb27_mensagem,
+            'modelo' => $invoice->tb27_modelo,
+            'ambiente' => $invoice->tb27_ambiente,
+            'serie' => $invoice->tb27_serie,
+            'numero' => $invoice->tb27_numero,
+            'protocolo' => $invoice->tb27_protocolo,
+            'recibo' => $invoice->tb27_recibo,
+            'chave_acesso' => $invoice->tb27_chave_acesso,
+            'emitida_em' => optional($invoice->tb27_emitida_em)?->toIso8601String(),
+        ];
     }
 }

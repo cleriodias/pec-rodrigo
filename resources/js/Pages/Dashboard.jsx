@@ -17,6 +17,15 @@ const paymentLabels = {
     faturar: 'Faturar',
     refeicao: 'Refeição',
 };
+const fiscalStatusLabels = {
+    pendente_configuracao: 'Pendente configuracao',
+    erro_validacao: 'Erro de validacao',
+    pendente_emissao: 'Pendente emissao',
+    xml_assinado: 'XML assinado',
+    erro_transmissao: 'Erro de transmissao',
+    emitida: 'Emitida',
+    cancelada: 'Cancelada',
+};
 const paymentOptions = [
     {
         value: 'dinheiro',
@@ -224,6 +233,7 @@ export default function Dashboard() {
     const [valeLoading, setValeLoading] = useState(false);
     const [receiptData, setReceiptData] = useState(null);
     const [showReceipt, setShowReceipt] = useState(false);
+    const [transmittingFiscal, setTransmittingFiscal] = useState(false);
     const [cashInputVisible, setCashInputVisible] = useState(false);
     const [cashValue, setCashValue] = useState('');
     const [showFaturarWarning, setShowFaturarWarning] = useState(false);
@@ -1263,6 +1273,54 @@ export default function Dashboard() {
         resetAfterReceipt();
     };
 
+    const handleTransmitFiscal = async () => {
+        const fiscalId = Number(receiptData?.fiscal?.id ?? 0);
+
+        if (! fiscalId || transmittingFiscal) {
+            return;
+        }
+
+        setSaleError('');
+        setTransmittingFiscal(true);
+
+        try {
+            const response = await axios.post(route('sales.fiscal.transmit', { notaFiscal: fiscalId }));
+            const payload = response?.data ?? {};
+
+            setReceiptData((current) => (
+                current
+                    ? {
+                        ...current,
+                        fiscal: payload.fiscal ?? current.fiscal,
+                    }
+                    : current
+            ));
+        } catch (error) {
+            let message = 'Nao foi possivel transmitir a nota fiscal desta venda.';
+
+            if (error.response?.data?.message) {
+                message = error.response.data.message;
+            } else if (error.message) {
+                message = error.message;
+            }
+
+            setSaleError(message);
+
+            if (error.response?.data?.fiscal) {
+                setReceiptData((current) => (
+                    current
+                        ? {
+                            ...current,
+                            fiscal: error.response.data.fiscal,
+                        }
+                        : current
+                ));
+            }
+        } finally {
+            setTransmittingFiscal(false);
+        }
+    };
+
     const resetSaleState = () => {
         setTexto('');
         setSuggestions([]);
@@ -1285,6 +1343,7 @@ export default function Dashboard() {
         resetSaleState();
         setReceiptData(null);
         setShowReceipt(false);
+        setTransmittingFiscal(false);
     };
 
     const handleCloseReceipt = () => {
@@ -2038,12 +2097,52 @@ export default function Dashboard() {
                                 <p>
                                     <span className="font-medium">Data:</span> {formatDateTime(receiptData.date_time)}
                                 </p>
+                                {receiptData.fiscal && (
+                                    <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-3 text-sm text-blue-900">
+                                        <p>
+                                            <span className="font-medium">Nota fiscal:</span>{' '}
+                                            {(receiptData.fiscal.modelo || 'NF').toUpperCase()} {' '}
+                                            {receiptData.fiscal.serie || '--'}/{receiptData.fiscal.numero || '--'}
+                                        </p>
+                                        <p>
+                                            <span className="font-medium">Status:</span>{' '}
+                                            {fiscalStatusLabels[receiptData.fiscal.status] ?? receiptData.fiscal.status ?? '--'}
+                                        </p>
+                                        {receiptData.fiscal.protocolo && (
+                                            <p>
+                                                <span className="font-medium">Protocolo:</span>{' '}
+                                                {receiptData.fiscal.protocolo}
+                                            </p>
+                                        )}
+                                        {receiptData.fiscal.recibo && (
+                                            <p>
+                                                <span className="font-medium">Recibo:</span>{' '}
+                                                {receiptData.fiscal.recibo}
+                                            </p>
+                                        )}
+                                        {receiptData.fiscal.mensagem && (
+                                            <p className="text-xs leading-5 text-blue-800">
+                                                {receiptData.fiscal.mensagem}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
                                 <p className="text-lg font-bold text-indigo-600">
                                     Total: {formatCurrency(receiptData.total)}
                                 </p>
                             </div>
                         </div>
                         <div className="flex justify-end gap-3 border-t border-gray-200 px-6 py-4 dark:border-gray-700">
+                            {receiptData.fiscal && ['xml_assinado', 'erro_transmissao'].includes(receiptData.fiscal.status) && (
+                                <button
+                                    type="button"
+                                    className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                    onClick={handleTransmitFiscal}
+                                    disabled={transmittingFiscal}
+                                >
+                                    {transmittingFiscal ? 'Transmitindo...' : 'Transmitir NF'}
+                                </button>
+                            )}
                             <button
                                 type="button"
                                 className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"

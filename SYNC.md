@@ -2325,3 +2325,42 @@
 - Observacoes para sincronizar em `pec1`:
   - nao manter a variante `RSA-SHA256` ativa no outro projeto neste momento;
   - sincronizar esta reversao junto com a etapa da migracao para `xmlseclibs`.
+
+## 17/04/26 - Botao Transmitir NF no cupom pos-venda do Dashboard
+
+- Arquivos alterados:
+  - `app/Http/Controllers/SaleController.php`
+  - `resources/js/Pages/Dashboard.jsx`
+  - `routes/web.php`
+
+- Causa identificada:
+  - o fechamento da venda no `Dashboard` ja retornava o resumo fiscal em `sale.fiscal`, mas o modal do cupom so permitia imprimir o comprovante interno;
+  - para transmitir a nota, o operador precisava sair do fluxo do caixa e ir ate `settings/fiscal`;
+  - alem disso, a rota de transmissao existente retornava `redirect`, adequada para a tela fiscal administrativa, mas nao para o fluxo em AJAX do cupom pos-venda.
+
+- O que foi feito:
+  - adicionada a rota autenticada `sales.fiscal.transmit` em `POST /sales/fiscal/{notaFiscal}/transmit`;
+  - criado no `SaleController` o metodo `transmitFiscalInvoice()`:
+    - responde em JSON;
+    - exige usuario autenticado;
+    - restringe a transmissao para a loja ativa do caixa;
+    - permite perfis `0`, `1` e `3`, alinhando com o fluxo operacional do Dashboard;
+    - reutiliza `FiscalNfceTransmissionService`;
+    - devolve no JSON o resumo fiscal atualizado da nota.
+  - `SaleController@store` passou a reutilizar o helper `buildFiscalSummary()` para manter o payload fiscal consistente entre venda e transmissao;
+  - o modal `Cupom pronto para impressao` em `Dashboard.jsx` ganhou:
+    - bloco visual com status da nota, serie/numero, protocolo e recibo;
+    - botao `Transmitir NF`;
+    - o botao aparece apenas quando a nota estiver em `xml_assinado` ou `erro_transmissao`;
+    - ao transmitir, o modal atualiza `receiptData.fiscal` sem fechar o cupom.
+
+- Efeito esperado:
+  - logo apos fechar a venda, o operador consegue transmitir a nota fiscal da propria venda sem sair do `Dashboard`;
+  - quando a transmissao falhar, o modal continua aberto e o status fiscal e atualizado ali mesmo;
+  - quando a nota mudar para `emitida`, o botao deixa de aparecer automaticamente.
+
+- Observacoes para sincronizar em `pec1`:
+  - sincronizar exatamente os tres arquivos listados acima;
+  - esta mudanca nao depende de migration;
+  - o `Dashboard.jsx` depende de o payload `sale.fiscal` continuar vindo do backend no fechamento da venda;
+  - importante manter a regra de unidade ativa no endpoint JSON, para o caixa nao transmitir nota de outra loja.
