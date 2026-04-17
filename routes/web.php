@@ -155,6 +155,8 @@ Route::middleware('auth')->group(function () {
         ->name('settings.fiscal.reprocess');
     Route::post('/settings/fiscal/notas/{notaFiscal}/regenerate', [FiscalConfigurationController::class, 'regenerateInvoice'])
         ->name('settings.fiscal.invoices.regenerate');
+    Route::delete('/settings/fiscal/notas/{notaFiscal}', [FiscalConfigurationController::class, 'destroyInvoice'])
+        ->name('settings.fiscal.invoices.destroy');
     Route::get('/settings/fiscal/notas/{notaFiscal}/xml', [FiscalConfigurationController::class, 'downloadXml'])
         ->name('settings.fiscal.invoices.xml');
     Route::post('/settings/fiscal/notas/{notaFiscal}/transmit', [FiscalConfigurationController::class, 'transmit'])

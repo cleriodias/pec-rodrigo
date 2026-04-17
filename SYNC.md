@@ -2068,3 +2068,40 @@
   - nesses casos, conferir o valor atual de `tb26_certificado_arquivo` no banco e alinhar o arquivo fisico correspondente em:
     - `storage/app/private/fiscal-certificados/<tb2_id>/...`
   - esse ajuste foi operacional, nao estrutural; nao depende de migration nem de alteracao adicional de codigo.
+
+## 17/04/26 - Exclusao segura de notas preparadas nao transmitidas em settings/fiscal
+
+- Arquivos alterados:
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+  - `resources/js/Pages/Settings/FiscalConfig.jsx`
+  - `routes/web.php`
+
+- Causa identificada:
+  - a lista `Ultimas notas preparadas` nao tinha acao para descartar registros fiscais internos que ainda nao foram transmitidos;
+  - isso deixava notas preparadas antigas acumuladas na unidade e confundia a operacao;
+  - ao mesmo tempo, apagar nota ja transmitida seria risco fiscal e precisava continuar proibido.
+
+- O que foi feito:
+  - adicionada a rota `settings.fiscal.invoices.destroy` com metodo `DELETE`;
+  - criado no `FiscalConfigurationController` o metodo `destroyInvoice()`;
+  - a exclusao agora so e permitida para notas que:
+    - nao estao com status `emitida` ou `cancelada`;
+    - nao possuem `tb27_protocolo`;
+    - nao possuem `tb27_recibo`;
+  - a listagem fiscal passou a receber a flag `pode_excluir`;
+  - a tela `FiscalConfig.jsx` ganhou uma nova coluna `Excluir` com botao de lixeira;
+  - ao clicar, a interface pede confirmacao e remove apenas notas ainda nao transmitidas.
+
+- Validacao:
+  - `php -l app/Http/Controllers/FiscalConfigurationController.php`
+  - `php -l routes/web.php`
+  - `cmd /c npm run build`
+
+- Efeito esperado:
+  - notas preparadas internas que ainda nao foram transmitidas podem ser descartadas pela tela fiscal;
+  - notas ja transmitidas ou com indicio de protocolo/recibo continuam protegidas contra exclusao.
+
+- Observacoes para sincronizar em `pec1`:
+  - sincronizar exatamente os tres arquivos listados acima;
+  - nao depende de migration;
+  - a regra de bloqueio no backend e obrigatoria e nao deve ser removida no outro projeto.

@@ -421,6 +421,34 @@ class FiscalConfigurationController extends Controller
             ));
     }
 
+    public function destroyInvoice(Request $request, NotaFiscal $notaFiscal): RedirectResponse
+    {
+        $user = $request->user();
+        $this->ensureAdmin($user);
+
+        if (! ManagementScope::canManageUnit($user, (int) $notaFiscal->tb2_id)) {
+            abort(403, 'Acesso negado.');
+        }
+
+        if (! $this->canDeletePreparedInvoice($notaFiscal)) {
+            return redirect()
+                ->route('settings.fiscal', ['unit_id' => $notaFiscal->tb2_id])
+                ->with('error', 'Somente notas preparadas que ainda nao foram transmitidas podem ser excluidas.');
+        }
+
+        $paymentId = (int) $notaFiscal->tb4_id;
+        $unitId = (int) $notaFiscal->tb2_id;
+
+        $notaFiscal->delete();
+
+        return redirect()
+            ->route('settings.fiscal', ['unit_id' => $unitId])
+            ->with('success', sprintf(
+                'Nota fiscal preparada da venda %d excluida com sucesso.',
+                $paymentId
+            ));
+    }
+
     public function downloadXml(Request $request, NotaFiscal $notaFiscal)
     {
         $user = $request->user();
@@ -763,6 +791,7 @@ class FiscalConfigurationController extends Controller
                 'erro_transmissao',
                 'pendente_emissao',
             ], true),
+            'pode_excluir' => $this->canDeletePreparedInvoice($invoice),
             'fiscal_receipt' => null,
         ];
 
@@ -777,6 +806,13 @@ class FiscalConfigurationController extends Controller
         }
 
         return $payload;
+    }
+
+    private function canDeletePreparedInvoice(NotaFiscal $invoice): bool
+    {
+        return ! in_array($invoice->tb27_status, ['emitida', 'cancelada'], true)
+            && ! filled($invoice->tb27_protocolo)
+            && ! filled($invoice->tb27_recibo);
     }
 
     private function fiscalTablesAreAvailable(): bool

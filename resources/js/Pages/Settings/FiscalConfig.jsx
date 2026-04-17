@@ -3,7 +3,7 @@ import PrimaryButton from '@/Components/Button/PrimaryButton';
 import InputError from '@/Components/InputError';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { buildFiscalReceiptHtml, formatReceiptCurrency } from '@/Utils/receipt';
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 
 const STATUS_CLASS = {
@@ -123,7 +123,17 @@ const DiagnosticsCard = ({ diagnostics }) => {
 const actionButtonClassName =
     'inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold';
 
-const InvoiceTable = ({ invoices = [], onPrintFiscalReceipt }) => (
+const TrashIcon = () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M10 11v6" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M14 11v6" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+    </svg>
+);
+
+const InvoiceTable = ({ invoices = [], onDeleteInvoice, onPrintFiscalReceipt }) => (
     <section className="rounded-2xl bg-white p-6 shadow dark:bg-gray-800">
         <div className="flex flex-col gap-1">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -153,6 +163,7 @@ const InvoiceTable = ({ invoices = [], onPrintFiscalReceipt }) => (
                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Regenerar</th>
                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">XML</th>
                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Transmissao</th>
+                            <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Excluir</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -219,6 +230,21 @@ const InvoiceTable = ({ invoices = [], onPrintFiscalReceipt }) => (
                                         >
                                             Transmitir
                                         </Link>
+                                    ) : (
+                                        '--'
+                                    )}
+                                </td>
+                                <td className="px-3 py-3 text-gray-700 dark:text-gray-200">
+                                    {invoice.pode_excluir ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => onDeleteInvoice(invoice)}
+                                            className={`${actionButtonClassName} border-rose-200 bg-rose-50 text-rose-700`}
+                                            title={`Excluir nota preparada da venda ${invoice.payment_id}`}
+                                            aria-label={`Excluir nota preparada da venda ${invoice.payment_id}`}
+                                        >
+                                            <TrashIcon />
+                                        </button>
                                     ) : (
                                         '--'
                                     )}
@@ -327,6 +353,24 @@ export default function FiscalConfig({
 
         printWindow.document.write(buildFiscalReceiptHtml(receipt));
         printWindow.document.close();
+    };
+
+    const handleDeleteInvoice = (invoice) => {
+        if (!invoice?.id) {
+            return;
+        }
+
+        const confirmed = window.confirm(
+            `Excluir a nota preparada da venda #${invoice.payment_id}? Esta acao remove apenas notas que ainda nao foram transmitidas.`
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        router.delete(route('settings.fiscal.invoices.destroy', { notaFiscal: invoice.id }), {
+            preserveScroll: true,
+        });
     };
 
     return (
@@ -654,7 +698,11 @@ export default function FiscalConfig({
                                 </div>
                             </form>
 
-                            <InvoiceTable invoices={invoices} onPrintFiscalReceipt={handlePrintFiscalReceipt} />
+                            <InvoiceTable
+                                invoices={invoices}
+                                onDeleteInvoice={handleDeleteInvoice}
+                                onPrintFiscalReceipt={handlePrintFiscalReceipt}
+                            />
                         </>
                     )}
                 </div>
