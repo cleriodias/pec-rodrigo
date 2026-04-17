@@ -64,6 +64,7 @@ class FiscalConfigurationController extends Controller
                     $this->defaultFiscalConfigurationPayload($selectedUnitId),
                     collect(),
                     null,
+                    $this->defaultConfigurationDiagnostics($selectedUnitId),
                     'As tabelas fiscais ainda nao estao disponiveis neste ambiente. Execute as migrations fiscais do deploy antes de usar esta tela.',
                     null,
                 );
@@ -138,6 +139,7 @@ class FiscalConfigurationController extends Controller
                 $this->buildFiscalConfigurationPayload($configuration, $unit, $selectedUnitId),
                 $invoices,
                 $resolvedEndpoints,
+                $this->buildConfigurationDiagnostics($configuration, $selectedUnitId),
                 null,
                 $invoiceLoadWarning,
             );
@@ -151,6 +153,7 @@ class FiscalConfigurationController extends Controller
                 $this->defaultFiscalConfigurationPayload($selectedUnitId),
                 collect(),
                 null,
+                $this->defaultConfigurationDiagnostics($selectedUnitId),
                 'O ambiente de producao retornou um erro interno ao montar os dados fiscais. A tela foi preservada com dados minimos para evitar a falha 500.',
                 null,
             );
@@ -758,6 +761,7 @@ class FiscalConfigurationController extends Controller
         array $configuration,
         $invoices,
         ?array $resolvedEndpoints,
+        array $configurationDiagnostics,
         ?string $fiscalUnavailableMessage,
         ?string $invoiceLoadWarning,
     ): Response {
@@ -773,6 +777,7 @@ class FiscalConfigurationController extends Controller
             ] : null,
             'configuration' => $configuration,
             'resolvedEndpoints' => $resolvedEndpoints,
+            'configurationDiagnostics' => $configurationDiagnostics,
             'invoices' => $invoices,
             'fiscalUnavailableMessage' => $fiscalUnavailableMessage,
             'invoiceLoadWarning' => $invoiceLoadWarning,
@@ -852,7 +857,92 @@ class FiscalConfigurationController extends Controller
             'tb26_cep' => $configuration?->tb26_cep ?? '',
             'tb26_telefone' => $configuration?->tb26_telefone ?? '',
             'tb26_email' => $configuration?->tb26_email ?? '',
-            'has_certificate_password' => filled($configuration?->tb26_certificado_senha),
+            'has_certificate_password' => $this->configurationHasCertificatePassword($configuration),
         ];
+    }
+
+    private function defaultConfigurationDiagnostics(int $selectedUnitId): array
+    {
+        return [
+            'selected_unit_id' => $selectedUnitId > 0 ? $selectedUnitId : null,
+            'configuration_found' => false,
+            'configuration_id' => null,
+            'storage_path' => null,
+            'storage_exists' => false,
+            'legacy_storage_exists' => false,
+            'raw_password_present' => false,
+            'password_decryptable' => null,
+            'password_status' => 'Configuracao fiscal ainda nao encontrada no banco.',
+        ];
+    }
+
+    private function buildConfigurationDiagnostics(?ConfiguracaoFiscal $configuration, int $selectedUnitId): array
+    {
+        $diagnostics = $this->defaultConfigurationDiagnostics($selectedUnitId);
+
+        if (! $configuration) {
+            return $diagnostics;
+        }
+
+        $storagePath = $this->stringOrNull($configuration->tb26_certificado_arquivo);
+        $rawPassword = trim((string) $configuration->getRawOriginal('tb26_certificado_senha'));
+        $passwordDecryption = $this->canDecryptConfigurationCertificatePassword($configuration);
+
+        $diagnostics['configuration_found'] = true;
+        $diagnostics['configuration_id'] = (int) $configuration->tb26_id;
+        $diagnostics['storage_path'] = $storagePath;
+        $diagnostics['storage_exists'] = $storagePath ? Storage::exists($storagePath) : false;
+        $diagnostics['legacy_storage_exists'] = $storagePath && ! str_starts_with($storagePath, 'private/')
+            ? Storage::exists('private/' . $storagePath)
+            : false;
+        $diagnostics['raw_password_present'] = $rawPassword !== '';
+        $diagnostics['password_decryptable'] = $passwordDecryption['decryptable'];
+        $diagnostics['password_status'] = $passwordDecryption['message'];
+
+        return $diagnostics;
+    }
+
+    private function configurationHasCertificatePassword(?ConfiguracaoFiscal $configuration): bool
+    {
+        if (! $configuration) {
+            return false;
+        }
+
+        return trim((string) $configuration->getRawOriginal('tb26_certificado_senha')) !== '';
+    }
+
+    private function canDecryptConfigurationCertificatePassword(?ConfiguracaoFiscal $configuration): array
+    {
+        if (! $configuration) {
+            return [
+                'decryptable' => null,
+                'message' => 'Configuracao fiscal ainda nao encontrada no banco.',
+            ];
+        }
+
+        $rawPassword = trim((string) $configuration->getRawOriginal('tb26_certificado_senha'));
+
+        if ($rawPassword === '') {
+            return [
+                'decryptable' => null,
+                'message' => 'Nenhuma senha de certificado foi salva no banco.',
+            ];
+        }
+
+        try {
+            $decryptedPassword = (string) $configuration->tb26_certificado_senha;
+
+            return [
+                'decryptable' => $decryptedPassword !== '',
+                'message' => $decryptedPassword !== ''
+                    ? 'A senha criptografada do certificado conseguiu ser lida neste ambiente.'
+                    : 'A senha criptografada existe no banco, mas retornou vazia ao tentar ler neste ambiente.',
+            ];
+        } catch (Throwable $exception) {
+            return [
+                'decryptable' => false,
+                'message' => 'A senha criptografada existe no banco, mas nao conseguiu ser lida neste ambiente. Verifique se a APP_KEY da producao coincide com a do ambiente que salvou a configuracao.',
+            ];
+        }
     }
 }

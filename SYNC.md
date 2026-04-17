@@ -1852,3 +1852,39 @@
 
 - Observacao para sincronizacao com `pec1`:
   - copiar exatamente essa blindagem do `update()` e da verificacao de `OpenSSL`, porque ela depende do mesmo fluxo de upload do certificado e reduz muito a dificuldade de diagnosticar falhas de producao.
+## 17/04/26 - Diagnostico visual de banco, storage e leitura da senha do certificado em settings/fiscal
+
+- Arquivos alterados:
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+  - `resources/js/Pages/Settings/FiscalConfig.jsx`
+
+- Causa identificada:
+  - local e producao usam o mesmo banco, mas o comportamento fiscal pode divergir porque o certificado fisico fica no storage local de cada ambiente e a senha do certificado depende da `APP_KEY` para descriptografia;
+  - a tela fiscal ainda lia `tb26_certificado_senha` pelo cast `encrypted`, o que pode falhar em producao se a `APP_KEY` nao coincidir com a do ambiente que gravou a senha;
+  - isso podia fazer a pagina cair para o modo minimo, dando a impressao de que os dados nao foram gravados mesmo quando o registro existia no banco.
+
+- O que foi feito:
+  - `FiscalConfigurationController` agora envia um bloco `configurationDiagnostics` para a tela fiscal;
+  - o diagnostico informa:
+    - unidade selecionada;
+    - se a configuracao foi encontrada no banco;
+    - `tb26_id`;
+    - caminho salvo do certificado;
+    - se o arquivo existe no storage deste ambiente;
+    - se existe no caminho legado `private/...`;
+    - se ha senha criptografada salva no banco;
+    - se a senha conseguiu ou nao ser lida neste ambiente;
+  - `buildFiscalConfigurationPayload()` deixou de depender diretamente da leitura descriptografada para montar `has_certificate_password`;
+  - foi criada uma leitura segura da senha criptografada usando `getRawOriginal('tb26_certificado_senha')` para evitar derrubar a tela so por divergencia de `APP_KEY`;
+  - `FiscalConfig.jsx` agora mostra um card `Diagnostico do ambiente` logo abaixo do resumo do certificado.
+
+- Efeito esperado:
+  - em producao, a propria tela deve mostrar se o problema esta no banco, no storage do certificado ou na leitura da senha criptografada;
+  - isso ajuda a diferenciar claramente:
+    - registro salvo no banco mas arquivo ausente no Azure;
+    - senha gravada no banco mas ilegivel por `APP_KEY` diferente;
+    - configuracao sequer criada na tabela `tb26_configuracoes_fiscais`.
+
+- Observacao para sincronizacao com `pec1`:
+  - essa alteracao e importante para depuracao de ambientes compartilhando o mesmo banco;
+  - sincronizar exatamente o card visual e a leitura segura da senha criptografada, porque isso reduz bastante o tempo de diagnostico quando local e servidor divergem.

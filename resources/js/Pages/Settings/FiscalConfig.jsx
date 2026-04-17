@@ -83,6 +83,35 @@ const CertificateSummaryCard = ({ unit, configuration, resolvedEndpoints }) => (
     </div>
 );
 
+const DiagnosticsCard = ({ diagnostics }) => {
+    if (!diagnostics) {
+        return null;
+    }
+
+    const statusClassName =
+        diagnostics.password_decryptable === false
+            ? 'text-rose-700 dark:text-rose-200'
+            : diagnostics.password_decryptable === true
+              ? 'text-emerald-700 dark:text-emerald-200'
+              : 'text-amber-700 dark:text-amber-200';
+
+    return (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+            <div className="flex flex-col gap-2 text-sm text-slate-800 dark:text-slate-100">
+                <p className="text-xs font-semibold uppercase tracking-wide">Diagnostico do ambiente</p>
+                <p>Unidade selecionada: {diagnostics.selected_unit_id ?? '--'}</p>
+                <p>Configuracao encontrada no banco: {diagnostics.configuration_found ? 'Sim' : 'Nao'}</p>
+                <p>ID da configuracao fiscal: {diagnostics.configuration_id ?? '--'}</p>
+                <p>Caminho salvo do certificado: {diagnostics.storage_path || '--'}</p>
+                <p>Arquivo existe no storage deste ambiente: {diagnostics.storage_exists ? 'Sim' : 'Nao'}</p>
+                <p>Arquivo existe no caminho legado deste ambiente: {diagnostics.legacy_storage_exists ? 'Sim' : 'Nao'}</p>
+                <p>Senha criptografada presente no banco: {diagnostics.raw_password_present ? 'Sim' : 'Nao'}</p>
+                <p className={statusClassName}>Leitura da senha neste ambiente: {diagnostics.password_status || '--'}</p>
+            </div>
+        </div>
+    );
+};
+
 const actionButtonClassName =
     'inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold';
 
@@ -202,6 +231,7 @@ export default function FiscalConfig({
     unit = null,
     configuration = {},
     resolvedEndpoints = null,
+    configurationDiagnostics = null,
     invoices = [],
     fiscalUnavailableMessage = null,
     invoiceLoadWarning = null,
@@ -350,6 +380,7 @@ export default function FiscalConfig({
                             )}
                             <UnitCard unit={unit} />
                             <CertificateSummaryCard unit={unit} configuration={configuration} resolvedEndpoints={resolvedEndpoints} />
+                            <DiagnosticsCard diagnostics={configurationDiagnostics} />
 
                             {printError && (
                                 <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
