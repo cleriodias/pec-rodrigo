@@ -11,6 +11,7 @@ use App\Support\FiscalNfceXmlService;
 use App\Support\FiscalWebserviceResolverService;
 use DOMDocument;
 use DOMElement;
+use DOMXPath;
 use App\Models\Venda;
 use ReflectionClass;
 use Tests\TestCase;
@@ -279,6 +280,16 @@ class FiscalNfceXmlServiceTest extends TestCase
         }
 
         $this->assertSame(['infNFe', 'infNFeSupl', 'Signature'], $rootChildren);
+
+        $xpath = new DOMXPath($document);
+        $xpath->registerNamespace('nfe', 'http://www.portalfiscal.inf.br/nfe');
+        $xpath->registerNamespace('ds', 'http://www.w3.org/2000/09/xmldsig#');
+
+        $this->assertSame('http://www.w3.org/2000/09/xmldsig#', $document->getElementsByTagName('Signature')->item(0)?->namespaceURI);
+        $this->assertSame(1.0, $xpath->evaluate('count(/nfe:NFe/ds:Signature/ds:SignedInfo)'));
+        $this->assertSame(1.0, $xpath->evaluate('count(/nfe:NFe/ds:Signature/ds:SignedInfo/ds:Reference)'));
+        $this->assertSame(1.0, $xpath->evaluate('count(/nfe:NFe/ds:Signature/ds:SignatureValue)'));
+        $this->assertSame(1.0, $xpath->evaluate('count(/nfe:NFe/ds:Signature/ds:KeyInfo/ds:X509Data/ds:X509Certificate)'));
     }
 
     private function createCertificateData(): array

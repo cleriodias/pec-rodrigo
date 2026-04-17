@@ -2209,3 +2209,64 @@
 - Observacoes para sincronizar em `pec1`:
   - sincronizar esta reversao junto com a correcao anterior da ordem da raiz;
   - nao manter a versao `SHA-256` isolada no outro projeto, porque ela trouxe de volta o `225` neste fluxo atual.
+
+## 17/04/26 - Assinatura XMLDSig da NFC-e corrigida para usar namespace em todos os nos internos
+
+- Arquivos alterados:
+  - `app/Support/FiscalNfceXmlService.php`
+  - `tests/Unit/FiscalNfceXmlServiceTest.php`
+
+- Causa identificada:
+  - o bloco `Signature` da NFC-e nascia com namespace XMLDSig, mas os filhos internos (`SignedInfo`, `Reference`, `DigestValue`, `SignatureValue`, `KeyInfo`, `X509Certificate`, etc.) ainda eram criados com `createElement()` sem namespace;
+  - isso pode passar na verificacao matematica local da assinatura, mas faz o autorizador nao reconhecer corretamente a autoria/integridade do arquivo;
+  - como o erro atual ja estava em `cStat 202`, o ponto mais forte restante era justamente a montagem XMLDSig manual.
+
+- O que foi feito:
+  - `FiscalNfceXmlService` passou a criar todos os nos do bloco de assinatura com `createElementNS('http://www.w3.org/2000/09/xmldsig#', ...)`;
+  - `DigestValue`, `SignatureValue` e `X509Certificate` deixaram de reutilizar o helper generico sem namespace e agora usam helper especifico da assinatura;
+  - o teste unitario passou a verificar explicitamente se:
+    - `Signature` permanece na ordem oficial apos `infNFeSupl`;
+    - `SignedInfo`, `Reference`, `SignatureValue` e `X509Certificate` existem com namespace XMLDSig.
+
+- Efeito esperado:
+  - a assinatura gerada fica mais aderente ao padrao XMLDSig esperado pela SEFAZ;
+  - isso ataca diretamente a causa mais forte restante do `cStat 202 - Rejeicao: Falha no reconhecimento da autoria ou integridade do arquivo digital`.
+
+- Observacoes para sincronizar em `pec1`:
+  - sincronizar exatamente os dois arquivos listados acima;
+  - nao misturar esta correcao com a tentativa anterior de `SHA-256` que foi revertida;
+  - depois da sincronizacao, regenerar a nota para que o XML assinado seja recriado com o novo bloco `Signature` totalmente namespace-aware.
+
+## 17/04/26 - Substituicao da assinatura manual da NFC-e por xmlseclibs
+
+- Arquivos alterados:
+  - `app/Support/FiscalNfceXmlService.php`
+  - `composer.json`
+  - `composer.lock`
+
+- Causa identificada:
+  - mesmo com o schema corrigido e o namespace XMLDSig ajustado, a SEFAZ continuava retornando `cStat 202`;
+  - a assinatura manual ja estava matematicamente consistente localmente, mas esse tipo de implementacao ainda e sensivel a detalhes finos de XMLDSig que o autorizador valida com mais rigor;
+  - por isso o ponto mais forte restante passou a ser a propria rotina artesanal de assinatura.
+
+- O que foi feito:
+  - adicionada a dependencia `robrichards/xmlseclibs:^3.1`;
+  - `FiscalNfceXmlService` deixou de montar `SignedInfo`, `Reference`, `DigestValue`, `SignatureValue` e `KeyInfo` manualmente;
+  - a assinatura agora usa `XMLSecurityDSig` com:
+    - canonicalizacao `C14N`;
+    - referencia ao `infNFe` existente sem sobrescrever o `Id`;
+    - transforms de `enveloped-signature` e `C14N`;
+    - chave privada `RSA_SHA1`, preservando o algoritmo que ja mantinha o schema aceito;
+    - inclusao do certificado via `add509Cert()`.
+
+- Efeito esperado:
+  - reduzir o risco de incompatibilidades sutis de XMLDSig que passavam localmente, mas ainda eram rejeitadas pela SEFAZ como falha de autoria/integridade;
+  - manter intacta a correcao anterior da ordem da raiz da NFC-e.
+
+- Observacoes para sincronizar em `pec1`:
+  - sincronizar obrigatoriamente:
+    - `app/Support/FiscalNfceXmlService.php`
+    - `composer.json`
+    - `composer.lock`
+  - depois de sincronizar o codigo, executar `composer install` no `pec1` para instalar `xmlseclibs`;
+  - nao remover a correcao anterior da ordem `infNFe -> infNFeSupl -> Signature`, porque ela continua sendo necessaria para evitar o `225`.

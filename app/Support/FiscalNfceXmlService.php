@@ -10,6 +10,8 @@ use App\Models\VendaPagamento;
 use Carbon\Carbon;
 use DOMDocument;
 use DOMElement;
+use RobRichards\XMLSecLibs\XMLSecurityDSig;
+use RobRichards\XMLSecLibs\XMLSecurityKey;
 use RuntimeException;
 
 class FiscalNfceXmlService
@@ -354,71 +356,32 @@ class FiscalNfceXmlService
 
     private function signDocument(DOMDocument $document, DOMElement $infNfe, array $certificateData): void
     {
-        $referenceUri = '#' . $infNfe->getAttribute('Id');
-        $digestValue = base64_encode(sha1($infNfe->C14N(false, false), true));
+        try {
+            $privateKey = new XMLSecurityKey(XMLSecurityKey::RSA_SHA1, ['type' => 'private']);
+            $privateKey->loadKey((string) $certificateData['private_key_pem'], false);
 
-        $signatureDocument = new DOMDocument('1.0', 'UTF-8');
-        $signatureDocument->preserveWhiteSpace = false;
-        $signatureDocument->formatOutput = false;
-
-        $signature = $signatureDocument->createElementNS('http://www.w3.org/2000/09/xmldsig#', 'Signature');
-        $signatureDocument->appendChild($signature);
-
-        $signedInfo = $signatureDocument->createElement('SignedInfo');
-        $signature->appendChild($signedInfo);
-
-        $canonicalizationMethod = $signatureDocument->createElement('CanonicalizationMethod');
-        $canonicalizationMethod->setAttribute('Algorithm', 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315');
-        $signedInfo->appendChild($canonicalizationMethod);
-
-        $signatureMethod = $signatureDocument->createElement('SignatureMethod');
-        $signatureMethod->setAttribute('Algorithm', 'http://www.w3.org/2000/09/xmldsig#rsa-sha1');
-        $signedInfo->appendChild($signatureMethod);
-
-        $reference = $signatureDocument->createElement('Reference');
-        $reference->setAttribute('URI', $referenceUri);
-        $signedInfo->appendChild($reference);
-
-        $transforms = $signatureDocument->createElement('Transforms');
-        $reference->appendChild($transforms);
-
-        $transformEnveloped = $signatureDocument->createElement('Transform');
-        $transformEnveloped->setAttribute('Algorithm', 'http://www.w3.org/2000/09/xmldsig#enveloped-signature');
-        $transforms->appendChild($transformEnveloped);
-
-        $transformCanonical = $signatureDocument->createElement('Transform');
-        $transformCanonical->setAttribute('Algorithm', 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315');
-        $transforms->appendChild($transformCanonical);
-
-        $digestMethod = $signatureDocument->createElement('DigestMethod');
-        $digestMethod->setAttribute('Algorithm', 'http://www.w3.org/2000/09/xmldsig#sha1');
-        $reference->appendChild($digestMethod);
-
-        $this->appendTextElement($signatureDocument, $reference, 'DigestValue', $digestValue);
-
-        $signedInfoCanonical = $signedInfo->C14N(false, false);
-        $privateKey = openssl_pkey_get_private($certificateData['private_key_pem']);
-
-        if (! $privateKey) {
-            throw new RuntimeException('Nao foi possivel abrir a chave privada do certificado para assinar o XML.');
+            $signature = new XMLSecurityDSig('');
+            $signature->setCanonicalMethod(XMLSecurityDSig::C14N);
+            $signature->addReference(
+                $infNfe,
+                XMLSecurityDSig::SHA1,
+                [
+                    'http://www.w3.org/2000/09/xmldsig#enveloped-signature',
+                    XMLSecurityDSig::C14N,
+                ],
+                [
+                    'overwrite' => false,
+                    'id_name' => 'Id',
+                ]
+            );
+            $signature->sign($privateKey, $document->documentElement);
+            $signature->add509Cert((string) $certificateData['certificate_pem'], true, false);
+        } catch (\Throwable $exception) {
+            throw new RuntimeException(
+                'Falha ao assinar o XML fiscal com o certificado da loja.',
+                previous: $exception
+            );
         }
-
-        $signatureValue = '';
-
-        if (! openssl_sign($signedInfoCanonical, $signatureValue, $privateKey, OPENSSL_ALGO_SHA1)) {
-            throw new RuntimeException('Falha ao assinar o XML fiscal com o certificado da loja.');
-        }
-
-        $this->appendTextElement($signatureDocument, $signature, 'SignatureValue', base64_encode($signatureValue));
-
-        $keyInfo = $signatureDocument->createElement('KeyInfo');
-        $signature->appendChild($keyInfo);
-        $x509Data = $signatureDocument->createElement('X509Data');
-        $keyInfo->appendChild($x509Data);
-        $this->appendTextElement($signatureDocument, $x509Data, 'X509Certificate', $certificateData['public_certificate_base64']);
-
-        $importedSignature = $document->importNode($signature, true);
-        $document->documentElement->appendChild($importedSignature);
     }
 
     private function appendTextElement(DOMDocument $document, DOMElement $parent, string $tag, string $value): void
