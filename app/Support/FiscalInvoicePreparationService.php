@@ -6,6 +6,7 @@ use App\Models\ConfiguracaoFiscal;
 use App\Models\NotaFiscal;
 use App\Models\Produto;
 use App\Models\VendaPagamento;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -36,86 +37,126 @@ class FiscalInvoicePreparationService
             return null;
         }
 
-        return DB::transaction(function () use ($payment, $unitId) {
-            $config = ConfiguracaoFiscal::query()
-                ->where('tb2_id', $unitId)
-                ->lockForUpdate()
-                ->first();
+        try {
+            return DB::transaction(function () use ($payment, $unitId) {
+                $config = null;
+                $invoice = NotaFiscal::query()
+                    ->where('tb4_id', $payment->tb4_id)
+                    ->lockForUpdate()
+                    ->first();
 
-            $invoice = NotaFiscal::query()
-                ->where('tb4_id', $payment->tb4_id)
-                ->lockForUpdate()
-                ->first();
+                if ($invoice) {
+                    $config = ConfiguracaoFiscal::query()
+                        ->where('tb2_id', $unitId)
+                        ->first();
+                } else {
+                    $config = ConfiguracaoFiscal::query()
+                        ->where('tb2_id', $unitId)
+                        ->lockForUpdate()
+                        ->first();
 
-            $nextNumber = $invoice?->tb27_numero;
-            $serie = $invoice?->tb27_serie;
-            $modelo = $invoice?->tb27_modelo ?? 'nfce';
-            $ambiente = $config?->tb26_ambiente ?? 'homologacao';
+                    if ($config && ! $config->tb26_geracao_automatica_ativa) {
+                        return null;
+                    }
 
-            if ($config && $nextNumber === null && ($config->tb26_emitir_nfce || $config->tb26_emitir_nfe)) {
-                $nextNumber = (int) $config->tb26_proximo_numero;
-                $serie = $config->tb26_serie;
-                $modelo = $config->tb26_emitir_nfce ? 'nfce' : ($config->tb26_emitir_nfe ? 'nfe' : 'nfce');
-
-                $config->update([
-                    'tb26_proximo_numero' => $nextNumber + 1,
-                ]);
-            }
-
-            $payload = $this->buildPayload($payment, $config, $modelo, $ambiente, $serie, $nextNumber);
-            $errors = $this->validatePayload($payment, $config, $modelo);
-            $status = $this->resolveStatus($config, $errors);
-            $signedXml = null;
-            $accessKey = null;
-
-            if ($errors === [] && $config && $modelo === 'nfce') {
-                try {
-                    $certificateData = $this->fiscalCertificateService->loadCertificateForConfiguration($config);
-                    $xmlPayload = $this->fiscalNfceXmlService->buildSignedXml(
-                        $invoice ?? new NotaFiscal([
-                            'tb27_modelo' => $modelo,
-                            'tb27_serie' => $serie,
-                            'tb27_numero' => $nextNumber,
-                        ]),
-                        $payment,
-                        $config,
-                        $certificateData,
-                    );
-
-                    $signedXml = $xmlPayload['xml'];
-                    $accessKey = $xmlPayload['access_key'];
-                    $status = 'xml_assinado';
-                } catch (RuntimeException $exception) {
-                    $errors[] = $exception->getMessage();
-                    $status = 'erro_validacao';
+                    // Revalida a existencia da nota apos obter o lock da configuracao:
+                    // se outra transacao acabou de criar a nota, nao devemos consumir nova numeracao.
+                    $invoice = NotaFiscal::query()
+                        ->where('tb4_id', $payment->tb4_id)
+                        ->lockForUpdate()
+                        ->first();
                 }
-            }
 
-            if (! $invoice) {
-                $invoice = new NotaFiscal([
-                    'tb4_id' => $payment->tb4_id,
+                $nextNumber = $invoice?->tb27_numero;
+                $serie = $invoice?->tb27_serie;
+                $modelo = $invoice?->tb27_modelo ?? 'nfce';
+                $ambiente = $config?->tb26_ambiente ?? 'homologacao';
+
+                if ($config && $nextNumber === null && ($config->tb26_emitir_nfce || $config->tb26_emitir_nfe)) {
+                    $nextNumber = (int) $config->tb26_proximo_numero;
+                    $serie = $config->tb26_serie;
+                    $modelo = $config->tb26_emitir_nfce ? 'nfce' : ($config->tb26_emitir_nfe ? 'nfe' : 'nfce');
+
+                    $config->update([
+                        'tb26_proximo_numero' => $nextNumber + 1,
+                    ]);
+                }
+
+                [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment);
+                $payload = $this->buildPayload(
+                    $payment,
+                    $config,
+                    $modelo,
+                    $ambiente,
+                    $serie,
+                    $nextNumber,
+                    $eligibleSales,
+                    $excludedItems,
+                );
+                $errors = $this->validatePayload($payment, $config, $modelo, $eligibleSales, $excludedItems);
+                $status = $this->resolveStatus($config, $errors);
+                $signedXml = null;
+                $accessKey = null;
+
+                if ($errors === [] && $config && $modelo === 'nfce') {
+                    try {
+                        $certificateData = $this->fiscalCertificateService->loadCertificateForConfiguration($config);
+                        $xmlPayload = $this->fiscalNfceXmlService->buildSignedXml(
+                            $invoice ?? new NotaFiscal([
+                                'tb27_modelo' => $modelo,
+                                'tb27_serie' => $serie,
+                                'tb27_numero' => $nextNumber,
+                            ]),
+                            $payment,
+                            $eligibleSales,
+                            $config,
+                            $certificateData,
+                        );
+
+                        $signedXml = $xmlPayload['xml'];
+                        $accessKey = $xmlPayload['access_key'];
+                        $status = 'xml_assinado';
+                    } catch (RuntimeException $exception) {
+                        $errors[] = $exception->getMessage();
+                        $status = 'erro_validacao';
+                    }
+                }
+
+                if (! $invoice) {
+                    $invoice = new NotaFiscal([
+                        'tb4_id' => $payment->tb4_id,
+                    ]);
+                }
+
+                $invoice->fill([
+                    'tb2_id' => $unitId,
+                    'tb26_id' => $config?->tb26_id,
+                    'tb27_modelo' => $modelo,
+                    'tb27_ambiente' => $ambiente,
+                    'tb27_serie' => $serie,
+                    'tb27_numero' => $nextNumber,
+                    'tb27_status' => $status,
+                    'tb27_payload' => $payload,
+                    'tb27_erros' => $errors,
+                    'tb27_chave_acesso' => $accessKey,
+                    'tb27_xml_envio' => $signedXml,
+                    'tb27_ultima_tentativa_em' => now(),
+                    'tb27_mensagem' => $this->buildStatusMessage($status, $errors, $payload),
                 ]);
+                $invoice->save();
+
+                return $invoice;
+            }, 3);
+        } catch (QueryException $exception) {
+            if ($this->isLockWaitTimeout($exception)) {
+                throw new RuntimeException(
+                    'Outra operacao fiscal da mesma loja ainda esta em andamento. Aguarde alguns segundos e tente novamente.',
+                    previous: $exception
+                );
             }
 
-            $invoice->fill([
-                'tb2_id' => $unitId,
-                'tb26_id' => $config?->tb26_id,
-                'tb27_modelo' => $modelo,
-                'tb27_ambiente' => $ambiente,
-                'tb27_serie' => $serie,
-                'tb27_numero' => $nextNumber,
-                'tb27_status' => $status,
-                'tb27_payload' => $payload,
-                'tb27_erros' => $errors,
-                'tb27_chave_acesso' => $accessKey,
-                'tb27_xml_envio' => $signedXml,
-                'tb27_ultima_tentativa_em' => now(),
-                'tb27_mensagem' => $this->buildStatusMessage($status, $errors),
-            ]);
-            $invoice->save();
-
-            return $invoice;
-        });
+            throw $exception;
+        }
     }
 
     public function reprocessPendingInvoicesForUnit(int $unitId): int
@@ -146,9 +187,12 @@ class FiscalInvoicePreparationService
         string $ambiente,
         ?string $serie,
         ?int $numero,
+        $eligibleSales,
+        array $excludedItems,
     ): array {
         $sales = $payment->vendas;
         $unit = $sales->first()?->unidade;
+        $documentTotal = round((float) $eligibleSales->sum('valor_total'), 2);
 
         return [
             'pagamento_id' => (int) $payment->tb4_id,
@@ -157,7 +201,9 @@ class FiscalInvoicePreparationService
             'serie' => $serie,
             'numero' => $numero,
             'tipo_pagamento' => $payment->tipo_pagamento,
-            'valor_total' => round((float) $payment->valor_total, 2),
+            'valor_total_venda' => round((float) $payment->valor_total, 2),
+            'valor_total_documento' => $documentTotal,
+            'itens_excluidos_qtd' => count($excludedItems),
             'emitente' => [
                 'unit_id' => (int) ($unit?->tb2_id ?? 0),
                 'nome_unidade' => $unit?->tb2_nome,
@@ -178,7 +224,7 @@ class FiscalInvoicePreparationService
                     'certificado_cnpj' => $config?->tb26_certificado_cnpj,
                 ],
             ],
-            'itens' => $sales->map(function ($sale) {
+            'itens' => $eligibleSales->map(function ($sale) {
                 /** @var Produto|null $product */
                 $product = $sale->produto;
 
@@ -200,10 +246,17 @@ class FiscalInvoicePreparationService
                     'codigo_barras' => $product?->tb1_codbar,
                 ];
             })->values()->all(),
+            'itens_excluidos' => $excludedItems,
         ];
     }
 
-    private function validatePayload(VendaPagamento $payment, ?ConfiguracaoFiscal $config, string $modelo): array
+    private function validatePayload(
+        VendaPagamento $payment,
+        ?ConfiguracaoFiscal $config,
+        string $modelo,
+        $eligibleSales,
+        array $excludedItems,
+    ): array
     {
         $errors = [];
 
@@ -287,7 +340,20 @@ class FiscalInvoicePreparationService
             $errors[] = 'A inscricao estadual da unidade esta invalida para emissao fiscal. Informe apenas digitos ou ISENTO.';
         }
 
-        foreach ($payment->vendas as $sale) {
+        if ($eligibleSales->isEmpty()) {
+            $excludedSummary = collect($excludedItems)
+                ->map(fn (array $item) => sprintf('%d (%s)', (int) $item['produto_id'], (string) $item['descricao']))
+                ->implode(', ');
+
+            $errors[] = $excludedSummary !== ''
+                ? sprintf(
+                    'Nenhum item da venda possui dados fiscais minimos para gerar a nota. Itens excluidos: %s.',
+                    $excludedSummary
+                )
+                : 'Nenhum item da venda possui dados fiscais minimos para gerar a nota.';
+        }
+
+        foreach ($eligibleSales as $sale) {
             /** @var Produto|null $product */
             $product = $sale->produto;
             $productId = (int) $sale->tb1_id;
@@ -341,14 +407,72 @@ class FiscalInvoicePreparationService
         return 'pendente_emissao';
     }
 
-    private function buildStatusMessage(string $status, array $errors): string
+    private function buildStatusMessage(string $status, array $errors, array $payload): string
     {
+        $excludedCount = (int) ($payload['itens_excluidos_qtd'] ?? 0);
+
         return match ($status) {
-            'xml_assinado' => 'XML fiscal assinado localmente e aguardando transmissao para a SEFAZ.',
-            'pendente_emissao' => 'Nota preparada e aguardando integracao com a SEFAZ.',
+            'xml_assinado' => $excludedCount > 0
+                ? sprintf(
+                    'XML fiscal assinado localmente e aguardando transmissao para a SEFAZ. %d item(ns) sem cadastro fiscal minimo ficaram fora da nota.',
+                    $excludedCount
+                )
+                : 'XML fiscal assinado localmente e aguardando transmissao para a SEFAZ.',
+            'pendente_emissao' => $excludedCount > 0
+                ? sprintf(
+                    'Nota preparada e aguardando integracao com a SEFAZ. %d item(ns) sem cadastro fiscal minimo ficaram fora da nota.',
+                    $excludedCount
+                )
+                : 'Nota preparada e aguardando integracao com a SEFAZ.',
             'erro_validacao' => $errors[0] ?? 'A nota possui pendencias fiscais.',
             default => 'A unidade ainda nao possui configuracao fiscal suficiente para emitir.',
         };
+    }
+
+    private function splitSalesForFiscal(VendaPagamento $payment): array
+    {
+        $eligibleSales = collect();
+        $excludedItems = [];
+
+        foreach ($payment->vendas as $sale) {
+            /** @var Produto|null $product */
+            $product = $sale->produto;
+            $missingFields = [];
+
+            if (! $product) {
+                $missingFields = ['Produto nao encontrado'];
+            } else {
+                if (blank($product->tb1_ncm)) {
+                    $missingFields[] = 'NCM';
+                }
+
+                if (blank($product->tb1_cfop)) {
+                    $missingFields[] = 'CFOP';
+                }
+
+                if (blank($product->tb1_csosn) && blank($product->tb1_cst)) {
+                    $missingFields[] = 'CSOSN/CST';
+                }
+            }
+
+            if ($missingFields === []) {
+                $eligibleSales->push($sale);
+                continue;
+            }
+
+            $excludedItems[] = [
+                'produto_id' => (int) $sale->tb1_id,
+                'descricao' => (string) $sale->produto_nome,
+                'motivo' => sprintf(
+                    'Item fora da nota por falta de: %s.',
+                    implode(', ', $missingFields)
+                ),
+                'campos_faltantes' => $missingFields,
+                'valor_total' => round((float) $sale->valor_total, 2),
+            ];
+        }
+
+        return [$eligibleSales, $excludedItems];
     }
 
     private function onlyDigits(?string $value): ?string
@@ -369,5 +493,14 @@ class FiscalInvoicePreparationService
         $digits = $this->onlyDigits($value);
 
         return $digits !== null && strlen($digits) >= 2 && strlen($digits) <= 14;
+    }
+
+    private function isLockWaitTimeout(QueryException $exception): bool
+    {
+        $message = strtolower($exception->getMessage());
+
+        return str_contains($message, 'lock wait timeout exceeded')
+            || str_contains($message, 'deadlock found')
+            || in_array((string) $exception->getCode(), ['1205', '1213'], true);
     }
 }

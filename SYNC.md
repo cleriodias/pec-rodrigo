@@ -2364,3 +2364,212 @@
   - esta mudanca nao depende de migration;
   - o `Dashboard.jsx` depende de o payload `sale.fiscal` continuar vindo do backend no fechamento da venda;
   - importante manter a regra de unidade ativa no endpoint JSON, para o caixa nao transmitir nota de outra loja.
+
+## 17/04/26 - Reducao do lock fiscal na preparacao da nota para evitar timeout 1205
+
+- Arquivos alterados:
+  - `app/Support/FiscalInvoicePreparationService.php`
+
+- Causa identificada:
+  - o metodo `prepareForPayment()` sempre fazia `lockForUpdate()` em `tb26_configuracoes_fiscais` da loja;
+  - isso acontecia ate quando a nota fiscal ja existia e a operacao so precisava reler ou regenerar o XML;
+  - em operacoes concorrentes da mesma loja, esse lock desnecessario aumentava o risco de `SQLSTATE[HY000]: General error: 1205 Lock wait timeout exceeded`.
+
+- O que foi feito:
+  - a preparacao da nota agora tenta travar primeiro apenas a propria `tb27_notas_fiscais` da venda;
+  - a configuracao fiscal da loja so recebe `lockForUpdate()` quando realmente nao existe nota e precisamos reservar nova numeracao fiscal;
+  - depois de obter o lock da configuracao, o codigo revalida se outra transacao criou a nota nesse intervalo, evitando consumir numeracao duplicada;
+  - foi adicionado tratamento especifico para `lock wait timeout` e `deadlock`, convertendo essas falhas em mensagem operacional amigavel.
+
+- Efeito esperado:
+  - reduzir muito a disputa de lock na linha da configuracao fiscal da loja;
+  - evitar timeout quando o caixa tenta transmitir logo apos a venda ou quando ha outra operacao fiscal concorrente na mesma unidade;
+  - quando ainda houver disputa real, a aplicacao passa a devolver mensagem clara em vez de erro bruto do banco.
+
+- Observacoes para sincronizar em `pec1`:
+  - sincronizar exatamente este arquivo;
+  - nao depende de migration;
+  - importante manter a revalidacao da nota apos o lock da configuracao, porque ela protege a numeracao fiscal contra concorrencia.
+
+## 17/04/26 - Enriquecimento do KeyInfo da assinatura XML com SubjectName e IssuerSerial
+
+- Arquivos alterados:
+  - `app/Support/FiscalNfceXmlService.php`
+
+- Causa identificada:
+  - com o schema ja resolvido e a assinatura estabilizada novamente em `SHA-1`, a NFC-e continuava em `cStat 202`;
+  - o bloco `KeyInfo/X509Data` estava indo apenas com `X509Certificate`;
+  - o proximo suspeito forte passou a ser a identificacao do certificado no XML, nao mais a estrutura geral da assinatura.
+
+- O que foi feito:
+  - mantida a assinatura via `xmlseclibs` em `RSA-SHA1`;
+  - o `add509Cert()` passou a incluir tambem:
+    - `X509SubjectName`
+    - `X509IssuerSerial`
+      - `X509IssuerName`
+      - `X509SerialNumber`
+  - isso deixa o `KeyInfo` mais completo para o autorizador reconhecer a autoria do certificado usado na assinatura.
+
+- Efeito esperado:
+  - aumentar a compatibilidade do bloco `Signature` com a validacao de autoria/integridade da SEFAZ sem reabrir o `225`.
+
+- Observacoes para sincronizar em `pec1`:
+  - sincronizar exatamente este arquivo;
+  - nao misturar esta etapa com a variante `SHA-256`, que deve continuar desativada;
+  - depois da sincronizacao, regenerar a nota para que a assinatura seja refeita com o `KeyInfo` enriquecido.
+
+## 17/04/26 - Switch para desligar a geracao automatica de notas fiscais e atalho fixo Abrir fiscal na modal de transmissao
+
+- Arquivos alterados:
+  - `app/Models/ConfiguracaoFiscal.php`
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+  - `app/Support/FiscalInvoicePreparationService.php`
+  - `resources/js/Pages/Settings/FiscalConfig.jsx`
+  - `resources/js/Layouts/AuthenticatedLayout.jsx`
+  - `SYNC.md`
+
+- Arquivos criados:
+  - `database/migrations/2026_04_17_030000_add_tb26_geracao_automatica_ativa_to_tb26_configuracoes_fiscais_table.php`
+
+- Causa identificada:
+  - a configuracao fiscal da loja nao tinha um interruptor geral para suspender a preparacao automatica de notas no fechamento da venda;
+  - quando a operacao queria apenas parar de gerar nota temporariamente, era preciso desmontar configuracao ou desmarcar tipos de emissao;
+  - na modal `Transmitir notas pendentes`, o botao `Abrir fiscal` aparecia somente nas linhas da lista, entao sumia quando nao havia registros pendentes.
+
+- O que foi feito:
+  - criada a coluna booleana `tb26_geracao_automatica_ativa` em `tb26_configuracoes_fiscais`, com `default true`;
+  - `ConfiguracaoFiscal` passou a tratar esse campo em `fillable` e `casts`;
+  - `FiscalConfigurationController` passou a:
+    - validar o novo campo;
+    - salvar o estado do switch;
+    - carregar o valor para a tela fiscal;
+    - assumir `true` por padrao quando ainda nao houver configuracao salva;
+  - `FiscalConfig.jsx` ganhou um switch visual de liga/desliga na secao `Emissao e numeracao`, com status textual `Ativa` ou `Desligada`;
+  - `FiscalInvoicePreparationService` agora interrompe a criacao automatica da nota quando:
+    - a configuracao fiscal existe;
+    - a nota da venda ainda nao existe;
+    - `tb26_geracao_automatica_ativa = false`;
+  - se a nota ja existir, o servico continua permitindo regeneracao/reprocessamento da nota existente;
+  - `AuthenticatedLayout.jsx` passou a exibir `Abrir fiscal` fixo no cabecalho da modal `Transmitir notas pendentes`, ao lado de `Fechar`;
+  - quando existir nota pendente, o atalho usa a loja da primeira nota da lista; quando nao existir nenhuma, ele aponta para `settings/fiscal`.
+
+- Efeito esperado:
+  - a loja pode desligar temporariamente a geracao automatica de notas sem apagar certificado, CSC ou numeracao fiscal;
+  - vendas fechadas com a geracao desligada nao criam nova `tb27_notas_fiscais`;
+  - notas ja existentes continuam podendo ser regeneradas ou transmitidas;
+  - a modal de transmissao sempre oferece o atalho `Abrir fiscal`, inclusive quando a fila estiver vazia.
+
+- Observacoes para sincronizar em `pec1`:
+  - sincronizar todos os arquivos listados acima;
+  - executar a migration nova no `pec1` depois de sincronizar o codigo;
+  - o comportamento foi desenhado para nao quebrar notas antigas: o bloqueio vale apenas para novas vendas sem nota fiscal criada;
+  - manter o botao `Abrir fiscal` no cabecalho da modal, mesmo sem registros, porque essa e justamente a situacao em que o atalho deixava de aparecer.
+
+## 17/04/26 - Coluna NF na listagem de unidades com atalho para settings/fiscal
+
+- Arquivos alterados:
+  - `app/Http/Controllers/UnitController.php`
+  - `resources/js/Pages/Units/UnitIndex.jsx`
+  - `SYNC.md`
+
+- Causa identificada:
+  - a listagem `units` ainda ocupava uma coluna com `Endereco`, mas nao mostrava nenhum indicador financeiro das notas fiscais por loja;
+  - tambem faltava um atalho direto da unidade para a tela fiscal da propria loja;
+  - como a tela `units` ja e restrita a `MASTER` e `GERENTE`, fazia sentido aproveitar esse mesmo escopo para expor o total fiscal.
+
+- O que foi feito:
+  - removida a coluna `Endereco` da tabela de unidades;
+  - adicionada a coluna `NF`;
+  - `UnitController@index` agora calcula `tb2_nf_total` por unidade via subquery:
+    - soma `tb4_vendas_pg.valor_total`;
+    - apenas para registros em `tb27_notas_fiscais` com `tb27_status = emitida`;
+  - o valor fiscal foi arredondado no backend e enviado junto com a paginacao;
+  - `UnitIndex.jsx` passou a renderizar esse valor como botao/link;
+  - ao clicar, o usuario vai direto para `settings/fiscal?unit_id=<loja>`.
+
+- Efeito esperado:
+  - `MASTER` e `GERENTE` visualizam rapidamente quanto cada loja ja gerou em notas fiscais autorizadas;
+  - a tela de unidades deixa de exibir a coluna de endereco e passa a ter um acesso direto para a configuracao/operacao fiscal da unidade.
+
+- Observacoes para sincronizar em `pec1`:
+  - sincronizar exatamente os arquivos listados acima;
+  - nao depende de migration;
+  - manter o criterio da soma apenas para `tb27_status = emitida`, para nao inflar o total com notas pendentes, com erro ou apenas assinadas localmente.
+
+## 17/04/26 - Botao NF da listagem de unidades sinaliza geracao automatica ativa ou desligada
+
+- Arquivos alterados:
+  - `app/Http/Controllers/UnitController.php`
+  - `resources/js/Pages/Units/UnitIndex.jsx`
+  - `SYNC.md`
+
+- Causa identificada:
+  - a nova coluna `NF` mostrava o valor fiscal da unidade, mas usava sempre o mesmo estilo visual;
+  - como a configuracao fiscal agora possui o switch `tb26_geracao_automatica_ativa`, faltava refletir esse estado no proprio botao da listagem.
+
+- O que foi feito:
+  - `UnitController@index` passou a carregar tambem `configuracaoFiscal` com o campo `tb26_geracao_automatica_ativa`;
+  - cada unidade enviada para a tela agora leva o booleano `tb26_geracao_automatica_ativa`;
+  - `UnitIndex.jsx` passou a pintar o botao `NF`:
+    - verde quando a geracao automatica estiver ativa;
+    - vermelho quando a geracao automatica estiver desligada;
+  - o clique continua levando para `settings/fiscal` da unidade;
+  - o botao tambem ganhou `title` explicando o estado atual da geracao automatica.
+
+- Efeito esperado:
+  - a listagem de unidades passa a mostrar nao apenas o total fiscal da loja, mas tambem o estado operacional da geracao automatica de notas;
+  - isso facilita bater o olho e identificar rapidamente quais lojas estao com a emissao automatica ligada ou desligada.
+
+- Observacoes para sincronizar em `pec1`:
+  - sincronizar exatamente os arquivos listados acima;
+  - nao depende de migration nova;
+  - este ajuste depende de a migration `2026_04_17_030000_add_tb26_geracao_automatica_ativa_to_tb26_configuracoes_fiscais_table.php` ja estar aplicada no outro projeto.
+
+## 17/04/26 - Geracao parcial da nota fiscal apenas com itens que possuem dados fiscais minimos
+
+- Arquivos alterados:
+  - `app/Support/FiscalInvoicePreparationService.php`
+  - `app/Support/FiscalNfceXmlService.php`
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+  - `tests/Unit/FiscalInvoicePreparationServiceTest.php`
+  - `SYNC.md`
+
+- Causa identificada:
+  - o fluxo fiscal anterior bloqueava a nota inteira quando qualquer item da venda estivesse sem `NCM`, `CFOP` ou `CSOSN/CST`;
+  - na pratica isso impedia a emissao mesmo quando parte da venda ja tinha cadastro fiscal suficiente;
+  - a nova regra operacional definida e gerar a nota apenas com os itens aptos, deixando os itens sem cadastro minimo fora do documento.
+
+- O que foi feito:
+  - `FiscalInvoicePreparationService` passou a separar os itens da venda em dois grupos:
+    - `itens` aptos para a nota;
+    - `itens_excluidos` por falta de dados fiscais minimos;
+  - o criterio minimo para entrar na nota passou a ser:
+    - `NCM`;
+    - `CFOP`;
+    - `CSOSN/CST`;
+  - se ao menos um item estiver apto:
+    - a nota e gerada apenas com esse subconjunto;
+    - os itens excluidos ficam registrados em `tb27_payload['itens_excluidos']`;
+    - `tb27_payload['valor_total_documento']` passa a guardar o total real da nota;
+  - se nenhum item estiver apto:
+    - a nota continua em `erro_validacao`;
+    - a mensagem informa que nenhum item da venda possui dados fiscais minimos;
+  - `FiscalNfceXmlService` passou a montar o XML apenas com os itens aptos recebidos do service;
+  - o grupo `pag` da NFC-e passou a usar o total do documento fiscal gerado, e nao mais o total completo da venda;
+  - `FiscalConfigurationController` passou a usar o payload fiscal salvo para:
+    - mostrar o total correto da nota na listagem;
+    - imprimir o cupom fiscal com apenas os itens incluidos;
+    - expor tambem a lista de itens excluidos quando existir.
+
+- Efeito esperado:
+  - uma venda com itens mistos agora pode gerar nota parcial;
+  - exemplo:
+    - se a venda tiver 10 itens e apenas 1 tiver `NCM`, `CFOP` e `CSOSN/CST`, a nota fiscal sera gerada apenas com esse 1 item;
+  - os itens sem cadastro minimo nao bloqueiam mais a nota inteira;
+  - o valor mostrado na area fiscal passa a refletir o total real da nota emitida, e nao o total bruto da venda.
+
+- Observacoes para sincronizar em `pec1`:
+  - sincronizar exatamente os arquivos listados acima;
+  - nao depende de migration;
+  - depois de sincronizar, regenerar notas antigas que estavam em `erro_validacao` apenas por itens mistos, para que a nova regra parcial seja aplicada;
+  - importante manter o uso de `valor_total_documento` e `itens_excluidos` no payload fiscal, porque eles passam a ser a referencia correta do documento quando a nota for parcial.

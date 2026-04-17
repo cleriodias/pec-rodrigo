@@ -19,6 +19,7 @@ class ConfiguracaoFiscal extends Model
         'tb2_id',
         'tb26_emitir_nfe',
         'tb26_emitir_nfce',
+        'tb26_geracao_automatica_ativa',
         'tb26_ambiente',
         'tb26_serie',
         'tb26_proximo_numero',
@@ -52,6 +53,7 @@ class ConfiguracaoFiscal extends Model
     protected $casts = [
         'tb26_emitir_nfe' => 'boolean',
         'tb26_emitir_nfce' => 'boolean',
+        'tb26_geracao_automatica_ativa' => 'boolean',
         'tb26_proximo_numero' => 'integer',
         'tb26_crt' => 'integer',
         'tb26_certificado_valido_ate' => 'datetime',

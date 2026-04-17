@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Unidade;
 use App\Support\ManagementScope;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redirect;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -25,7 +26,18 @@ class UnitController extends Controller
         $this->ensureAuthorized();
 
         $user = request()->user();
-        $unitsQuery = Unidade::query()->orderByDesc('tb2_id');
+        $unitsQuery = Unidade::query()
+            ->select('tb2_unidades.*')
+            ->with('configuracaoFiscal:tb26_id,tb2_id,tb26_geracao_automatica_ativa')
+            ->selectSub(
+                DB::table('tb27_notas_fiscais')
+                    ->join('tb4_vendas_pg', 'tb4_vendas_pg.tb4_id', '=', 'tb27_notas_fiscais.tb4_id')
+                    ->whereColumn('tb27_notas_fiscais.tb2_id', 'tb2_unidades.tb2_id')
+                    ->where('tb27_notas_fiscais.tb27_status', 'emitida')
+                    ->selectRaw('COALESCE(SUM(tb4_vendas_pg.valor_total), 0)'),
+                'tb2_nf_total'
+            )
+            ->orderByDesc('tb2_id');
 
         if (ManagementScope::isManager($user)) {
             $unitIds = ManagementScope::managedUnitIds($user)->all();
@@ -37,7 +49,12 @@ class UnitController extends Controller
             }
         }
 
-        $units = $unitsQuery->paginate(10);
+        $units = $unitsQuery->paginate(10)->through(function (Unidade $unit) {
+            $unit->tb2_nf_total = round((float) ($unit->tb2_nf_total ?? 0), 2);
+            $unit->tb26_geracao_automatica_ativa = (bool) optional($unit->configuracaoFiscal)->tb26_geracao_automatica_ativa;
+
+            return $unit;
+        });
 
         return Inertia::render('Units/UnitIndex', [
             'units' => $units,

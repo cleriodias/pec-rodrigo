@@ -24,6 +24,7 @@ class FiscalNfceXmlService
     public function buildSignedXml(
         NotaFiscal $invoice,
         VendaPagamento $payment,
+        $sales,
         ConfiguracaoFiscal $configuration,
         array $certificateData,
     ): array {
@@ -31,7 +32,6 @@ class FiscalNfceXmlService
             throw new RuntimeException('A geracao automatica de XML assinado nesta etapa esta disponivel apenas para NFC-e.');
         }
 
-        $sales = $payment->vendas;
         $unit = $sales->first()?->unidade;
 
         if (! $unit) {
@@ -76,9 +76,11 @@ class FiscalNfceXmlService
         $this->appendIde($document, $infNfe, $configuration, $issueDate, $cUf, $cNf, $serie, $number, $verifierDigit);
         $this->appendEmitter($document, $infNfe, $configuration, $unitCnpj);
         $this->appendItems($document, $infNfe, $sales, (int) $configuration->tb26_crt);
+        $documentTotal = (float) $sales->sum('valor_total');
+
         $this->appendTotals($document, $infNfe, $sales);
         $this->appendTransport($document, $infNfe);
-        $this->appendPayment($document, $infNfe, $payment);
+        $this->appendPayment($document, $infNfe, $payment, $documentTotal);
         $this->appendAdditionalInfo($document, $infNfe, $payment, $unit->tb2_nome);
         $this->appendSupplementalInfo($document, $nfe, $configuration, $accessKey, $endpoints);
         $this->signDocument($document, $infNfe, $certificateData);
@@ -291,7 +293,12 @@ class FiscalNfceXmlService
         $this->appendTextElement($document, $transport, 'modFrete', '9');
     }
 
-    private function appendPayment(DOMDocument $document, DOMElement $infNfe, VendaPagamento $payment): void
+    private function appendPayment(
+        DOMDocument $document,
+        DOMElement $infNfe,
+        VendaPagamento $payment,
+        float $documentTotal,
+    ): void
     {
         $paymentNode = $document->createElement('pag');
         $infNfe->appendChild($paymentNode);
@@ -305,11 +312,7 @@ class FiscalNfceXmlService
             $this->appendTextElement($document, $detail, 'xPag', $paymentData['description']);
         }
 
-        $this->appendTextElement($document, $detail, 'vPag', number_format((float) $payment->valor_total, 2, '.', ''));
-
-        if ((float) $payment->troco > 0) {
-            $this->appendTextElement($document, $paymentNode, 'vTroco', number_format((float) $payment->troco, 2, '.', ''));
-        }
+        $this->appendTextElement($document, $detail, 'vPag', number_format($documentTotal, 2, '.', ''));
     }
 
     private function appendAdditionalInfo(
@@ -375,7 +378,10 @@ class FiscalNfceXmlService
                 ]
             );
             $signature->sign($privateKey, $document->documentElement);
-            $signature->add509Cert((string) $certificateData['certificate_pem'], true, false);
+            $signature->add509Cert((string) $certificateData['certificate_pem'], true, false, [
+                'subjectName' => true,
+                'issuerSerial' => true,
+            ]);
         } catch (\Throwable $exception) {
             throw new RuntimeException(
                 'Falha ao assinar o XML fiscal com o certificado da loja.',

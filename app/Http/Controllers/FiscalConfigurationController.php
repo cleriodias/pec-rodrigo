@@ -193,6 +193,7 @@ class FiscalConfigurationController extends Controller
             'tb2_id' => ['required', 'integer', 'exists:tb2_unidades,tb2_id'],
             'tb26_emitir_nfe' => ['nullable', 'boolean'],
             'tb26_emitir_nfce' => ['nullable', 'boolean'],
+            'tb26_geracao_automatica_ativa' => ['nullable', 'boolean'],
             'tb26_ambiente' => ['required', Rule::in(['homologacao', 'producao'])],
             'tb26_serie' => ['required', 'string', 'max:10'],
             'tb26_proximo_numero' => ['required', 'integer', 'min:1'],
@@ -302,6 +303,7 @@ class FiscalConfigurationController extends Controller
             $configuration->fill([
                 'tb26_emitir_nfe' => (bool) ($data['tb26_emitir_nfe'] ?? false),
                 'tb26_emitir_nfce' => (bool) ($data['tb26_emitir_nfce'] ?? false),
+                'tb26_geracao_automatica_ativa' => (bool) ($data['tb26_geracao_automatica_ativa'] ?? true),
                 'tb26_ambiente' => $data['tb26_ambiente'],
                 'tb26_serie' => trim((string) $data['tb26_serie']),
                 'tb26_proximo_numero' => (int) $data['tb26_proximo_numero'],
@@ -638,12 +640,16 @@ class FiscalConfigurationController extends Controller
         $sales = $payment->vendas->values();
         $firstSale = $sales->first();
         $configuration = $invoice->configuracaoFiscal;
+        $invoicePayload = $invoice->tb27_payload ?? [];
+        $fiscalItems = collect($invoicePayload['itens'] ?? []);
+        $excludedItems = collect($invoicePayload['itens_excluidos'] ?? []);
         $xmlData = $this->extractFiscalReceiptXmlData($invoice->tb27_xml_envio);
         $issueDateTime = $invoice->tb27_emitida_em ?? $firstSale?->data_hora ?? $invoice->created_at;
         $emitterName = $configuration?->tb26_nome_fantasia
             ?: $configuration?->tb26_razao_social
             ?: $firstSale?->unidade?->tb2_nome
             ?: 'EMITENTE NAO INFORMADO';
+        $documentTotal = round((float) ($invoicePayload['valor_total_documento'] ?? $payment->valor_total), 2);
 
         return [
             'title' => strtolower((string) $invoice->tb27_modelo) === 'nfce' ? 'DANFE NFC-e' : 'Documento fiscal',
@@ -664,23 +670,24 @@ class FiscalConfigurationController extends Controller
             'emitter_address' => $this->buildEmitterAddress($configuration),
             'consumer_name' => 'CONSUMIDOR NAO IDENTIFICADO',
             'payment_label' => $this->resolvePaymentLabel($payment->tipo_pagamento),
-            'total' => round((float) $payment->valor_total, 2),
-            'amount_paid' => $payment->valor_pago !== null ? round((float) $payment->valor_pago, 2) : null,
-            'change' => $payment->troco !== null ? round((float) $payment->troco, 2) : null,
-            'additional_payment' => $payment->dois_pgto !== null ? round((float) $payment->dois_pgto, 2) : null,
+            'total' => $documentTotal,
+            'amount_paid' => $documentTotal,
+            'change' => null,
+            'additional_payment' => null,
             'access_key' => $invoice->tb27_chave_acesso ?: ($xmlData['access_key'] ?? null),
             'protocol' => $invoice->tb27_protocolo,
             'receipt' => $invoice->tb27_recibo,
             'consulta_url' => $xmlData['consulta_url'] ?? null,
             'qr_code_data' => $xmlData['qr_code_data'] ?? null,
             'is_preview' => $invoice->tb27_status !== 'emitida',
-            'items' => $sales
-                ->map(fn (Venda $sale) => [
-                    'id' => $sale->tb3_id,
-                    'product_name' => $sale->produto_nome,
-                    'quantity' => (float) $sale->quantidade,
-                    'unit_price' => round((float) $sale->valor_unitario, 2),
-                    'subtotal' => round((float) $sale->valor_total, 2),
+            'excluded_items' => $excludedItems->values()->all(),
+            'items' => $fiscalItems
+                ->map(fn (array $item) => [
+                    'id' => $item['produto_id'] ?? null,
+                    'product_name' => $item['descricao'] ?? 'ITEM FISCAL',
+                    'quantity' => (float) ($item['quantidade'] ?? 0),
+                    'unit_price' => round((float) ($item['valor_unitario'] ?? 0), 2),
+                    'subtotal' => round((float) ($item['valor_total'] ?? 0), 2),
                 ])
                 ->values()
                 ->all(),
@@ -769,6 +776,8 @@ class FiscalConfigurationController extends Controller
 
     private function buildInvoiceListPayload(NotaFiscal $invoice): array
     {
+        $invoicePayload = is_array($invoice->tb27_payload) ? $invoice->tb27_payload : [];
+
         $payload = [
             'id' => (int) $invoice->tb27_id,
             'payment_id' => (int) $invoice->tb4_id,
@@ -783,7 +792,7 @@ class FiscalConfigurationController extends Controller
             'recibo' => $invoice->tb27_recibo,
             'emitida_em' => optional($invoice->tb27_emitida_em)->format('d/m/y H:i'),
             'criada_em' => optional($invoice->created_at)->format('d/m/y H:i'),
-            'total' => round((float) ($invoice->pagamento?->valor_total ?? 0), 2),
+            'total' => round((float) ($invoicePayload['valor_total_documento'] ?? $invoice->pagamento?->valor_total ?? 0), 2),
             'xml_disponivel' => filled($invoice->tb27_xml_envio),
             'pode_regenerar' => in_array($invoice->tb27_status, [
                 'pendente_configuracao',
@@ -792,6 +801,7 @@ class FiscalConfigurationController extends Controller
                 'pendente_emissao',
             ], true),
             'pode_excluir' => $this->canDeletePreparedInvoice($invoice),
+            'itens_excluidos_qtd' => (int) ($invoicePayload['itens_excluidos_qtd'] ?? 0),
             'fiscal_receipt' => null,
         ];
 
@@ -861,6 +871,7 @@ class FiscalConfigurationController extends Controller
             'tb2_id' => $selectedUnitId > 0 ? $selectedUnitId : null,
             'tb26_emitir_nfe' => false,
             'tb26_emitir_nfce' => false,
+            'tb26_geracao_automatica_ativa' => true,
             'tb26_ambiente' => 'homologacao',
             'tb26_serie' => '1',
             'tb26_proximo_numero' => 1,
@@ -901,6 +912,7 @@ class FiscalConfigurationController extends Controller
             'tb2_id' => $selectedUnitId > 0 ? $selectedUnitId : null,
             'tb26_emitir_nfe' => (bool) ($configuration?->tb26_emitir_nfe ?? false),
             'tb26_emitir_nfce' => (bool) ($configuration?->tb26_emitir_nfce ?? false),
+            'tb26_geracao_automatica_ativa' => (bool) ($configuration?->tb26_geracao_automatica_ativa ?? true),
             'tb26_ambiente' => $configuration?->tb26_ambiente ?? 'homologacao',
             'tb26_serie' => $configuration?->tb26_serie ?? '1',
             'tb26_proximo_numero' => (int) ($configuration?->tb26_proximo_numero ?? 1),

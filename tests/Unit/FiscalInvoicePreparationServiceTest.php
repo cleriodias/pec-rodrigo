@@ -24,8 +24,9 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         $validatePayload->setAccessible(true);
 
         $payment = $this->makePaymentWithFiscalProduct();
+        [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment, $service);
 
-        $errors = $validatePayload->invoke($service, $payment, null, 'nfce');
+        $errors = $validatePayload->invoke($service, $payment, null, 'nfce', $eligibleSales, $excludedItems);
 
         $this->assertSame(
             ['Configure a emissao fiscal da unidade antes de gerar a nota.'],
@@ -42,13 +43,14 @@ class FiscalInvoicePreparationServiceTest extends TestCase
 
         $payment = $this->makePaymentWithFiscalProduct();
         $config = $this->makeConfiguration();
+        [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment, $service);
 
-        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce');
+        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', $eligibleSales, $excludedItems);
 
         $this->assertSame([], $errors);
     }
 
-    public function test_validate_payload_flags_product_without_required_tax_fields(): void
+    public function test_validate_payload_flags_when_all_items_are_without_minimum_tax_fields(): void
     {
         $service = $this->makeService();
         $reflection = new ReflectionClass($service);
@@ -62,14 +64,14 @@ class FiscalInvoicePreparationServiceTest extends TestCase
             'tb1_cst' => null,
         ]);
         $config = $this->makeConfiguration();
+        [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment, $service);
 
-        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce');
+        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', $eligibleSales, $excludedItems);
 
-        $this->assertCount(1, $errors);
-        $this->assertStringContainsString('sem cadastro fiscal completo', $errors[0]);
-        $this->assertStringContainsString('NCM', $errors[0]);
-        $this->assertStringContainsString('CFOP', $errors[0]);
-        $this->assertStringContainsString('CSOSN/CST', $errors[0]);
+        $productError = collect($errors)->first(fn (string $error) => str_contains($error, 'Nenhum item da venda possui dados fiscais minimos'));
+
+        $this->assertNotNull($productError);
+        $this->assertStringContainsString('COXINHA', $productError);
     }
 
     public function test_validate_payload_flags_certificate_from_another_store(): void
@@ -83,8 +85,9 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         $config = $this->makeConfiguration([
             'tb26_certificado_cnpj' => '99888777000166',
         ]);
+        [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment, $service);
 
-        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce');
+        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', $eligibleSales, $excludedItems);
 
         $this->assertContains(
             'O CNPJ do certificado nao pertence ao mesmo CNPJ base da loja da venda.',
@@ -105,8 +108,9 @@ class FiscalInvoicePreparationServiceTest extends TestCase
             'tb26_codigo_municipio' => '5300108',
             'tb26_municipio' => 'AGUAS LINDAS DE GOIAS',
         ]);
+        [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment, $service);
 
-        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce');
+        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', $eligibleSales, $excludedItems);
 
         $this->assertContains(
             'O codigo do municipio IBGE 5300108 nao pertence a UF GO informada na configuracao fiscal. Use um codigo iniciado por 52.',
@@ -125,8 +129,9 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         $config = $this->makeConfiguration([
             'tb26_ie' => 'ABCD',
         ]);
+        [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment, $service);
 
-        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce');
+        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', $eligibleSales, $excludedItems);
 
         $this->assertContains(
             'A inscricao estadual da unidade esta invalida para emissao fiscal. Informe apenas digitos ou ISENTO.',
@@ -178,9 +183,111 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         return $payment;
     }
 
+    public function test_build_payload_keeps_only_items_with_minimum_tax_data(): void
+    {
+        $service = $this->makeService();
+        $reflection = new ReflectionClass($service);
+        $buildPayload = $reflection->getMethod('buildPayload');
+        $buildPayload->setAccessible(true);
+
+        $eligibleProduct = new Produto([
+            'tb1_id' => 10,
+            'tb1_nome' => 'COXINHA',
+            'tb1_codbar' => '7891234567890',
+            'tb1_ncm' => '19059090',
+            'tb1_cest' => '1704901',
+            'tb1_cfop' => '5102',
+            'tb1_unidade_comercial' => 'UN',
+            'tb1_unidade_tributavel' => 'UN',
+            'tb1_origem' => 0,
+            'tb1_csosn' => '102',
+            'tb1_cst' => null,
+            'tb1_aliquota_icms' => 0,
+        ]);
+
+        $excludedProduct = new Produto([
+            'tb1_id' => 11,
+            'tb1_nome' => 'REFRIGERANTE',
+            'tb1_codbar' => '7890000000000',
+            'tb1_ncm' => null,
+            'tb1_cest' => null,
+            'tb1_cfop' => null,
+            'tb1_unidade_comercial' => 'UN',
+            'tb1_unidade_tributavel' => 'UN',
+            'tb1_origem' => 0,
+            'tb1_csosn' => null,
+            'tb1_cst' => null,
+            'tb1_aliquota_icms' => 0,
+        ]);
+
+        $unit = new \App\Models\Unidade([
+            'tb2_id' => 1,
+            'tb2_nome' => 'LOJA TESTE',
+            'tb2_cnpj' => '11.222.333/0001-44',
+        ]);
+
+        $eligibleSale = new Venda([
+            'tb1_id' => 10,
+            'produto_nome' => 'COXINHA',
+            'quantidade' => 2,
+            'valor_unitario' => 7.5,
+            'valor_total' => 15,
+        ]);
+        $eligibleSale->setRelation('produto', $eligibleProduct);
+        $eligibleSale->setRelation('unidade', $unit);
+
+        $excludedSale = new Venda([
+            'tb1_id' => 11,
+            'produto_nome' => 'REFRIGERANTE',
+            'quantidade' => 1,
+            'valor_unitario' => 10,
+            'valor_total' => 10,
+        ]);
+        $excludedSale->setRelation('produto', $excludedProduct);
+        $excludedSale->setRelation('unidade', $unit);
+
+        $payment = new VendaPagamento([
+            'tb4_id' => 99,
+            'valor_total' => 25,
+            'tipo_pagamento' => 'dinheiro',
+        ]);
+        $payment->setRelation('vendas', collect([$eligibleSale, $excludedSale]));
+
+        $config = $this->makeConfiguration();
+        [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment, $service);
+
+        $payload = $buildPayload->invoke(
+            $service,
+            $payment,
+            $config,
+            'nfce',
+            'homologacao',
+            '1',
+            1,
+            $eligibleSales,
+            $excludedItems,
+        );
+
+        $this->assertCount(1, $payload['itens']);
+        $this->assertSame('COXINHA', $payload['itens'][0]['descricao']);
+        $this->assertSame(1, $payload['itens_excluidos_qtd']);
+        $this->assertSame('REFRIGERANTE', $payload['itens_excluidos'][0]['descricao']);
+        $this->assertSame(15.0, $payload['valor_total_documento']);
+        $this->assertSame(25.0, $payload['valor_total_venda']);
+    }
+
+    private function splitSalesForFiscal(VendaPagamento $payment, FiscalInvoicePreparationService $service): array
+    {
+        $reflection = new ReflectionClass($service);
+        $splitMethod = $reflection->getMethod('splitSalesForFiscal');
+        $splitMethod->setAccessible(true);
+
+        return $splitMethod->invoke($service, $payment);
+    }
+
     private function makeConfiguration(array $overrides = []): ConfiguracaoFiscal
     {
-        return new ConfiguracaoFiscal(array_merge([
+        $attributes = array_merge([
             'tb2_id' => 1,
             'tb26_emitir_nfce' => true,
             'tb26_emitir_nfe' => false,
@@ -195,6 +302,7 @@ class FiscalInvoicePreparationServiceTest extends TestCase
             'tb26_certificado_cnpj' => '11222333000144',
             'tb26_certificado_arquivo' => 'private/fiscal-certificados/1/certificado.pfx',
             'tb26_certificado_senha' => 'segredo',
+            'tb26_certificado_senha_compartilhada' => 'segredo',
             'tb26_razao_social' => 'EMPRESA TESTE LTDA',
             'tb26_ie' => '123456789',
             'tb26_logradouro' => 'RUA 1',
@@ -204,7 +312,12 @@ class FiscalInvoicePreparationServiceTest extends TestCase
             'tb26_municipio' => 'BRASILIA',
             'tb26_uf' => 'DF',
             'tb26_cep' => '70000000',
-        ], $overrides));
+        ], $overrides);
+
+        $configuration = new ConfiguracaoFiscal();
+        $configuration->setRawAttributes($attributes, true);
+
+        return $configuration;
     }
 
     private function makeService(): FiscalInvoicePreparationService

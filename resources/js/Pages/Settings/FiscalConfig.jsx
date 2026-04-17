@@ -276,6 +276,7 @@ export default function FiscalConfig({
         tb2_id: configuration?.tb2_id ?? selectedUnitId ?? '',
         tb26_emitir_nfe: Boolean(configuration?.tb26_emitir_nfe),
         tb26_emitir_nfce: Boolean(configuration?.tb26_emitir_nfce),
+        tb26_geracao_automatica_ativa: configuration?.tb26_geracao_automatica_ativa ?? true,
         tb26_ambiente: configuration?.tb26_ambiente ?? 'homologacao',
         tb26_serie: configuration?.tb26_serie ?? '1',
         tb26_proximo_numero: configuration?.tb26_proximo_numero ?? 1,
@@ -304,6 +305,7 @@ export default function FiscalConfig({
         tb26_telefone: configuration?.tb26_telefone ?? '',
         tb26_email: configuration?.tb26_email ?? '',
     });
+    const fiscalGenerationEnabled = Boolean(data.tb26_geracao_automatica_ativa);
 
     const filter = useForm({
         unit_id: selectedUnitId ?? '',
@@ -455,6 +457,38 @@ export default function FiscalConfig({
                                         <p className="text-sm text-gray-500 dark:text-gray-300">
                                             Defina tipo de nota, ambiente e sequencia fiscal da unidade.
                                         </p>
+                                    </div>
+
+                                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/40">
+                                        <label className="flex items-center justify-between gap-4">
+                                            <div className="space-y-1">
+                                                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                                    Geracao automatica de notas fiscais
+                                                </p>
+                                                <p className="text-sm text-gray-500 dark:text-gray-300">
+                                                    Desligue para concluir vendas sem preparar nota fiscal automaticamente nesta loja.
+                                                </p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setData('tb26_geracao_automatica_ativa', !fiscalGenerationEnabled)}
+                                                className={`relative inline-flex h-8 w-14 items-center rounded-full transition ${
+                                                    fiscalGenerationEnabled ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'
+                                                }`}
+                                                aria-pressed={fiscalGenerationEnabled}
+                                            >
+                                                <span className="sr-only">Alternar geracao automatica de notas fiscais</span>
+                                                <span
+                                                    className={`inline-block h-6 w-6 transform rounded-full bg-white transition ${
+                                                        fiscalGenerationEnabled ? 'translate-x-7' : 'translate-x-1'
+                                                    }`}
+                                                />
+                                            </button>
+                                        </label>
+                                        <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                                            Status atual: {fiscalGenerationEnabled ? 'Ativa' : 'Desligada'}
+                                        </p>
+                                        <InputError message={errors.tb26_geracao_automatica_ativa} className="mt-2" />
                                     </div>
 
                                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

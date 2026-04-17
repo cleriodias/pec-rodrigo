@@ -299,6 +299,8 @@ export default function AuthenticatedLayout({ header, headerClassName = '', chil
     const pendingFiscalTransmissionItems = Array.isArray(pendingFiscalTransmissions?.items)
         ? pendingFiscalTransmissions.items
         : [];
+    const fiscalSettingsShortcutUrl =
+        pendingFiscalTransmissionItems[0]?.settings_url ?? (isAdmin ? route('settings.fiscal') : null);
 
     useEffect(() => {
         if (
@@ -850,13 +852,23 @@ export default function AuthenticatedLayout({ header, headerClassName = '', chil
                                 Notas prontas para transmissao na SEFAZ: {pendingFiscalTransmissionCount}
                             </p>
                         </div>
-                        <button
-                            type="button"
-                            onClick={() => setShowTransmitModal(false)}
-                            className="rounded-full border border-gray-200 px-3 py-1 text-sm font-semibold text-gray-600 hover:bg-gray-100"
-                        >
-                            Fechar
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                            {fiscalSettingsShortcutUrl ? (
+                                <Link
+                                    href={fiscalSettingsShortcutUrl}
+                                    className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+                                >
+                                    Abrir fiscal
+                                </Link>
+                            ) : null}
+                            <button
+                                type="button"
+                                onClick={() => setShowTransmitModal(false)}
+                                className="rounded-full border border-gray-200 px-3 py-1 text-sm font-semibold text-gray-600 hover:bg-gray-100"
+                            >
+                                Fechar
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div className="max-h-[70vh] overflow-y-auto px-6 py-4">

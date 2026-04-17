@@ -9,6 +9,12 @@ import { Head, Link, usePage } from "@inertiajs/react";
 
 export default function UnitIndex({ auth, units, canCreate = false }) {
     const { flash } = usePage().props;
+    const formatCurrency = (value) =>
+        Number(value ?? 0).toLocaleString('pt-BR', {
+            style: 'currency',
+            currency: 'BRL',
+        });
+
     const renderStatus = (status) => {
         const isActive = Number(status) === 1;
 
@@ -54,7 +60,7 @@ export default function UnitIndex({ auth, units, canCreate = false }) {
                             <tr>
                                 <td className="px-4 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">ID</td>
                                 <td className="px-4 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">Nome</td>
-                                <td className="px-4 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">{'Endere\u00E7o'}</td>
+                                <td className="px-4 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">NF</td>
                                 <td className="px-4 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">CEP</td>
                                 <td className="px-4 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">Telefone</td>
                                 <td className="px-4 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">CNPJ</td>
@@ -73,7 +79,21 @@ export default function UnitIndex({ auth, units, canCreate = false }) {
                                         {unit.tb2_nome}
                                     </td>
                                     <td className="px-4 py-2 text-sm text-gray-500 tracking-wider">
-                                        {unit.tb2_endereco}
+                                        <Link
+                                            href={route('settings.fiscal', { unit_id: unit.tb2_id })}
+                                            className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                                                unit.tb26_geracao_automatica_ativa
+                                                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                                    : 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
+                                            }`}
+                                            title={
+                                                unit.tb26_geracao_automatica_ativa
+                                                    ? 'Geracao automatica de notas ativa'
+                                                    : 'Geracao automatica de notas desligada'
+                                            }
+                                        >
+                                            {formatCurrency(unit.tb2_nf_total)}
+                                        </Link>
                                     </td>
                                     <td className="px-4 py-2 text-sm text-gray-500 tracking-wider">
                                         {unit.tb2_cep}
