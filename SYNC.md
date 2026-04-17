@@ -2175,3 +2175,37 @@
   - sincronizar esta etapa somente se o outro projeto tambem estiver seguindo a mesma investigacao;
   - esta mudanca ainda nao resolveu a transmissao final;
   - o ponto util desta etapa foi diagnostico: confirmou que o problema nao era apenas "usar SHA-1", porque a troca direta para SHA-256 reintroduziu erro de schema.
+
+## 17/04/26 - Reversao da assinatura em SHA-256 para retornar ao ponto correto de diagnostico
+
+- Arquivos alterados:
+  - `app/Support/FiscalNfceXmlService.php`
+  - `SYNC.md`
+
+- Causa identificada:
+  - a troca direta da assinatura para `SHA-256` nao resolveu o problema final e ainda trouxe de volta o `cStat 225`;
+  - isso atrapalhava o diagnostico porque reabria o erro de schema, que ja tinha sido superado quando a raiz da NFC-e foi corrigida.
+
+- O que foi feito:
+  - revertida a parte da assinatura que havia sido trocada para `SHA-256`;
+  - mantida a ordem correta da raiz da NFC-e:
+    - `infNFe`
+    - `infNFeSupl`
+    - `Signature`
+  - a assinatura voltou a sair em `SHA-1`, apenas para restaurar o ponto de comparacao que ja havia eliminado o erro de schema.
+
+- Validacao:
+  - `php -l app/Support/FiscalNfceXmlService.php`
+  - `php artisan test tests/Unit/FiscalNfceXmlServiceTest.php`
+  - retransmissao real da venda `20145`
+
+- Resultado operacional confirmado:
+  - com a reversao, a venda `20145` voltou a transmitir com:
+    - `cStat 202 - Rejeicao: Falha no reconhecimento da autoria ou integridade do arquivo digital`
+  - isso confirma novamente que:
+    - o problema de schema foi resolvido pela correcao da ordem da raiz;
+    - o proximo bloqueio real continua sendo a assinatura/autenticidade do XML.
+
+- Observacoes para sincronizar em `pec1`:
+  - sincronizar esta reversao junto com a correcao anterior da ordem da raiz;
+  - nao manter a versao `SHA-256` isolada no outro projeto, porque ela trouxe de volta o `225` neste fluxo atual.
