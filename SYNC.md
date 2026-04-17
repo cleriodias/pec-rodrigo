@@ -2297,3 +2297,31 @@
 - Observacoes para sincronizar em `pec1`:
   - sincronizar este ajuste apenas junto com a etapa anterior da migracao para `xmlseclibs`;
   - nao aplicar este trecho isoladamente em cima da assinatura manual antiga.
+
+## 17/04/26 - Reversao do xmlseclibs em RSA-SHA256 para voltar ao ponto correto do cStat 202
+
+- Arquivos alterados:
+  - `app/Support/FiscalNfceXmlService.php`
+  - `SYNC.md`
+
+- Causa identificada:
+  - a tentativa de usar `RSA-SHA256` com `Digest SHA256` dentro do `xmlseclibs` fez a transmissao real da NFC-e voltar de `cStat 202` para `cStat 225`;
+  - isso mostrou que, neste fluxo atual, o `SHA-256` reabre incompatibilidade de schema e atrapalha o diagnostico do problema real de autoria/integridade.
+
+- O que foi feito:
+  - `FiscalNfceXmlService` voltou a usar:
+    - `XMLSecurityKey::RSA_SHA1`
+    - `XMLSecurityDSig::SHA1`
+  - foi mantida a assinatura via `xmlseclibs`;
+  - foi mantida a ordem correta da raiz da NFC-e:
+    - `infNFe`
+    - `infNFeSupl`
+    - `Signature`
+
+- Efeito esperado:
+  - restaurar o estado estavel em que a NFC-e volta a passar do schema e a resposta da SEFAZ fica em `cStat 202`;
+  - a partir desse ponto, a investigacao segue no bloco `KeyInfo/X509Data` e nao mais no algoritmo de assinatura.
+
+- Observacoes para sincronizar em `pec1`:
+  - nao manter a variante `RSA-SHA256` ativa no outro projeto neste momento;
+  - sincronizar esta reversao junto com a etapa da migracao para `xmlseclibs`.
