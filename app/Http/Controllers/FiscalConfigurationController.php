@@ -102,61 +102,44 @@ class FiscalConfigurationController extends Controller
             ? Unidade::query()->find($selectedUnitId)
             : null;
 
-        $invoices = $selectedUnitId > 0
-            ? NotaFiscal::query()
-                ->where('tb2_id', $selectedUnitId)
-                ->with([
-                    'pagamento.vendas.unidade:tb2_id,tb2_nome,tb2_endereco,tb2_cnpj',
-                    'pagamento.vendas.caixa:id,name',
-                    'pagamento.vendas.valeUser:id,name',
-                    'configuracaoFiscal:tb26_id,tb26_razao_social,tb26_nome_fantasia,tb26_ie,tb26_logradouro,tb26_numero,tb26_complemento,tb26_bairro,tb26_municipio,tb26_uf,tb26_cep',
-                ])
-                ->orderByDesc('tb27_id')
-                ->limit(15)
-                ->get([
-                    'tb27_id',
-                    'tb4_id',
-                    'tb27_modelo',
-                    'tb27_ambiente',
-                    'tb27_serie',
-                    'tb27_numero',
-                    'tb27_status',
-                    'tb27_mensagem',
-                    'tb27_chave_acesso',
-                    'tb27_protocolo',
-                    'tb27_recibo',
-                    'tb27_xml_envio',
-                    'tb27_emitida_em',
-                    'created_at',
-                ])
-                ->map(fn (NotaFiscal $invoice) => [
-                    'id' => (int) $invoice->tb27_id,
-                    'payment_id' => (int) $invoice->tb4_id,
-                    'modelo' => $invoice->tb27_modelo,
-                    'ambiente' => $invoice->tb27_ambiente,
-                    'serie' => $invoice->tb27_serie,
-                    'numero' => $invoice->tb27_numero,
-                    'status' => $invoice->tb27_status,
-                    'mensagem' => $invoice->tb27_mensagem,
-                    'chave_acesso' => $invoice->tb27_chave_acesso,
-                    'protocolo' => $invoice->tb27_protocolo,
-                    'recibo' => $invoice->tb27_recibo,
-                    'emitida_em' => optional($invoice->tb27_emitida_em)->format('d/m/y H:i'),
-                    'criada_em' => optional($invoice->created_at)->format('d/m/y H:i'),
-                    'total' => round((float) ($invoice->pagamento?->valor_total ?? 0), 2),
-                    'xml_disponivel' => filled($invoice->tb27_xml_envio),
-                    'pode_regenerar' => in_array($invoice->tb27_status, [
-                        'pendente_configuracao',
-                        'erro_validacao',
-                        'erro_transmissao',
-                        'pendente_emissao',
-                    ], true),
-                    'fiscal_receipt' => $invoice->pagamento
-                        ? $this->buildFiscalReceiptPayload($invoice)
-                        : null,
-                ])
-                ->values()
-            : collect();
+        $invoiceLoadWarning = null;
+        $invoices = collect();
+
+        if ($selectedUnitId > 0) {
+            try {
+                $invoices = NotaFiscal::query()
+                    ->where('tb2_id', $selectedUnitId)
+                    ->with([
+                        'pagamento.vendas.unidade:tb2_id,tb2_nome,tb2_endereco,tb2_cnpj',
+                        'pagamento.vendas.caixa:id,name',
+                        'pagamento.vendas.valeUser:id,name',
+                        'configuracaoFiscal:tb26_id,tb26_razao_social,tb26_nome_fantasia,tb26_ie,tb26_logradouro,tb26_numero,tb26_complemento,tb26_bairro,tb26_municipio,tb26_uf,tb26_cep',
+                    ])
+                    ->orderByDesc('tb27_id')
+                    ->limit(15)
+                    ->get([
+                        'tb27_id',
+                        'tb4_id',
+                        'tb27_modelo',
+                        'tb27_ambiente',
+                        'tb27_serie',
+                        'tb27_numero',
+                        'tb27_status',
+                        'tb27_mensagem',
+                        'tb27_chave_acesso',
+                        'tb27_protocolo',
+                        'tb27_recibo',
+                        'tb27_xml_envio',
+                        'tb27_emitida_em',
+                        'created_at',
+                    ])
+                    ->map(fn (NotaFiscal $invoice) => $this->buildInvoiceListPayload($invoice))
+                    ->values();
+            } catch (Throwable) {
+                $invoiceLoadWarning = 'Nao foi possivel carregar todas as notas fiscais desta unidade neste ambiente. A tela foi mantida aberta sem derrubar a configuracao.';
+                $invoices = collect();
+            }
+        }
 
         $resolvedEndpoints = null;
 
@@ -220,6 +203,7 @@ class FiscalConfigurationController extends Controller
             'resolvedEndpoints' => $resolvedEndpoints,
             'invoices' => $invoices,
             'fiscalUnavailableMessage' => null,
+            'invoiceLoadWarning' => $invoiceLoadWarning,
         ]);
     }
 
@@ -716,6 +700,10 @@ class FiscalConfigurationController extends Controller
             return [];
         }
 
+        if (! class_exists(DOMDocument::class) || ! class_exists(DOMXPath::class)) {
+            return [];
+        }
+
         $document = new DOMDocument();
 
         if (! @$document->loadXML((string) $xml)) {
@@ -751,6 +739,46 @@ class FiscalConfigurationController extends Controller
             'faturar' => 'Faturar',
             default => strtoupper(str_replace('_', ' ', trim((string) $paymentType))) ?: 'Nao informado',
         };
+    }
+
+    private function buildInvoiceListPayload(NotaFiscal $invoice): array
+    {
+        $payload = [
+            'id' => (int) $invoice->tb27_id,
+            'payment_id' => (int) $invoice->tb4_id,
+            'modelo' => $invoice->tb27_modelo,
+            'ambiente' => $invoice->tb27_ambiente,
+            'serie' => $invoice->tb27_serie,
+            'numero' => $invoice->tb27_numero,
+            'status' => $invoice->tb27_status,
+            'mensagem' => $invoice->tb27_mensagem,
+            'chave_acesso' => $invoice->tb27_chave_acesso,
+            'protocolo' => $invoice->tb27_protocolo,
+            'recibo' => $invoice->tb27_recibo,
+            'emitida_em' => optional($invoice->tb27_emitida_em)->format('d/m/y H:i'),
+            'criada_em' => optional($invoice->created_at)->format('d/m/y H:i'),
+            'total' => round((float) ($invoice->pagamento?->valor_total ?? 0), 2),
+            'xml_disponivel' => filled($invoice->tb27_xml_envio),
+            'pode_regenerar' => in_array($invoice->tb27_status, [
+                'pendente_configuracao',
+                'erro_validacao',
+                'erro_transmissao',
+                'pendente_emissao',
+            ], true),
+            'fiscal_receipt' => null,
+        ];
+
+        if (! $invoice->pagamento) {
+            return $payload;
+        }
+
+        try {
+            $payload['fiscal_receipt'] = $this->buildFiscalReceiptPayload($invoice);
+        } catch (Throwable) {
+            $payload['fiscal_receipt'] = null;
+        }
+
+        return $payload;
     }
 
     private function fiscalTablesAreAvailable(): bool

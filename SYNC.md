@@ -1785,3 +1785,45 @@
   - sincronizar estes arquivos em conjunto;
   - esta blindagem nao substitui a necessidade de aplicar as migrations fiscais em producao;
   - ela apenas evita que a interface inteira caia enquanto o banco ainda nao foi atualizado.
+
+## 17/04/26 - Blindagem adicional de `settings/fiscal` contra XML invalido e ausencia de `dom/xml`
+
+- causa do problema:
+  - mesmo com a protecao para tabelas ausentes, `settings/fiscal` ainda podia retornar `500` em producao;
+  - o controller passou a montar o cupom fiscal de cada nota ao abrir a tela;
+  - isso depende de:
+    - `DOMDocument`;
+    - `DOMXPath`;
+    - XML fiscal valido em `tb27_xml_envio`;
+  - se o servidor estiver sem a extensao `dom/xml` ou se uma unica nota tiver XML corrompido, a tela inteira podia cair.
+
+- o que foi ajustado:
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+    - o carregamento da lista de notas passou a ficar dentro de `try/catch`;
+    - se houver falha ao carregar a listagem fiscal, a tela continua abrindo e recebe um aviso amigavel;
+    - cada nota agora e montada por um metodo isolado;
+    - a construcao do `fiscal_receipt` de cada linha tambem fica protegida por `try/catch`, impedindo que uma nota quebrada derrube toda a tela;
+    - `extractFiscalReceiptXmlData()` agora retorna vazio imediatamente quando `DOMDocument` ou `DOMXPath` nao existirem no ambiente.
+  - `resources/js/Pages/Settings/FiscalConfig.jsx`
+    - passou a exibir `invoiceLoadWarning` quando o backend conseguir abrir a tela, mas nao conseguir montar com seguranca a listagem fiscal completa.
+
+- efeito pratico:
+  - a tela `settings/fiscal` continua abrindo em producao mesmo se:
+    - o PHP estiver sem `dom/xml`;
+    - alguma nota tiver XML invalido;
+    - a montagem do cupom fiscal falhar em uma ou mais linhas.
+  - nesses casos, o impacto fica restrito ao cupom/listagem, sem derrubar a pagina toda.
+
+- validacao:
+  - validar com:
+    - `php -l app/Http/Controllers/FiscalConfigurationController.php`
+    - `cmd /c npm run build`
+
+- arquivos alterados:
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+  - `resources/js/Pages/Settings/FiscalConfig.jsx`
+  - `SYNC.md`
+
+- observacoes para sincronizar em `pec1`:
+  - sincronizar estes arquivos junto com as blindagens anteriores de producao;
+  - essa camada nao corrige o XML ruim em si, apenas impede que ele derrube a interface.
