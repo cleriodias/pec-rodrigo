@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\ConfiguracaoFiscal;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use Throwable;
@@ -76,7 +77,7 @@ class FiscalCertificateService
         }
 
         try {
-            $decryptedPassword = trim((string) $configuration->tb26_certificado_senha);
+            $decryptedPassword = trim((string) Crypt::decryptString($legacyPassword));
 
             if ($decryptedPassword === '') {
                 return [

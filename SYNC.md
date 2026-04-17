@@ -1950,3 +1950,25 @@
 - Efeito esperado:
   - quando a configuracao fiscal nao conseguir ser salva, o usuario deve ver o motivo na propria tela;
   - isso elimina o comportamento de “nao gravou e nao deu erro”.
+## 17/04/26 - Neutralizacao definitiva do campo legado tb26_certificado_senha para parar o erro "The MAC is invalid."
+
+- Arquivos alterados:
+  - `app/Models/ConfiguracaoFiscal.php`
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+  - `app/Support/FiscalCertificateService.php`
+
+- Causa confirmada:
+  - mesmo apos a criacao da senha compartilhada, o campo legado `tb26_certificado_senha` ainda permanecia no model com cast `encrypted`;
+  - isso fazia o Laravel tentar interpretar um valor criptografado antigo com `APP_KEY` diferente, disparando `The MAC is invalid.` durante o fluxo de salvar a configuracao fiscal;
+  - na pratica, o campo legado continuava contaminando o salvamento, apesar a senha compartilhada ja existir para resolver a divergencia entre ambientes.
+
+- O que foi feito:
+  - removido o cast `encrypted` de `tb26_certificado_senha` em `ConfiguracaoFiscal`;
+  - `FiscalCertificateService` passou a descriptografar o campo legado manualmente via `Crypt::decryptString()` somente quando precisar tentar aproveita-lo;
+  - `FiscalConfigurationController@update` passou a limpar `tb26_certificado_senha` sempre que a senha compartilhada estiver presente, deixando `tb26_certificado_senha_compartilhada` como fonte operacional principal;
+  - quando uma nova senha e informada, ela agora fica apenas na senha compartilhada e o campo legado e neutralizado.
+
+- Efeito esperado:
+  - salvar a configuracao fiscal em producao nao deve mais falhar por causa de `The MAC is invalid.`;
+  - a leitura operacional do certificado continua funcionando pela senha compartilhada;
+  - o campo legado deixa de interferir no comportamento entre local e Azure.

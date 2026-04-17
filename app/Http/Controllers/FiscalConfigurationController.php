@@ -311,7 +311,7 @@ class FiscalConfigurationController extends Controller
             ]);
 
             if ($request->filled('tb26_certificado_senha')) {
-                $configuration->tb26_certificado_senha = $data['tb26_certificado_senha'];
+                $configuration->tb26_certificado_senha = null;
                 $configuration->tb26_certificado_senha_compartilhada = $data['tb26_certificado_senha'];
             } elseif (! filled($configuration->getRawOriginal('tb26_certificado_senha_compartilhada'))) {
                 $resolvedPassword = $fiscalCertificateService->resolveConfigurationPassword($configuration);
@@ -319,6 +319,10 @@ class FiscalConfigurationController extends Controller
                 if ($resolvedPassword !== null && $resolvedPassword !== '') {
                     $configuration->tb26_certificado_senha_compartilhada = $resolvedPassword;
                 }
+            }
+
+            if (filled($configuration->getRawOriginal('tb26_certificado_senha_compartilhada'))) {
+                $configuration->tb26_certificado_senha = null;
             }
 
             $this->ensureCertificateMatchesUnit($configuration, $unit);

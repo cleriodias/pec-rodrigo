@@ -55,7 +55,6 @@ class ConfiguracaoFiscal extends Model
         'tb26_proximo_numero' => 'integer',
         'tb26_crt' => 'integer',
         'tb26_certificado_valido_ate' => 'datetime',
-        'tb26_certificado_senha' => 'encrypted',
     ];
 
     public function unidade(): BelongsTo
