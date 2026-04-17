@@ -203,6 +203,7 @@ export default function FiscalConfig({
     configuration = {},
     resolvedEndpoints = null,
     invoices = [],
+    fiscalUnavailableMessage = null,
 }) {
     const [printError, setPrintError] = useState('');
     const { data, setData, post, processing, errors } = useForm({
@@ -336,6 +337,11 @@ export default function FiscalConfig({
                         </div>
                     ) : (
                         <>
+                            {fiscalUnavailableMessage && (
+                                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-800 shadow dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+                                    {fiscalUnavailableMessage}
+                                </div>
+                            )}
                             <UnitCard unit={unit} />
                             <CertificateSummaryCard unit={unit} configuration={configuration} resolvedEndpoints={resolvedEndpoints} />
 

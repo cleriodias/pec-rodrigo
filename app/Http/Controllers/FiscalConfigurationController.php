@@ -18,12 +18,14 @@ use Illuminate\Http\UploadedFile;
 use App\Support\ManagementScope;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use RuntimeException;
+use Throwable;
 
 class FiscalConfigurationController extends Controller
 {
@@ -47,6 +49,49 @@ class FiscalConfigurationController extends Controller
 
         if ($selectedUnitId > 0 && ! ManagementScope::canManageUnit($user, $selectedUnitId)) {
             abort(403, 'Acesso negado.');
+        }
+
+        if (! $this->fiscalTablesAreAvailable()) {
+            return Inertia::render('Settings/FiscalConfig', [
+                'units' => $units,
+                'selectedUnitId' => $selectedUnitId > 0 ? $selectedUnitId : null,
+                'unit' => null,
+                'configuration' => [
+                    'tb2_id' => $selectedUnitId > 0 ? $selectedUnitId : null,
+                    'tb26_emitir_nfe' => false,
+                    'tb26_emitir_nfce' => false,
+                    'tb26_ambiente' => 'homologacao',
+                    'tb26_serie' => '1',
+                    'tb26_proximo_numero' => 1,
+                    'tb26_crt' => '',
+                    'tb26_csc_id' => '',
+                    'tb26_csc' => '',
+                    'tb26_certificado_tipo' => 'A1',
+                    'tb26_certificado_nome' => '',
+                    'tb26_certificado_cnpj' => '',
+                    'tb26_certificado_arquivo' => '',
+                    'tb26_certificado_valido_ate' => '',
+                    'tb26_razao_social' => '',
+                    'tb26_nome_fantasia' => '',
+                    'tb26_ie' => '',
+                    'tb26_im' => '',
+                    'tb26_cnae' => '',
+                    'tb26_logradouro' => '',
+                    'tb26_numero' => '',
+                    'tb26_complemento' => '',
+                    'tb26_bairro' => '',
+                    'tb26_codigo_municipio' => '',
+                    'tb26_municipio' => '',
+                    'tb26_uf' => '',
+                    'tb26_cep' => '',
+                    'tb26_telefone' => '',
+                    'tb26_email' => '',
+                    'has_certificate_password' => false,
+                ],
+                'resolvedEndpoints' => null,
+                'invoices' => [],
+                'fiscalUnavailableMessage' => 'As tabelas fiscais ainda nao estao disponiveis neste ambiente. Execute as migrations fiscais do deploy antes de usar esta tela.',
+            ]);
         }
 
         $configuration = $selectedUnitId > 0
@@ -174,6 +219,7 @@ class FiscalConfigurationController extends Controller
             ],
             'resolvedEndpoints' => $resolvedEndpoints,
             'invoices' => $invoices,
+            'fiscalUnavailableMessage' => null,
         ]);
     }
 
@@ -705,5 +751,15 @@ class FiscalConfigurationController extends Controller
             'faturar' => 'Faturar',
             default => strtoupper(str_replace('_', ' ', trim((string) $paymentType))) ?: 'Nao informado',
         };
+    }
+
+    private function fiscalTablesAreAvailable(): bool
+    {
+        try {
+            return Schema::hasTable('tb26_configuracoes_fiscais')
+                && Schema::hasTable('tb27_notas_fiscais');
+        } catch (Throwable) {
+            return false;
+        }
     }
 }

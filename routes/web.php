@@ -13,7 +13,6 @@ use App\Http\Controllers\ProductDiscardController;
 use App\Http\Controllers\ProductStockController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\LanchoneteTerminalController;
-use App\Http\Controllers\MobileRevenueController;
 use App\Http\Controllers\NoticeController;
 use App\Http\Controllers\OnlineController;
 use App\Http\Controllers\NewsletterSubscriptionController;
@@ -57,12 +56,14 @@ Route::get('/', function (Request $request) {
 Route::post('/newsletter', [NewsletterSubscriptionController::class, 'store'])
     ->name('newsletter.store');
 
-Route::get('/app/endpoints/mobile/revenue/dashboard', [MobileRevenueController::class, 'dashboard'])
-    ->name('mobile.revenue.dashboard');
-Route::get('/app/endpoints/mobile/revenue/daily', [MobileRevenueController::class, 'daily'])
-    ->name('mobile.revenue.daily');
-Route::get('/app/endpoints/mobile/revenue/monthly', [MobileRevenueController::class, 'monthly'])
-    ->name('mobile.revenue.monthly');
+if (class_exists(\App\Http\Controllers\MobileRevenueController::class)) {
+    Route::get('/app/endpoints/mobile/revenue/dashboard', [\App\Http\Controllers\MobileRevenueController::class, 'dashboard'])
+        ->name('mobile.revenue.dashboard');
+    Route::get('/app/endpoints/mobile/revenue/daily', [\App\Http\Controllers\MobileRevenueController::class, 'daily'])
+        ->name('mobile.revenue.daily');
+    Route::get('/app/endpoints/mobile/revenue/monthly', [\App\Http\Controllers\MobileRevenueController::class, 'monthly'])
+        ->name('mobile.revenue.monthly');
+}
 
 
 Route::get('/dashboard', function () {

@@ -1736,3 +1736,52 @@
   - alem do codigo, verificar se o arquivo fisico do certificado tambem existe no storage do `pec1`;
   - se o banco do `pec1` apontar para um `.pfx` inexistente, repor o arquivo antes de tentar regenerar as notas;
   - se houver o mesmo certificado em local externo ao storage, copiar para `storage/app/private/fiscal-certificados/<tb2_id>/...` e alinhar `tb26_certificado_arquivo` para o caminho sem o prefixo legado `private/`.
+
+## 17/04/26 - Blindagem de producao para `settings/fiscal` e rotas moveis ausentes
+
+- causa do problema:
+  - apos o deploy em producao, a tela `settings/fiscal` retornava `500 Server Error`;
+  - havia dois pontos de risco:
+    - o layout global passou a consultar `tb27_notas_fiscais` em toda requisicao autenticada para alimentar o item `Transmitir` do dropdown;
+    - o proprio controller fiscal assume que as tabelas `tb26_configuracoes_fiscais` e `tb27_notas_fiscais` ja existem no banco;
+  - se o deploy subir o codigo antes de aplicar as migrations fiscais, qualquer uma dessas consultas pode derrubar a aplicacao;
+  - alem disso, `routes/web.php` referenciava `MobileRevenueController`, mas esse controller nao existe no projeto atual, o que pode quebrar `route:list`, cache de rotas e alguns processos de deploy.
+
+- o que foi ajustado:
+  - `app/Http/Middleware/HandleInertiaRequests.php`
+    - a montagem de `pendingFiscalTransmissions` agora verifica antes se as tabelas fiscais existem;
+    - se a base fiscal ainda nao estiver pronta, retorna `count = 0` e `items = []` sem derrubar a aplicacao;
+    - tambem foi adicionada protecao com `try/catch` para evitar `500` em falhas de banco nessa etapa global.
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+    - a acao `index()` agora verifica se as tabelas fiscais ja existem;
+    - se nao existirem, a tela continua abrindo sem `500`;
+    - nesse caso, ela renderiza a pagina com listas vazias e uma mensagem explicando que as migrations fiscais ainda nao foram aplicadas no ambiente.
+  - `resources/js/Pages/Settings/FiscalConfig.jsx`
+    - passou a exibir a mensagem amigavel de indisponibilidade da base fiscal quando o backend detectar ambiente sem as tabelas novas.
+  - `routes/web.php`
+    - as rotas de `MobileRevenueController` passaram a ser registradas apenas se a classe realmente existir no projeto;
+    - isso impede que um controller ausente quebre `route:list` e etapas de deploy/caching.
+
+- efeito pratico:
+  - `settings/fiscal` deixa de cair com `500` quando o deploy sobe antes das migrations fiscais;
+  - o dropdown global continua funcionando mesmo sem a base fiscal pronta;
+  - o projeto deixa de depender da existencia do `MobileRevenueController` para montar as rotas.
+
+- validacao:
+  - validar com:
+    - `php -l app/Http/Middleware/HandleInertiaRequests.php`
+    - `php -l app/Http/Controllers/FiscalConfigurationController.php`
+    - `php -l routes/web.php`
+    - `cmd /c npm run build`
+
+- arquivos alterados:
+  - `app/Http/Middleware/HandleInertiaRequests.php`
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+  - `resources/js/Pages/Settings/FiscalConfig.jsx`
+  - `routes/web.php`
+  - `SYNC.md`
+
+- observacoes para sincronizar em `pec1`:
+  - sincronizar estes arquivos em conjunto;
+  - esta blindagem nao substitui a necessidade de aplicar as migrations fiscais em producao;
+  - ela apenas evita que a interface inteira caia enquanto o banco ainda nao foi atualizado.
