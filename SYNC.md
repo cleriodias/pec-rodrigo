@@ -1827,3 +1827,28 @@
 - observacoes para sincronizar em `pec1`:
   - sincronizar estes arquivos junto com as blindagens anteriores de producao;
   - essa camada nao corrige o XML ruim em si, apenas impede que ele derrube a interface.
+## 17/04/26 - Blindagem do salvamento fiscal em producao contra 500 no upload do certificado
+
+- Arquivos alterados:
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+  - `app/Support/FiscalCertificateService.php`
+
+- Causa identificada:
+  - em producao, o `settings/fiscal` ainda podia retornar `500` ao salvar a configuracao do certificado quando o ambiente falhasse em pontos como `OpenSSL`, escrita no storage local ou persistencia da configuracao fiscal;
+  - a tela ja estava blindada no `GET`, mas o `POST` de salvamento ainda podia deixar a excecao escapar como erro interno;
+  - se a extensao `OpenSSL` nao estiver disponivel no servidor, a leitura do `.pfx/.p12` via `openssl_pkcs12_read()` poderia falhar de forma estrutural no ambiente.
+
+- O que foi feito:
+  - `FiscalCertificateService` agora verifica explicitamente se as funcoes `openssl_pkcs12_read` e `openssl_x509_parse` existem antes de tentar ler o certificado;
+  - quando `OpenSSL` nao estiver disponivel, o sistema passa a retornar uma mensagem controlada: `A extensao OpenSSL nao esta disponivel neste ambiente para ler o certificado digital.`;
+  - `FiscalConfigurationController@update` foi blindado com `try/catch` amplo no fluxo de salvamento;
+  - `ValidationException` continua subindo normalmente para manter mensagens de formulario;
+  - falhas inesperadas de ambiente agora sao registradas com `report($exception)` e redirecionam de volta para `settings/fiscal` com mensagem amigavel, evitando `500` bruto na gravacao.
+
+- Efeito esperado em producao:
+  - salvar o certificado nao deve mais derrubar a rota com erro interno visivel ao usuario;
+  - se o problema for `OpenSSL`, storage local ou divergencia de banco, a tela deve permanecer aberta e exibir erro amigavel;
+  - a excecao continua registrada no log do Laravel/Azure para diagnostico fino do ambiente.
+
+- Observacao para sincronizacao com `pec1`:
+  - copiar exatamente essa blindagem do `update()` e da verificacao de `OpenSSL`, porque ela depende do mesmo fluxo de upload do certificado e reduz muito a dificuldade de diagnosticar falhas de producao.

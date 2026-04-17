@@ -216,106 +216,116 @@ class FiscalConfigurationController extends Controller
 
         $unitId = (int) $data['tb2_id'];
 
-        if (! ManagementScope::canManageUnit($user, $unitId)) {
-            abort(403, 'Acesso negado.');
-        }
+        try {
+            if (! ManagementScope::canManageUnit($user, $unitId)) {
+                abort(403, 'Acesso negado.');
+            }
 
-        $unit = Unidade::query()->findOrFail($unitId);
+            $unit = Unidade::query()->findOrFail($unitId);
 
-        $configuration = ConfiguracaoFiscal::query()->firstOrNew([
-            'tb2_id' => $unitId,
-        ]);
+            $configuration = ConfiguracaoFiscal::query()->firstOrNew([
+                'tb2_id' => $unitId,
+            ]);
 
-        if ($request->boolean('remover_certificado') && filled($configuration->tb26_certificado_arquivo)) {
-            Storage::delete($configuration->tb26_certificado_arquivo);
-            $configuration->tb26_certificado_arquivo = null;
-            $configuration->tb26_certificado_senha = null;
-        }
-
-        if ($request->hasFile('tb26_certificado_arquivo_upload')) {
-            if (filled($configuration->tb26_certificado_arquivo)) {
+            if ($request->boolean('remover_certificado') && filled($configuration->tb26_certificado_arquivo)) {
                 Storage::delete($configuration->tb26_certificado_arquivo);
-            }
-
-            $file = $request->file('tb26_certificado_arquivo_upload');
-            $password = trim((string) ($data['tb26_certificado_senha'] ?? ''));
-
-            if ($password === '' && ! filled($configuration->tb26_certificado_senha)) {
-                throw ValidationException::withMessages([
-                    'tb26_certificado_senha' => 'Informe a senha do certificado para validar o arquivo enviado.',
-                ]);
-            }
-
-            $path = $file->storeAs(
-                'fiscal-certificados/' . $unitId,
-                'certificado-' . now()->format('YmdHis') . '.' . $file->getClientOriginalExtension()
-            );
-
-            $configuration->tb26_certificado_arquivo = $path;
-
-            try {
-                $inspection = $fiscalCertificateService->inspectStoredCertificate(
-                    $path,
-                    $password !== '' ? $password : (string) $configuration->tb26_certificado_senha
-                );
-            } catch (RuntimeException $exception) {
-                Storage::delete($path);
                 $configuration->tb26_certificado_arquivo = null;
-
-                throw ValidationException::withMessages([
-                    'tb26_certificado_arquivo_upload' => $exception->getMessage(),
-                ]);
+                $configuration->tb26_certificado_senha = null;
             }
 
-            $configuration->tb26_certificado_nome = $inspection['common_name'] ?? $configuration->tb26_certificado_nome;
-            $configuration->tb26_certificado_cnpj = $inspection['cnpj'] ?? $configuration->tb26_certificado_cnpj;
-            $configuration->tb26_certificado_valido_ate = isset($inspection['valid_to'])
-                ? now()->setTimestamp((int) $inspection['valid_to'])
-                : null;
+            if ($request->hasFile('tb26_certificado_arquivo_upload')) {
+                if (filled($configuration->tb26_certificado_arquivo)) {
+                    Storage::delete($configuration->tb26_certificado_arquivo);
+                }
+
+                $file = $request->file('tb26_certificado_arquivo_upload');
+                $password = trim((string) ($data['tb26_certificado_senha'] ?? ''));
+
+                if ($password === '' && ! filled($configuration->tb26_certificado_senha)) {
+                    throw ValidationException::withMessages([
+                        'tb26_certificado_senha' => 'Informe a senha do certificado para validar o arquivo enviado.',
+                    ]);
+                }
+
+                $path = $file->storeAs(
+                    'fiscal-certificados/' . $unitId,
+                    'certificado-' . now()->format('YmdHis') . '.' . $file->getClientOriginalExtension()
+                );
+
+                $configuration->tb26_certificado_arquivo = $path;
+
+                try {
+                    $inspection = $fiscalCertificateService->inspectStoredCertificate(
+                        $path,
+                        $password !== '' ? $password : (string) $configuration->tb26_certificado_senha
+                    );
+                } catch (RuntimeException $exception) {
+                    Storage::delete($path);
+                    $configuration->tb26_certificado_arquivo = null;
+
+                    throw ValidationException::withMessages([
+                        'tb26_certificado_arquivo_upload' => $exception->getMessage(),
+                    ]);
+                }
+
+                $configuration->tb26_certificado_nome = $inspection['common_name'] ?? $configuration->tb26_certificado_nome;
+                $configuration->tb26_certificado_cnpj = $inspection['cnpj'] ?? $configuration->tb26_certificado_cnpj;
+                $configuration->tb26_certificado_valido_ate = isset($inspection['valid_to'])
+                    ? now()->setTimestamp((int) $inspection['valid_to'])
+                    : null;
+            }
+
+            $configuration->fill([
+                'tb26_emitir_nfe' => (bool) ($data['tb26_emitir_nfe'] ?? false),
+                'tb26_emitir_nfce' => (bool) ($data['tb26_emitir_nfce'] ?? false),
+                'tb26_ambiente' => $data['tb26_ambiente'],
+                'tb26_serie' => trim((string) $data['tb26_serie']),
+                'tb26_proximo_numero' => (int) $data['tb26_proximo_numero'],
+                'tb26_crt' => filled($data['tb26_crt'] ?? null) ? (int) $data['tb26_crt'] : null,
+                'tb26_csc_id' => $this->nullableTrim($data['tb26_csc_id'] ?? null),
+                'tb26_csc' => $this->nullableTrim($data['tb26_csc'] ?? null),
+                'tb26_certificado_tipo' => $this->nullableTrim($data['tb26_certificado_tipo'] ?? null) ?? 'A1',
+                'tb26_certificado_nome' => $this->nullableTrim($data['tb26_certificado_nome'] ?? null) ?? $configuration->tb26_certificado_nome,
+                'tb26_certificado_cnpj' => $this->onlyDigits($data['tb26_certificado_cnpj'] ?? null) ?? $configuration->tb26_certificado_cnpj,
+                'tb26_certificado_valido_ate' => $configuration->tb26_certificado_valido_ate,
+                'tb26_razao_social' => $this->nullableTrim($data['tb26_razao_social'] ?? null),
+                'tb26_nome_fantasia' => $this->nullableTrim($data['tb26_nome_fantasia'] ?? null),
+                'tb26_ie' => $this->normalizeStateRegistration($data['tb26_ie'] ?? null),
+                'tb26_im' => $this->nullableTrim($data['tb26_im'] ?? null),
+                'tb26_cnae' => $this->onlyDigits($data['tb26_cnae'] ?? null),
+                'tb26_logradouro' => $this->nullableTrim($data['tb26_logradouro'] ?? null),
+                'tb26_numero' => $this->nullableTrim($data['tb26_numero'] ?? null),
+                'tb26_complemento' => $this->nullableTrim($data['tb26_complemento'] ?? null),
+                'tb26_bairro' => $this->nullableTrim($data['tb26_bairro'] ?? null),
+                'tb26_codigo_municipio' => $this->onlyDigits($data['tb26_codigo_municipio'] ?? null),
+                'tb26_municipio' => $this->nullableTrim($data['tb26_municipio'] ?? null),
+                'tb26_uf' => strtoupper((string) ($data['tb26_uf'] ?? '')),
+                'tb26_cep' => $this->onlyDigits($data['tb26_cep'] ?? null),
+                'tb26_telefone' => $this->nullableTrim($data['tb26_telefone'] ?? null),
+                'tb26_email' => $this->nullableTrim($data['tb26_email'] ?? null),
+            ]);
+
+            if ($request->filled('tb26_certificado_senha')) {
+                $configuration->tb26_certificado_senha = $data['tb26_certificado_senha'];
+            }
+
+            $this->ensureCertificateMatchesUnit($configuration, $unit);
+            $this->ensureMunicipalityCodeMatchesUf($configuration, $fiscalMunicipalityCodeService);
+
+            $configuration->save();
+
+            return redirect()
+                ->route('settings.fiscal', ['unit_id' => $unitId])
+                ->with('success', 'Configuracao fiscal atualizada com sucesso.');
+        } catch (ValidationException $exception) {
+            throw $exception;
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return redirect()
+                ->route('settings.fiscal', ['unit_id' => $unitId])
+                ->with('error', 'Nao foi possivel salvar a configuracao fiscal neste ambiente. Verifique o suporte a OpenSSL, o armazenamento local do servidor e as migrations fiscais do deploy.');
         }
-
-        $configuration->fill([
-            'tb26_emitir_nfe' => (bool) ($data['tb26_emitir_nfe'] ?? false),
-            'tb26_emitir_nfce' => (bool) ($data['tb26_emitir_nfce'] ?? false),
-            'tb26_ambiente' => $data['tb26_ambiente'],
-            'tb26_serie' => trim((string) $data['tb26_serie']),
-            'tb26_proximo_numero' => (int) $data['tb26_proximo_numero'],
-            'tb26_crt' => filled($data['tb26_crt'] ?? null) ? (int) $data['tb26_crt'] : null,
-            'tb26_csc_id' => $this->nullableTrim($data['tb26_csc_id'] ?? null),
-            'tb26_csc' => $this->nullableTrim($data['tb26_csc'] ?? null),
-            'tb26_certificado_tipo' => $this->nullableTrim($data['tb26_certificado_tipo'] ?? null) ?? 'A1',
-            'tb26_certificado_nome' => $this->nullableTrim($data['tb26_certificado_nome'] ?? null) ?? $configuration->tb26_certificado_nome,
-            'tb26_certificado_cnpj' => $this->onlyDigits($data['tb26_certificado_cnpj'] ?? null) ?? $configuration->tb26_certificado_cnpj,
-            'tb26_certificado_valido_ate' => $configuration->tb26_certificado_valido_ate,
-            'tb26_razao_social' => $this->nullableTrim($data['tb26_razao_social'] ?? null),
-            'tb26_nome_fantasia' => $this->nullableTrim($data['tb26_nome_fantasia'] ?? null),
-            'tb26_ie' => $this->normalizeStateRegistration($data['tb26_ie'] ?? null),
-            'tb26_im' => $this->nullableTrim($data['tb26_im'] ?? null),
-            'tb26_cnae' => $this->onlyDigits($data['tb26_cnae'] ?? null),
-            'tb26_logradouro' => $this->nullableTrim($data['tb26_logradouro'] ?? null),
-            'tb26_numero' => $this->nullableTrim($data['tb26_numero'] ?? null),
-            'tb26_complemento' => $this->nullableTrim($data['tb26_complemento'] ?? null),
-            'tb26_bairro' => $this->nullableTrim($data['tb26_bairro'] ?? null),
-            'tb26_codigo_municipio' => $this->onlyDigits($data['tb26_codigo_municipio'] ?? null),
-            'tb26_municipio' => $this->nullableTrim($data['tb26_municipio'] ?? null),
-            'tb26_uf' => strtoupper((string) ($data['tb26_uf'] ?? '')),
-            'tb26_cep' => $this->onlyDigits($data['tb26_cep'] ?? null),
-            'tb26_telefone' => $this->nullableTrim($data['tb26_telefone'] ?? null),
-            'tb26_email' => $this->nullableTrim($data['tb26_email'] ?? null),
-        ]);
-
-        if ($request->filled('tb26_certificado_senha')) {
-            $configuration->tb26_certificado_senha = $data['tb26_certificado_senha'];
-        }
-
-        $this->ensureCertificateMatchesUnit($configuration, $unit);
-        $this->ensureMunicipalityCodeMatchesUf($configuration, $fiscalMunicipalityCodeService);
-
-        $configuration->save();
-
-        return redirect()
-            ->route('settings.fiscal', ['unit_id' => $unitId])
-            ->with('success', 'Configuracao fiscal atualizada com sucesso.');
     }
 
     public function reprocess(

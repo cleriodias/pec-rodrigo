@@ -40,6 +40,10 @@ class FiscalCertificateService
 
     public function inspectCertificateFile(string $absolutePath, string $password): array
     {
+        if (! function_exists('openssl_pkcs12_read') || ! function_exists('openssl_x509_parse')) {
+            throw new RuntimeException('A extensao OpenSSL nao esta disponivel neste ambiente para ler o certificado digital.');
+        }
+
         $content = @file_get_contents($absolutePath);
 
         if ($content === false) {
