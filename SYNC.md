@@ -2105,3 +2105,40 @@
   - sincronizar exatamente os tres arquivos listados acima;
   - nao depende de migration;
   - a regra de bloqueio no backend e obrigatoria e nao deve ser removida no outro projeto.
+
+## 17/04/26 - Correcao da ordem da raiz da NFC-e conforme o leiaute oficial
+
+- Arquivos alterados:
+  - `app/Support/FiscalNfceXmlService.php`
+  - `tests/Unit/FiscalNfceXmlServiceTest.php`
+
+- Causa confirmada:
+  - a NFC-e estava sendo gerada com a raiz em ordem:
+    - `infNFe`
+    - `Signature`
+    - `infNFeSupl`
+  - pelo leiaute oficial consultado no MOC 7.0, o grupo `infNFeSupl` deve vir antes da `Signature`;
+  - isso era a causa real do `cStat 225 - Rejeicao: Falha no Schema XML do lote de NFe`.
+
+- O que foi feito:
+  - `FiscalNfceXmlService` passou a montar a NFC-e nesta ordem:
+    - `infNFe`
+    - `infNFeSupl`
+    - `Signature`
+  - o teste unitario do XML fiscal foi ajustado para validar a ordem oficial;
+  - como o ambiente de teste local nao conseguiu gerar uma chave RSA temporaria com OpenSSL, o teste de assinatura completa ficou preparado para `skip` quando a capacidade de assinatura nao estiver disponivel.
+
+- Validacao:
+  - `php artisan test tests/Unit/FiscalNfceXmlServiceTest.php`
+
+- Resultado operacional confirmado:
+  - depois de reprocessar a venda `20145` com a nova ordem, o erro mudou de:
+    - `cStat 225 - Rejeicao: Falha no Schema XML do lote de NFe`
+  - para:
+    - `cStat 202 - Rejeicao: Falha no reconhecimento da autoria ou integridade do arquivo digital`
+  - isso confirma que o problema de schema foi resolvido e o proximo bloqueio passou a ser a assinatura/autenticidade do XML.
+
+- Observacoes para sincronizar em `pec1`:
+  - sincronizar exatamente os arquivos listados acima;
+  - depois da sincronizacao, regenerar as notas antigas para que o XML seja refeito com a ordem correta;
+  - se o banco compartilhado estiver apontando para um nome de certificado inexistente no storage local, alinhar tambem o arquivo fisico antes de testar transmissao.

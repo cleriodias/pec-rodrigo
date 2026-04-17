@@ -3119,3 +3119,33 @@ Stack trace:
 #21 C:\\xampp\\htdocs\\pec-rodrigo\\artisan(13): Illuminate\\Foundation\\Application->handleCommand(Object(Symfony\\Component\\Console\\Input\\ArgvInput))
 #22 {main}
 "} 
+[2026-04-17 03:29:18] local.ERROR: Undefined constant "STDERR" {"exception":"[object] (Error(code: 0): Undefined constant \"STDERR\" at Standard input code:13)
+[stacktrace]
+#0 {main}
+"} 
+[2026-04-17 03:32:03] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'paoecafe83.tb4_venda_pagamentos' doesn't exist (Connection: mysql, SQL: select * from `tb4_venda_pagamentos` where `tb4_id` = 20145 limit 1) {"exception":"[object] (Illuminate\\Database\\QueryException(code: 42S02): SQLSTATE[42S02]: Base table or view not found: 1146 Table 'paoecafe83.tb4_venda_pagamentos' doesn't exist (Connection: mysql, SQL: select * from `tb4_venda_pagamentos` where `tb4_id` = 20145 limit 1) at C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Connection.php:825)
+[stacktrace]
+#0 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Connection.php(779): Illuminate\\Database\\Connection->runQueryCallback('select * from `...', Array, Object(Closure))
+#1 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Connection.php(398): Illuminate\\Database\\Connection->run('select * from `...', Array, Object(Closure))
+#2 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Query\\Builder.php(3132): Illuminate\\Database\\Connection->select('select * from `...', Array, true)
+#3 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Query\\Builder.php(3117): Illuminate\\Database\\Query\\Builder->runSelect()
+#4 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Query\\Builder.php(3705): Illuminate\\Database\\Query\\Builder->Illuminate\\Database\\Query\\{closure}()
+#5 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Query\\Builder.php(3116): Illuminate\\Database\\Query\\Builder->onceWithColumns(Array, Object(Closure))
+#6 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Concerns\\BuildsQueries.php(344): Illuminate\\Database\\Query\\Builder->get(Array)
+#7 Standard input code(7): Illuminate\\Database\\Query\\Builder->first()
+#8 {main}
+
+[previous exception] [object] (PDOException(code: 42S02): SQLSTATE[42S02]: Base table or view not found: 1146 Table 'paoecafe83.tb4_venda_pagamentos' doesn't exist at C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Connection.php:407)
+[stacktrace]
+#0 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Connection.php(407): PDO->prepare('select * from `...')
+#1 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Connection.php(812): Illuminate\\Database\\Connection->Illuminate\\Database\\{closure}('select * from `...', Array)
+#2 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Connection.php(779): Illuminate\\Database\\Connection->runQueryCallback('select * from `...', Array, Object(Closure))
+#3 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Connection.php(398): Illuminate\\Database\\Connection->run('select * from `...', Array, Object(Closure))
+#4 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Query\\Builder.php(3132): Illuminate\\Database\\Connection->select('select * from `...', Array, true)
+#5 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Query\\Builder.php(3117): Illuminate\\Database\\Query\\Builder->runSelect()
+#6 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Query\\Builder.php(3705): Illuminate\\Database\\Query\\Builder->Illuminate\\Database\\Query\\{closure}()
+#7 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Query\\Builder.php(3116): Illuminate\\Database\\Query\\Builder->onceWithColumns(Array, Object(Closure))
+#8 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Concerns\\BuildsQueries.php(344): Illuminate\\Database\\Query\\Builder->get(Array)
+#9 Standard input code(7): Illuminate\\Database\\Query\\Builder->first()
+#10 {main}
+"} 

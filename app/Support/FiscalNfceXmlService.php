@@ -78,8 +78,8 @@ class FiscalNfceXmlService
         $this->appendTransport($document, $infNfe);
         $this->appendPayment($document, $infNfe, $payment);
         $this->appendAdditionalInfo($document, $infNfe, $payment, $unit->tb2_nome);
-        $this->signDocument($document, $infNfe, $certificateData);
         $this->appendSupplementalInfo($document, $nfe, $configuration, $accessKey, $endpoints);
+        $this->signDocument($document, $infNfe, $certificateData);
 
         return [
             'xml' => $document->saveXML(),

@@ -3,7 +3,9 @@
 namespace Tests\Unit;
 
 use App\Models\ConfiguracaoFiscal;
+use App\Models\NotaFiscal;
 use App\Models\Produto;
+use App\Models\Unidade;
 use App\Models\VendaPagamento;
 use App\Support\FiscalNfceXmlService;
 use App\Support\FiscalWebserviceResolverService;
@@ -198,39 +200,75 @@ class FiscalNfceXmlServiceTest extends TestCase
         $this->assertStringNotContainsString('<xPag>', $valeXml);
     }
 
-    public function test_append_supplemental_info_keeps_existing_signature_before_it_in_nfe_root(): void
+    public function test_build_signed_xml_keeps_official_root_order_with_supplemental_info_before_signature(): void
     {
         $service = new FiscalNfceXmlService(new FiscalWebserviceResolverService());
-        $reflection = new ReflectionClass($service);
-        $appendSupplementalInfo = $reflection->getMethod('appendSupplementalInfo');
-        $appendSupplementalInfo->setAccessible(true);
-
-        $document = new DOMDocument('1.0', 'UTF-8');
-        $nfe = $document->createElementNS('http://www.portalfiscal.inf.br/nfe', 'NFe');
-        $document->appendChild($nfe);
-        $infNfe = $document->createElement('infNFe');
-        $infNfe->setAttribute('Id', 'NFe52260411222333000144650010000012341000012345');
-        $infNfe->setAttribute('versao', '4.00');
-        $nfe->appendChild($infNfe);
-        $infNfe->appendChild($document->createElement('ide'));
-        $signature = $document->createElementNS('http://www.w3.org/2000/09/xmldsig#', 'Signature');
-        $nfe->appendChild($signature);
 
         $config = new ConfiguracaoFiscal([
             'tb26_ambiente' => 'homologacao',
+            'tb26_uf' => 'GO',
+            'tb26_codigo_municipio' => '5200258',
+            'tb26_serie' => '1',
+            'tb26_crt' => 1,
+            'tb26_razao_social' => 'EMPRESA TESTE LTDA',
+            'tb26_nome_fantasia' => 'EMPRESA TESTE',
+            'tb26_logradouro' => 'RUA 1',
+            'tb26_numero' => '10',
+            'tb26_bairro' => 'CENTRO',
+            'tb26_municipio' => 'AGUAS LINDAS DE GOIAS',
+            'tb26_cep' => '72920076',
+            'tb26_ie' => '123456789',
+            'tb26_csc_id' => '1',
+            'tb26_csc' => 'ABC123',
         ]);
 
-        $appendSupplementalInfo->invoke(
-            $service,
-            $document,
-            $nfe,
-            $config,
-            '52260411222333000144650010000012341000012345',
-            [
-                'qr_code_url' => 'https://nfewebhomolog.sefaz.go.gov.br/nfeweb/sites/nfce/danfeNFCe',
-                'consultation_url' => 'https://nfewebhomolog.sefaz.go.gov.br/nfeweb/sites/nfe/consulta-completa',
-            ],
-        );
+        $product = new Produto([
+            'tb1_ncm' => '19059090',
+            'tb1_cfop' => '5102',
+            'tb1_unidade_comercial' => 'UN',
+            'tb1_unidade_tributavel' => 'UN',
+            'tb1_origem' => 0,
+            'tb1_csosn' => '102',
+            'tb1_codbar' => null,
+        ]);
+
+        $sale = new Venda([
+            'tb1_id' => 1,
+            'id_unidade' => 3,
+            'produto_nome' => 'PAO DE SAL',
+            'quantidade' => 2,
+            'valor_unitario' => 1.5,
+            'valor_total' => 3.0,
+        ]);
+        $sale->setRelation('produto', $product);
+        $sale->setRelation('unidade', new Unidade([
+            'tb2_id' => 3,
+            'tb2_nome' => 'BARRAGEM 1',
+            'tb2_cnpj' => '62074471000156',
+        ]));
+
+        $payment = new VendaPagamento([
+            'tb4_id' => 999,
+            'tipo_pagamento' => 'dinheiro',
+            'valor_total' => 3.0,
+            'troco' => 0,
+        ]);
+        $payment->setRelation('vendas', collect([$sale]));
+
+        $invoice = new NotaFiscal([
+            'tb27_modelo' => 'nfce',
+            'tb27_serie' => '1',
+            'tb27_numero' => 1,
+        ]);
+
+        $certificateData = $this->createCertificateData();
+
+        $result = $service->buildSignedXml($invoice, $payment, $configuration, $certificateData);
+
+        $document = new DOMDocument();
+        $loaded = @$document->loadXML($result['xml']);
+
+        $this->assertTrue($loaded);
 
         $rootChildren = [];
 
@@ -240,6 +278,55 @@ class FiscalNfceXmlServiceTest extends TestCase
             }
         }
 
-        $this->assertSame(['infNFe', 'Signature', 'infNFeSupl'], $rootChildren);
+        $this->assertSame(['infNFe', 'infNFeSupl', 'Signature'], $rootChildren);
+    }
+
+    private function createCertificateData(): array
+    {
+        if (! function_exists('openssl_pkey_new') || ! function_exists('openssl_csr_new') || ! function_exists('openssl_csr_sign')) {
+            $this->markTestSkipped('OpenSSL nao esta disponivel neste ambiente para gerar um certificado temporario de teste.');
+        }
+
+        $privateKey = openssl_pkey_new([
+            'private_key_type' => OPENSSL_KEYTYPE_RSA,
+            'private_key_bits' => 2048,
+        ]);
+
+        if ($privateKey === false) {
+            $this->markTestSkipped('O ambiente atual nao permitiu gerar uma chave RSA temporaria para o teste de assinatura.');
+        }
+
+        $csr = openssl_csr_new([
+            'commonName' => 'TESTE NFC-E',
+            'organizationName' => 'PEC',
+            'countryName' => 'BR',
+        ], $privateKey);
+
+        if ($csr === false) {
+            $this->markTestSkipped('O ambiente atual nao permitiu gerar um CSR temporario para o teste de assinatura.');
+        }
+
+        $certificate = openssl_csr_sign($csr, null, $privateKey, 1);
+
+        if ($certificate === false) {
+            $this->markTestSkipped('O ambiente atual nao permitiu assinar um certificado temporario para o teste de assinatura.');
+        }
+
+        $certificatePem = '';
+        $privateKeyPem = '';
+
+        $this->assertTrue(openssl_x509_export($certificate, $certificatePem));
+        $this->assertTrue(openssl_pkey_export($privateKey, $privateKeyPem));
+
+        return [
+            'certificate_pem' => $certificatePem,
+            'private_key_pem' => $privateKeyPem,
+            'public_certificate_base64' => trim(str_replace([
+                '-----BEGIN CERTIFICATE-----',
+                '-----END CERTIFICATE-----',
+                "\r",
+                "\n",
+            ], '', $certificatePem)),
+        ];
     }
 }
