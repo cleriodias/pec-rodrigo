@@ -31,6 +31,7 @@ class FiscalConfigurationController extends Controller
 {
     public function index(
         Request $request,
+        FiscalCertificateService $fiscalCertificateService,
         FiscalWebserviceResolverService $fiscalWebserviceResolverService,
     ): Response
     {
@@ -136,10 +137,10 @@ class FiscalConfigurationController extends Controller
                 $units,
                 $selectedUnitId,
                 $unit,
-                $this->buildFiscalConfigurationPayload($configuration, $unit, $selectedUnitId),
+                $this->buildFiscalConfigurationPayload($configuration, $unit, $selectedUnitId, $fiscalCertificateService),
                 $invoices,
                 $resolvedEndpoints,
-                $this->buildConfigurationDiagnostics($configuration, $selectedUnitId),
+                $this->buildConfigurationDiagnostics($configuration, $selectedUnitId, $fiscalCertificateService),
                 null,
                 $invoiceLoadWarning,
             );
@@ -234,6 +235,7 @@ class FiscalConfigurationController extends Controller
                 Storage::delete($configuration->tb26_certificado_arquivo);
                 $configuration->tb26_certificado_arquivo = null;
                 $configuration->tb26_certificado_senha = null;
+                $configuration->tb26_certificado_senha_compartilhada = null;
             }
 
             if ($request->hasFile('tb26_certificado_arquivo_upload')) {
@@ -244,7 +246,7 @@ class FiscalConfigurationController extends Controller
                 $file = $request->file('tb26_certificado_arquivo_upload');
                 $password = trim((string) ($data['tb26_certificado_senha'] ?? ''));
 
-                if ($password === '' && ! filled($configuration->tb26_certificado_senha)) {
+                if ($password === '' && ! $fiscalCertificateService->hasStoredPassword($configuration)) {
                     throw ValidationException::withMessages([
                         'tb26_certificado_senha' => 'Informe a senha do certificado para validar o arquivo enviado.',
                     ]);
@@ -260,7 +262,7 @@ class FiscalConfigurationController extends Controller
                 try {
                     $inspection = $fiscalCertificateService->inspectStoredCertificate(
                         $path,
-                        $password !== '' ? $password : (string) $configuration->tb26_certificado_senha
+                        $password !== '' ? $password : (string) $fiscalCertificateService->resolveConfigurationPassword($configuration)
                     );
                 } catch (RuntimeException $exception) {
                     Storage::delete($path);
@@ -310,6 +312,13 @@ class FiscalConfigurationController extends Controller
 
             if ($request->filled('tb26_certificado_senha')) {
                 $configuration->tb26_certificado_senha = $data['tb26_certificado_senha'];
+                $configuration->tb26_certificado_senha_compartilhada = $data['tb26_certificado_senha'];
+            } elseif (! filled($configuration->getRawOriginal('tb26_certificado_senha_compartilhada'))) {
+                $resolvedPassword = $fiscalCertificateService->resolveConfigurationPassword($configuration);
+
+                if ($resolvedPassword !== null && $resolvedPassword !== '') {
+                    $configuration->tb26_certificado_senha_compartilhada = $resolvedPassword;
+                }
             }
 
             $this->ensureCertificateMatchesUnit($configuration, $unit);
@@ -824,6 +833,7 @@ class FiscalConfigurationController extends Controller
         ?ConfiguracaoFiscal $configuration,
         ?Unidade $unit,
         int $selectedUnitId,
+        FiscalCertificateService $fiscalCertificateService,
     ): array {
         return [
             'tb2_id' => $selectedUnitId > 0 ? $selectedUnitId : null,
@@ -857,7 +867,7 @@ class FiscalConfigurationController extends Controller
             'tb26_cep' => $configuration?->tb26_cep ?? '',
             'tb26_telefone' => $configuration?->tb26_telefone ?? '',
             'tb26_email' => $configuration?->tb26_email ?? '',
-            'has_certificate_password' => $this->configurationHasCertificatePassword($configuration),
+            'has_certificate_password' => $configuration ? $fiscalCertificateService->hasStoredPassword($configuration) : false,
         ];
     }
 
@@ -871,12 +881,18 @@ class FiscalConfigurationController extends Controller
             'storage_exists' => false,
             'legacy_storage_exists' => false,
             'raw_password_present' => false,
+            'shared_password_present' => false,
             'password_decryptable' => null,
+            'password_source' => null,
             'password_status' => 'Configuracao fiscal ainda nao encontrada no banco.',
         ];
     }
 
-    private function buildConfigurationDiagnostics(?ConfiguracaoFiscal $configuration, int $selectedUnitId): array
+    private function buildConfigurationDiagnostics(
+        ?ConfiguracaoFiscal $configuration,
+        int $selectedUnitId,
+        FiscalCertificateService $fiscalCertificateService,
+    ): array
     {
         $diagnostics = $this->defaultConfigurationDiagnostics($selectedUnitId);
 
@@ -886,7 +902,8 @@ class FiscalConfigurationController extends Controller
 
         $storagePath = $this->stringOrNull($configuration->tb26_certificado_arquivo);
         $rawPassword = trim((string) $configuration->getRawOriginal('tb26_certificado_senha'));
-        $passwordDecryption = $this->canDecryptConfigurationCertificatePassword($configuration);
+        $sharedPassword = trim((string) $configuration->getRawOriginal('tb26_certificado_senha_compartilhada'));
+        $passwordDecryption = $fiscalCertificateService->resolveConfigurationPasswordDetails($configuration);
 
         $diagnostics['configuration_found'] = true;
         $diagnostics['configuration_id'] = (int) $configuration->tb26_id;
@@ -895,54 +912,12 @@ class FiscalConfigurationController extends Controller
         $diagnostics['legacy_storage_exists'] = $storagePath && ! str_starts_with($storagePath, 'private/')
             ? Storage::exists('private/' . $storagePath)
             : false;
-        $diagnostics['raw_password_present'] = $rawPassword !== '';
+        $diagnostics['raw_password_present'] = $rawPassword !== '' || $sharedPassword !== '';
+        $diagnostics['shared_password_present'] = $sharedPassword !== '';
         $diagnostics['password_decryptable'] = $passwordDecryption['decryptable'];
         $diagnostics['password_status'] = $passwordDecryption['message'];
+        $diagnostics['password_source'] = $passwordDecryption['source'];
 
         return $diagnostics;
-    }
-
-    private function configurationHasCertificatePassword(?ConfiguracaoFiscal $configuration): bool
-    {
-        if (! $configuration) {
-            return false;
-        }
-
-        return trim((string) $configuration->getRawOriginal('tb26_certificado_senha')) !== '';
-    }
-
-    private function canDecryptConfigurationCertificatePassword(?ConfiguracaoFiscal $configuration): array
-    {
-        if (! $configuration) {
-            return [
-                'decryptable' => null,
-                'message' => 'Configuracao fiscal ainda nao encontrada no banco.',
-            ];
-        }
-
-        $rawPassword = trim((string) $configuration->getRawOriginal('tb26_certificado_senha'));
-
-        if ($rawPassword === '') {
-            return [
-                'decryptable' => null,
-                'message' => 'Nenhuma senha de certificado foi salva no banco.',
-            ];
-        }
-
-        try {
-            $decryptedPassword = (string) $configuration->tb26_certificado_senha;
-
-            return [
-                'decryptable' => $decryptedPassword !== '',
-                'message' => $decryptedPassword !== ''
-                    ? 'A senha criptografada do certificado conseguiu ser lida neste ambiente.'
-                    : 'A senha criptografada existe no banco, mas retornou vazia ao tentar ler neste ambiente.',
-            ];
-        } catch (Throwable $exception) {
-            return [
-                'decryptable' => false,
-                'message' => 'A senha criptografada existe no banco, mas nao conseguiu ser lida neste ambiente. Verifique se a APP_KEY da producao coincide com a do ambiente que salvou a configuracao.',
-            ];
-        }
     }
 }

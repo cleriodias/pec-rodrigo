@@ -227,13 +227,16 @@ class FiscalInvoicePreparationService
             'tb26_certificado_nome' => 'Nome do certificado',
             'tb26_certificado_cnpj' => 'CNPJ do certificado',
             'tb26_certificado_arquivo' => 'Arquivo do certificado A1',
-            'tb26_certificado_senha' => 'Senha do certificado',
         ];
 
         foreach ($requiredConfigFields as $field => $label) {
             if (blank($config->{$field})) {
                 $errors[] = sprintf('%s nao configurado na unidade.', $label);
             }
+        }
+
+        if ($this->fiscalCertificateService->resolveConfigurationPassword($config) === null) {
+            $errors[] = 'Senha do certificado nao configurada na unidade ou ilegivel neste ambiente.';
         }
 
         if (! $config->tb26_emitir_nfe && ! $config->tb26_emitir_nfce) {

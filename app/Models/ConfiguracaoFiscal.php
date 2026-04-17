@@ -31,6 +31,7 @@ class ConfiguracaoFiscal extends Model
         'tb26_certificado_valido_ate',
         'tb26_certificado_arquivo',
         'tb26_certificado_senha',
+        'tb26_certificado_senha_compartilhada',
         'tb26_razao_social',
         'tb26_nome_fantasia',
         'tb26_ie',

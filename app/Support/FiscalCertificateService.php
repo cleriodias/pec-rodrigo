@@ -3,8 +3,9 @@
 namespace App\Support;
 
 use App\Models\ConfiguracaoFiscal;
-use RuntimeException;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
+use Throwable;
 
 class FiscalCertificateService
 {
@@ -25,17 +26,84 @@ class FiscalCertificateService
     public function loadCertificateForConfiguration(ConfiguracaoFiscal $configuration): array
     {
         $storagePath = trim((string) $configuration->tb26_certificado_arquivo);
-        $password = (string) ($configuration->tb26_certificado_senha ?? '');
+        $password = $this->resolveConfigurationPassword($configuration);
 
         if ($storagePath === '') {
             throw new RuntimeException('Nenhum arquivo de certificado foi configurado para esta loja.');
         }
 
-        if ($password === '') {
-            throw new RuntimeException('A senha do certificado da loja nao foi configurada.');
+        if ($password === null || $password === '') {
+            throw new RuntimeException($this->resolveConfigurationPasswordDetails($configuration)['message']);
         }
 
         return $this->inspectStoredCertificate($storagePath, $password);
+    }
+
+    public function resolveConfigurationPassword(ConfiguracaoFiscal $configuration): ?string
+    {
+        return $this->resolveConfigurationPasswordDetails($configuration)['password'];
+    }
+
+    public function hasStoredPassword(ConfiguracaoFiscal $configuration): bool
+    {
+        return $this->resolveConfigurationPasswordDetails($configuration)['has_password'];
+    }
+
+    public function resolveConfigurationPasswordDetails(ConfiguracaoFiscal $configuration): array
+    {
+        $sharedPassword = trim((string) $configuration->getRawOriginal('tb26_certificado_senha_compartilhada'));
+
+        if ($sharedPassword !== '') {
+            return [
+                'password' => $sharedPassword,
+                'has_password' => true,
+                'readable' => true,
+                'source' => 'shared',
+                'message' => 'A senha compartilhada do certificado esta disponivel neste ambiente sem depender da APP_KEY.',
+            ];
+        }
+
+        $legacyPassword = trim((string) $configuration->getRawOriginal('tb26_certificado_senha'));
+
+        if ($legacyPassword === '') {
+            return [
+                'password' => null,
+                'has_password' => false,
+                'readable' => null,
+                'source' => null,
+                'message' => 'Nenhuma senha de certificado foi salva no banco.',
+            ];
+        }
+
+        try {
+            $decryptedPassword = trim((string) $configuration->tb26_certificado_senha);
+
+            if ($decryptedPassword === '') {
+                return [
+                    'password' => null,
+                    'has_password' => true,
+                    'readable' => false,
+                    'source' => 'legacy_encrypted',
+                    'message' => 'A senha criptografada existe no banco, mas retornou vazia ao tentar ler neste ambiente.',
+                ];
+            }
+
+            return [
+                'password' => $decryptedPassword,
+                'has_password' => true,
+                'readable' => true,
+                'source' => 'legacy_encrypted',
+                'message' => 'A senha criptografada do certificado conseguiu ser lida neste ambiente.',
+            ];
+        } catch (Throwable) {
+            return [
+                'password' => null,
+                'has_password' => true,
+                'readable' => false,
+                'source' => 'legacy_encrypted',
+                'message' => 'A senha criptografada existe no banco, mas nao conseguiu ser lida neste ambiente. Verifique se a APP_KEY da producao coincide com a do ambiente que salvou a configuracao.',
+            ];
+        }
     }
 
     public function inspectCertificateFile(string $absolutePath, string $password): array

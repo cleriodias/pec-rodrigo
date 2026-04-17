@@ -2,7 +2,9 @@
 
 namespace Tests\Unit;
 
+use App\Models\ConfiguracaoFiscal;
 use App\Support\FiscalCertificateService;
+use Illuminate\Support\Facades\Crypt;
 use ReflectionClass;
 use Tests\TestCase;
 
@@ -80,5 +82,38 @@ class FiscalCertificateServiceTest extends TestCase
 
         $this->assertSame($expectedPath, $resolvedCurrentPath);
         $this->assertSame($expectedPath, $resolvedLegacyPath);
+    }
+
+    public function test_prefers_shared_certificate_password_without_app_key_dependency(): void
+    {
+        $service = new FiscalCertificateService();
+        $configuration = new ConfiguracaoFiscal();
+        $configuration->setRawAttributes([
+            'tb26_certificado_senha_compartilhada' => 'segredo-compartilhado',
+            'tb26_certificado_senha' => Crypt::encryptString('segredo-antigo'),
+        ], true);
+
+        $details = $service->resolveConfigurationPasswordDetails($configuration);
+
+        $this->assertTrue($details['has_password']);
+        $this->assertTrue($details['readable']);
+        $this->assertSame('shared', $details['source']);
+        $this->assertSame('segredo-compartilhado', $details['password']);
+    }
+
+    public function test_reads_legacy_encrypted_certificate_password_when_shared_is_missing(): void
+    {
+        $service = new FiscalCertificateService();
+        $configuration = new ConfiguracaoFiscal();
+        $configuration->setRawAttributes([
+            'tb26_certificado_senha' => Crypt::encryptString('segredo-antigo'),
+        ], true);
+
+        $details = $service->resolveConfigurationPasswordDetails($configuration);
+
+        $this->assertTrue($details['has_password']);
+        $this->assertTrue($details['readable']);
+        $this->assertSame('legacy_encrypted', $details['source']);
+        $this->assertSame('segredo-antigo', $details['password']);
     }
 }

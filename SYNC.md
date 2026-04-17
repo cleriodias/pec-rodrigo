@@ -1888,3 +1888,46 @@
 - Observacao para sincronizacao com `pec1`:
   - essa alteracao e importante para depuracao de ambientes compartilhando o mesmo banco;
   - sincronizar exatamente o card visual e a leitura segura da senha criptografada, porque isso reduz bastante o tempo de diagnostico quando local e servidor divergem.
+## 17/04/26 - Resolucao definitiva da senha do certificado entre local e producao com mesmo banco
+
+- Arquivos alterados:
+  - `app/Models/ConfiguracaoFiscal.php`
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+  - `app/Support/FiscalCertificateService.php`
+  - `app/Support/FiscalInvoicePreparationService.php`
+  - `resources/js/Pages/Settings/FiscalConfig.jsx`
+  - `tests/Unit/FiscalCertificateServiceTest.php`
+
+- Arquivos criados:
+  - `database/migrations/2026_04_17_020000_add_shared_certificate_password_to_tb26_configuracoes_fiscais_table.php`
+
+- Causa confirmada:
+  - local e producao compartilham o mesmo banco, mas a senha do certificado estava presa ao cast `encrypted` de `tb26_certificado_senha`;
+  - isso faz a leitura depender da `APP_KEY` do ambiente que gravou o dado;
+  - com `APP_KEY` diferente entre local e Azure, a producao via o mesmo registro, mas nao conseguia descriptografar a senha;
+  - resultado: a configuracao parecia inconsistente entre ambientes, mesmo com o mesmo banco.
+
+- O que foi feito:
+  - criada a coluna `tb26_certificado_senha_compartilhada` em `tb26_configuracoes_fiscais`;
+  - a migration tenta migrar automaticamente para a nova coluna os valores antigos de `tb26_certificado_senha` quando estiver rodando em um ambiente capaz de descriptografar a senha antiga;
+  - `FiscalCertificateService` agora:
+    - prefere a senha compartilhada;
+    - cai para a senha antiga criptografada somente quando necessario;
+    - expõe detalhes da origem e legibilidade da senha;
+  - `FiscalConfigurationController` passou a:
+    - salvar a nova senha nos dois campos quando o usuario informar novamente;
+    - preencher a senha compartilhada automaticamente quando a senha antiga ainda for legivel no ambiente atual;
+    - usar o novo resolvedor de senha no upload e no diagnostico;
+  - `FiscalInvoicePreparationService` agora valida a senha do certificado usando a senha efetivamente legivel no ambiente, e nao mais apenas o campo criptografado antigo;
+  - `FiscalConfig.jsx` passou a mostrar no diagnostico:
+    - se a senha compartilhada existe;
+    - qual a fonte da senha lida (`shared` ou `legacy_encrypted`);
+    - o status real da leitura no ambiente atual.
+
+- Efeito esperado:
+  - depois da migration rodar no banco compartilhado a partir do ambiente local, a senha legivel passa a ficar disponivel para a producao sem depender da `APP_KEY`;
+  - o Azure deve conseguir abrir o certificado usando a senha compartilhada, mesmo que a senha antiga criptografada tenha sido gravada com outra `APP_KEY`.
+
+- Observacao para sincronizacao com `pec1`:
+  - sincronizar exatamente a migration e os ajustes do resolvedor de senha;
+  - essa parte e critica porque resolve a divergencia mais traiçoeira entre ambientes com o mesmo banco, mas com `APP_KEY` diferentes.

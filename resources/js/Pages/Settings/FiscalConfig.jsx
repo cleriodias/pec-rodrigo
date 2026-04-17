@@ -106,6 +106,8 @@ const DiagnosticsCard = ({ diagnostics }) => {
                 <p>Arquivo existe no storage deste ambiente: {diagnostics.storage_exists ? 'Sim' : 'Nao'}</p>
                 <p>Arquivo existe no caminho legado deste ambiente: {diagnostics.legacy_storage_exists ? 'Sim' : 'Nao'}</p>
                 <p>Senha criptografada presente no banco: {diagnostics.raw_password_present ? 'Sim' : 'Nao'}</p>
+                <p>Senha compartilhada presente no banco: {diagnostics.shared_password_present ? 'Sim' : 'Nao'}</p>
+                <p>Fonte da senha lida neste ambiente: {diagnostics.password_source || '--'}</p>
                 <p className={statusClassName}>Leitura da senha neste ambiente: {diagnostics.password_status || '--'}</p>
             </div>
         </div>
