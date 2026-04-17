@@ -336,7 +336,10 @@ class FiscalConfigurationController extends Controller
 
             return redirect()
                 ->route('settings.fiscal', ['unit_id' => $unitId])
-                ->with('error', 'Nao foi possivel salvar a configuracao fiscal neste ambiente. Verifique o suporte a OpenSSL, o armazenamento local do servidor e as migrations fiscais do deploy.');
+                ->with('error', sprintf(
+                    'Nao foi possivel salvar a configuracao fiscal neste ambiente. Detalhe tecnico: %s',
+                    $this->buildSafeExceptionMessage($exception)
+                ));
         }
     }
 
@@ -886,6 +889,17 @@ class FiscalConfigurationController extends Controller
             'password_source' => null,
             'password_status' => 'Configuracao fiscal ainda nao encontrada no banco.',
         ];
+    }
+
+    private function buildSafeExceptionMessage(Throwable $exception): string
+    {
+        $message = trim($exception->getMessage());
+
+        if ($message !== '') {
+            return $message;
+        }
+
+        return class_basename($exception);
     }
 
     private function buildConfigurationDiagnostics(

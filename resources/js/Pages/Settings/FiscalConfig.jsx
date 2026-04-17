@@ -1,8 +1,9 @@
+import AlertMessage from '@/Components/Alert/AlertMessage';
 import PrimaryButton from '@/Components/Button/PrimaryButton';
 import InputError from '@/Components/InputError';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { buildFiscalReceiptHtml, formatReceiptCurrency } from '@/Utils/receipt';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 
 const STATUS_CLASS = {
@@ -239,6 +240,7 @@ export default function FiscalConfig({
     invoiceLoadWarning = null,
 }) {
     const [printError, setPrintError] = useState('');
+    const { flash = {} } = usePage().props;
     const { data, setData, post, processing, errors } = useForm({
         tb2_id: configuration?.tb2_id ?? selectedUnitId ?? '',
         tb26_emitir_nfe: Boolean(configuration?.tb26_emitir_nfe),
@@ -337,6 +339,8 @@ export default function FiscalConfig({
             <Head title="Configuracao Fiscal" />
             <div className="py-8">
                 <div className="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
+                    <AlertMessage message={flash} />
+
                     <form onSubmit={handleFilterSubmit} className="rounded-2xl bg-white p-6 shadow dark:bg-gray-800">
                         <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
                             <div>

@@ -1931,3 +1931,22 @@
 - Observacao para sincronizacao com `pec1`:
   - sincronizar exatamente a migration e os ajustes do resolvedor de senha;
   - essa parte e critica porque resolve a divergencia mais traiçoeira entre ambientes com o mesmo banco, mas com `APP_KEY` diferentes.
+## 17/04/26 - Exibicao do erro real de salvamento na tela fiscal
+
+- Arquivos alterados:
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+  - `resources/js/Pages/Settings/FiscalConfig.jsx`
+
+- Causa identificada:
+  - a gravacao da configuracao fiscal podia falhar antes de criar a linha em `tb26_configuracoes_fiscais`, mas a tela `settings/fiscal` nao exibia o `flash.error` retornado pelo backend;
+  - isso fazia parecer que nada acontecia, mesmo quando o controller ja estava redirecionando com erro;
+  - como o diagnostico depende da existencia da linha no banco, a ausencia desse feedback dificultava entender que o `save()` nem chegou a persistir.
+
+- O que foi feito:
+  - `FiscalConfig.jsx` agora mostra `flash.success` e `flash.error` usando o componente `AlertMessage`;
+  - `FiscalConfigurationController@update` passou a devolver um `flash.error` com detalhe tecnico controlado, reaproveitando a mensagem da excecao quando existir;
+  - com isso, a proxima tentativa de salvar em producao deve mostrar a causa real diretamente na interface.
+
+- Efeito esperado:
+  - quando a configuracao fiscal nao conseguir ser salva, o usuario deve ver o motivo na propria tela;
+  - isso elimina o comportamento de “nao gravou e nao deu erro”.
