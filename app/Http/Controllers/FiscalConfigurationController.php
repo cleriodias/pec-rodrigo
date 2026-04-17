@@ -36,175 +36,125 @@ class FiscalConfigurationController extends Controller
     {
         $user = $request->user();
         $this->ensureAdmin($user);
+        $units = collect();
+        $selectedUnitId = (int) $request->query('unit_id', 0);
 
-        $units = ManagementScope::managedUnits($user, ['tb2_id', 'tb2_nome', 'tb2_cnpj'])
-            ->map(fn (Unidade $unit) => [
-                'id' => (int) $unit->tb2_id,
-                'name' => $unit->tb2_nome,
-                'cnpj' => $unit->tb2_cnpj,
-            ])
-            ->values();
+        try {
+            $units = ManagementScope::managedUnits($user, ['tb2_id', 'tb2_nome', 'tb2_cnpj'])
+                ->map(fn (Unidade $unit) => [
+                    'id' => (int) $unit->tb2_id,
+                    'name' => $unit->tb2_nome,
+                    'cnpj' => $unit->tb2_cnpj,
+                ])
+                ->values();
 
-        $selectedUnitId = (int) $request->query('unit_id', (int) ($units->first()['id'] ?? 0));
-
-        if ($selectedUnitId > 0 && ! ManagementScope::canManageUnit($user, $selectedUnitId)) {
-            abort(403, 'Acesso negado.');
-        }
-
-        if (! $this->fiscalTablesAreAvailable()) {
-            return Inertia::render('Settings/FiscalConfig', [
-                'units' => $units,
-                'selectedUnitId' => $selectedUnitId > 0 ? $selectedUnitId : null,
-                'unit' => null,
-                'configuration' => [
-                    'tb2_id' => $selectedUnitId > 0 ? $selectedUnitId : null,
-                    'tb26_emitir_nfe' => false,
-                    'tb26_emitir_nfce' => false,
-                    'tb26_ambiente' => 'homologacao',
-                    'tb26_serie' => '1',
-                    'tb26_proximo_numero' => 1,
-                    'tb26_crt' => '',
-                    'tb26_csc_id' => '',
-                    'tb26_csc' => '',
-                    'tb26_certificado_tipo' => 'A1',
-                    'tb26_certificado_nome' => '',
-                    'tb26_certificado_cnpj' => '',
-                    'tb26_certificado_arquivo' => '',
-                    'tb26_certificado_valido_ate' => '',
-                    'tb26_razao_social' => '',
-                    'tb26_nome_fantasia' => '',
-                    'tb26_ie' => '',
-                    'tb26_im' => '',
-                    'tb26_cnae' => '',
-                    'tb26_logradouro' => '',
-                    'tb26_numero' => '',
-                    'tb26_complemento' => '',
-                    'tb26_bairro' => '',
-                    'tb26_codigo_municipio' => '',
-                    'tb26_municipio' => '',
-                    'tb26_uf' => '',
-                    'tb26_cep' => '',
-                    'tb26_telefone' => '',
-                    'tb26_email' => '',
-                    'has_certificate_password' => false,
-                ],
-                'resolvedEndpoints' => null,
-                'invoices' => [],
-                'fiscalUnavailableMessage' => 'As tabelas fiscais ainda nao estao disponiveis neste ambiente. Execute as migrations fiscais do deploy antes de usar esta tela.',
-            ]);
-        }
-
-        $configuration = $selectedUnitId > 0
-            ? ConfiguracaoFiscal::query()->where('tb2_id', $selectedUnitId)->first()
-            : null;
-
-        $unit = $selectedUnitId > 0
-            ? Unidade::query()->find($selectedUnitId)
-            : null;
-
-        $invoiceLoadWarning = null;
-        $invoices = collect();
-
-        if ($selectedUnitId > 0) {
-            try {
-                $invoices = NotaFiscal::query()
-                    ->where('tb2_id', $selectedUnitId)
-                    ->with([
-                        'pagamento.vendas.unidade:tb2_id,tb2_nome,tb2_endereco,tb2_cnpj',
-                        'pagamento.vendas.caixa:id,name',
-                        'pagamento.vendas.valeUser:id,name',
-                        'configuracaoFiscal:tb26_id,tb26_razao_social,tb26_nome_fantasia,tb26_ie,tb26_logradouro,tb26_numero,tb26_complemento,tb26_bairro,tb26_municipio,tb26_uf,tb26_cep',
-                    ])
-                    ->orderByDesc('tb27_id')
-                    ->limit(15)
-                    ->get([
-                        'tb27_id',
-                        'tb4_id',
-                        'tb27_modelo',
-                        'tb27_ambiente',
-                        'tb27_serie',
-                        'tb27_numero',
-                        'tb27_status',
-                        'tb27_mensagem',
-                        'tb27_chave_acesso',
-                        'tb27_protocolo',
-                        'tb27_recibo',
-                        'tb27_xml_envio',
-                        'tb27_emitida_em',
-                        'created_at',
-                    ])
-                    ->map(fn (NotaFiscal $invoice) => $this->buildInvoiceListPayload($invoice))
-                    ->values();
-            } catch (Throwable) {
-                $invoiceLoadWarning = 'Nao foi possivel carregar todas as notas fiscais desta unidade neste ambiente. A tela foi mantida aberta sem derrubar a configuracao.';
-                $invoices = collect();
+            if ($selectedUnitId <= 0) {
+                $selectedUnitId = (int) ($units->first()['id'] ?? 0);
             }
-        }
 
-        $resolvedEndpoints = null;
+            if ($selectedUnitId > 0 && ! ManagementScope::canManageUnit($user, $selectedUnitId)) {
+                abort(403, 'Acesso negado.');
+            }
 
-        if ($configuration && filled($configuration->tb26_uf) && filled($configuration->tb26_ambiente)) {
-            try {
-                $resolvedEndpoints = $fiscalWebserviceResolverService->resolveNfceEndpoints(
-                    (string) $configuration->tb26_uf,
-                    (string) $configuration->tb26_ambiente,
+            if (! $this->fiscalTablesAreAvailable()) {
+                return $this->renderFiscalConfigPage(
+                    $units,
+                    $selectedUnitId,
+                    null,
+                    $this->defaultFiscalConfigurationPayload($selectedUnitId),
+                    collect(),
+                    null,
+                    'As tabelas fiscais ainda nao estao disponiveis neste ambiente. Execute as migrations fiscais do deploy antes de usar esta tela.',
+                    null,
                 );
-            } catch (RuntimeException $exception) {
-                $resolvedEndpoints = [
-                    'error' => $exception->getMessage(),
-                ];
             }
-        }
 
-        return Inertia::render('Settings/FiscalConfig', [
-            'units' => $units,
-            'selectedUnitId' => $selectedUnitId > 0 ? $selectedUnitId : null,
-            'unit' => $unit ? [
-                'id' => (int) $unit->tb2_id,
-                'name' => $unit->tb2_nome,
-                'cnpj' => $unit->tb2_cnpj,
-                'endereco' => $unit->tb2_endereco,
-                'cnpj_digits' => $this->onlyDigits($unit->tb2_cnpj),
-            ] : null,
-            'configuration' => [
-                'tb2_id' => $selectedUnitId > 0 ? $selectedUnitId : null,
-                'tb26_emitir_nfe' => (bool) ($configuration?->tb26_emitir_nfe ?? false),
-                'tb26_emitir_nfce' => (bool) ($configuration?->tb26_emitir_nfce ?? false),
-                'tb26_ambiente' => $configuration?->tb26_ambiente ?? 'homologacao',
-                'tb26_serie' => $configuration?->tb26_serie ?? '1',
-                'tb26_proximo_numero' => (int) ($configuration?->tb26_proximo_numero ?? 1),
-                'tb26_crt' => $configuration?->tb26_crt ? (string) $configuration->tb26_crt : '',
-                'tb26_csc_id' => $configuration?->tb26_csc_id ?? '',
-                'tb26_csc' => $configuration?->tb26_csc ?? '',
-                'tb26_certificado_tipo' => $configuration?->tb26_certificado_tipo ?? 'A1',
-                'tb26_certificado_nome' => $configuration?->tb26_certificado_nome ?? '',
-                'tb26_certificado_cnpj' => $configuration?->tb26_certificado_cnpj ?? '',
-                'tb26_certificado_arquivo' => $configuration?->tb26_certificado_arquivo ?? '',
-                'tb26_certificado_valido_ate' => $configuration?->tb26_certificado_valido_ate
-                    ? $configuration->tb26_certificado_valido_ate->format('d/m/y H:i')
-                    : '',
-                'tb26_razao_social' => $configuration?->tb26_razao_social ?? '',
-                'tb26_nome_fantasia' => $configuration?->tb26_nome_fantasia ?? ($unit?->tb2_nome ?? ''),
-                'tb26_ie' => $configuration?->tb26_ie ?? '',
-                'tb26_im' => $configuration?->tb26_im ?? '',
-                'tb26_cnae' => $configuration?->tb26_cnae ?? '',
-                'tb26_logradouro' => $configuration?->tb26_logradouro ?? '',
-                'tb26_numero' => $configuration?->tb26_numero ?? '',
-                'tb26_complemento' => $configuration?->tb26_complemento ?? '',
-                'tb26_bairro' => $configuration?->tb26_bairro ?? '',
-                'tb26_codigo_municipio' => $configuration?->tb26_codigo_municipio ?? '',
-                'tb26_municipio' => $configuration?->tb26_municipio ?? '',
-                'tb26_uf' => $configuration?->tb26_uf ?? '',
-                'tb26_cep' => $configuration?->tb26_cep ?? '',
-                'tb26_telefone' => $configuration?->tb26_telefone ?? '',
-                'tb26_email' => $configuration?->tb26_email ?? '',
-                'has_certificate_password' => filled($configuration?->tb26_certificado_senha),
-            ],
-            'resolvedEndpoints' => $resolvedEndpoints,
-            'invoices' => $invoices,
-            'fiscalUnavailableMessage' => null,
-            'invoiceLoadWarning' => $invoiceLoadWarning,
-        ]);
+            $configuration = $selectedUnitId > 0
+                ? ConfiguracaoFiscal::query()->where('tb2_id', $selectedUnitId)->first()
+                : null;
+
+            $unit = $selectedUnitId > 0
+                ? Unidade::query()->find($selectedUnitId)
+                : null;
+
+            $invoiceLoadWarning = null;
+            $invoices = collect();
+
+            if ($selectedUnitId > 0) {
+                try {
+                    $invoices = NotaFiscal::query()
+                        ->where('tb2_id', $selectedUnitId)
+                        ->with([
+                            'pagamento.vendas.unidade:tb2_id,tb2_nome,tb2_endereco,tb2_cnpj',
+                            'pagamento.vendas.caixa:id,name',
+                            'pagamento.vendas.valeUser:id,name',
+                            'configuracaoFiscal:tb26_id,tb26_razao_social,tb26_nome_fantasia,tb26_ie,tb26_logradouro,tb26_numero,tb26_complemento,tb26_bairro,tb26_municipio,tb26_uf,tb26_cep',
+                        ])
+                        ->orderByDesc('tb27_id')
+                        ->limit(15)
+                        ->get([
+                            'tb27_id',
+                            'tb4_id',
+                            'tb27_modelo',
+                            'tb27_ambiente',
+                            'tb27_serie',
+                            'tb27_numero',
+                            'tb27_status',
+                            'tb27_mensagem',
+                            'tb27_chave_acesso',
+                            'tb27_protocolo',
+                            'tb27_recibo',
+                            'tb27_xml_envio',
+                            'tb27_emitida_em',
+                            'created_at',
+                        ])
+                        ->map(fn (NotaFiscal $invoice) => $this->buildInvoiceListPayload($invoice))
+                        ->values();
+                } catch (Throwable) {
+                    $invoiceLoadWarning = 'Nao foi possivel carregar todas as notas fiscais desta unidade neste ambiente. A tela foi mantida aberta sem derrubar a configuracao.';
+                    $invoices = collect();
+                }
+            }
+
+            $resolvedEndpoints = null;
+
+            if ($configuration && filled($configuration->tb26_uf) && filled($configuration->tb26_ambiente)) {
+                try {
+                    $resolvedEndpoints = $fiscalWebserviceResolverService->resolveNfceEndpoints(
+                        (string) $configuration->tb26_uf,
+                        (string) $configuration->tb26_ambiente,
+                    );
+                } catch (RuntimeException $exception) {
+                    $resolvedEndpoints = [
+                        'error' => $exception->getMessage(),
+                    ];
+                }
+            }
+
+            return $this->renderFiscalConfigPage(
+                $units,
+                $selectedUnitId,
+                $unit,
+                $this->buildFiscalConfigurationPayload($configuration, $unit, $selectedUnitId),
+                $invoices,
+                $resolvedEndpoints,
+                null,
+                $invoiceLoadWarning,
+            );
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return $this->renderFiscalConfigPage(
+                $units,
+                $selectedUnitId,
+                null,
+                $this->defaultFiscalConfigurationPayload($selectedUnitId),
+                collect(),
+                null,
+                'O ambiente de producao retornou um erro interno ao montar os dados fiscais. A tela foi preservada com dados minimos para evitar a falha 500.',
+                null,
+            );
+        }
     }
 
     public function update(
@@ -789,5 +739,110 @@ class FiscalConfigurationController extends Controller
         } catch (Throwable) {
             return false;
         }
+    }
+
+    private function renderFiscalConfigPage(
+        $units,
+        int $selectedUnitId,
+        ?Unidade $unit,
+        array $configuration,
+        $invoices,
+        ?array $resolvedEndpoints,
+        ?string $fiscalUnavailableMessage,
+        ?string $invoiceLoadWarning,
+    ): Response {
+        return Inertia::render('Settings/FiscalConfig', [
+            'units' => $units,
+            'selectedUnitId' => $selectedUnitId > 0 ? $selectedUnitId : null,
+            'unit' => $unit ? [
+                'id' => (int) $unit->tb2_id,
+                'name' => $unit->tb2_nome,
+                'cnpj' => $unit->tb2_cnpj,
+                'endereco' => $unit->tb2_endereco,
+                'cnpj_digits' => $this->onlyDigits($unit->tb2_cnpj),
+            ] : null,
+            'configuration' => $configuration,
+            'resolvedEndpoints' => $resolvedEndpoints,
+            'invoices' => $invoices,
+            'fiscalUnavailableMessage' => $fiscalUnavailableMessage,
+            'invoiceLoadWarning' => $invoiceLoadWarning,
+        ]);
+    }
+
+    private function defaultFiscalConfigurationPayload(int $selectedUnitId): array
+    {
+        return [
+            'tb2_id' => $selectedUnitId > 0 ? $selectedUnitId : null,
+            'tb26_emitir_nfe' => false,
+            'tb26_emitir_nfce' => false,
+            'tb26_ambiente' => 'homologacao',
+            'tb26_serie' => '1',
+            'tb26_proximo_numero' => 1,
+            'tb26_crt' => '',
+            'tb26_csc_id' => '',
+            'tb26_csc' => '',
+            'tb26_certificado_tipo' => 'A1',
+            'tb26_certificado_nome' => '',
+            'tb26_certificado_cnpj' => '',
+            'tb26_certificado_arquivo' => '',
+            'tb26_certificado_valido_ate' => '',
+            'tb26_razao_social' => '',
+            'tb26_nome_fantasia' => '',
+            'tb26_ie' => '',
+            'tb26_im' => '',
+            'tb26_cnae' => '',
+            'tb26_logradouro' => '',
+            'tb26_numero' => '',
+            'tb26_complemento' => '',
+            'tb26_bairro' => '',
+            'tb26_codigo_municipio' => '',
+            'tb26_municipio' => '',
+            'tb26_uf' => '',
+            'tb26_cep' => '',
+            'tb26_telefone' => '',
+            'tb26_email' => '',
+            'has_certificate_password' => false,
+        ];
+    }
+
+    private function buildFiscalConfigurationPayload(
+        ?ConfiguracaoFiscal $configuration,
+        ?Unidade $unit,
+        int $selectedUnitId,
+    ): array {
+        return [
+            'tb2_id' => $selectedUnitId > 0 ? $selectedUnitId : null,
+            'tb26_emitir_nfe' => (bool) ($configuration?->tb26_emitir_nfe ?? false),
+            'tb26_emitir_nfce' => (bool) ($configuration?->tb26_emitir_nfce ?? false),
+            'tb26_ambiente' => $configuration?->tb26_ambiente ?? 'homologacao',
+            'tb26_serie' => $configuration?->tb26_serie ?? '1',
+            'tb26_proximo_numero' => (int) ($configuration?->tb26_proximo_numero ?? 1),
+            'tb26_crt' => $configuration?->tb26_crt ? (string) $configuration->tb26_crt : '',
+            'tb26_csc_id' => $configuration?->tb26_csc_id ?? '',
+            'tb26_csc' => $configuration?->tb26_csc ?? '',
+            'tb26_certificado_tipo' => $configuration?->tb26_certificado_tipo ?? 'A1',
+            'tb26_certificado_nome' => $configuration?->tb26_certificado_nome ?? '',
+            'tb26_certificado_cnpj' => $configuration?->tb26_certificado_cnpj ?? '',
+            'tb26_certificado_arquivo' => $configuration?->tb26_certificado_arquivo ?? '',
+            'tb26_certificado_valido_ate' => $configuration?->tb26_certificado_valido_ate
+                ? $configuration->tb26_certificado_valido_ate->format('d/m/y H:i')
+                : '',
+            'tb26_razao_social' => $configuration?->tb26_razao_social ?? '',
+            'tb26_nome_fantasia' => $configuration?->tb26_nome_fantasia ?? ($unit?->tb2_nome ?? ''),
+            'tb26_ie' => $configuration?->tb26_ie ?? '',
+            'tb26_im' => $configuration?->tb26_im ?? '',
+            'tb26_cnae' => $configuration?->tb26_cnae ?? '',
+            'tb26_logradouro' => $configuration?->tb26_logradouro ?? '',
+            'tb26_numero' => $configuration?->tb26_numero ?? '',
+            'tb26_complemento' => $configuration?->tb26_complemento ?? '',
+            'tb26_bairro' => $configuration?->tb26_bairro ?? '',
+            'tb26_codigo_municipio' => $configuration?->tb26_codigo_municipio ?? '',
+            'tb26_municipio' => $configuration?->tb26_municipio ?? '',
+            'tb26_uf' => $configuration?->tb26_uf ?? '',
+            'tb26_cep' => $configuration?->tb26_cep ?? '',
+            'tb26_telefone' => $configuration?->tb26_telefone ?? '',
+            'tb26_email' => $configuration?->tb26_email ?? '',
+            'has_certificate_password' => filled($configuration?->tb26_certificado_senha),
+        ];
     }
 }
