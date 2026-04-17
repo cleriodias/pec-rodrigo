@@ -1972,3 +1972,30 @@
   - salvar a configuracao fiscal em producao nao deve mais falhar por causa de `The MAC is invalid.`;
   - a leitura operacional do certificado continua funcionando pela senha compartilhada;
   - o campo legado deixa de interferir no comportamento entre local e Azure.
+## 17/04/26 - Instrumentacao do GET settings/fiscal para comparar leitura do model com leitura crua do banco
+
+- Arquivos alterados:
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+  - `resources/js/Pages/Settings/FiscalConfig.jsx`
+
+- Causa investigada:
+  - havia divergencia entre o comportamento do local e da producao ao recarregar `settings/fiscal`;
+  - o `POST` ja retornava sucesso, mas o `GET` seguinte ainda caia no bloco de protecao, dando a impressao de que nada tinha sido salvo;
+  - era necessario descobrir se a linha existia no banco e em qual etapa do carregamento a producao quebrava.
+
+- O que foi feito:
+  - `FiscalConfigurationController@index` agora registra a etapa atual do carregamento da tela (`carregar configuracao`, `carregar unidade`, `resolver endpoints`, `montar payload`, etc.);
+  - quando o `GET` falhar, a mensagem exibida na propria tela agora informa:
+    - a etapa em que a excecao ocorreu;
+    - o detalhe tecnico da excecao;
+  - foi criado um fallback de diagnostico por consulta crua via `DB::table('tb26_configuracoes_fiscais')`, sem passar pelo model;
+  - o card `Diagnostico do ambiente` agora mostra tambem:
+    - se a configuracao crua foi encontrada no banco;
+    - o `tb26_id` cru;
+    - a falha especifica de carregamento, quando existir.
+
+- Efeito esperado:
+  - em producao, depois do deploy, a tela deve revelar se:
+    - o registro realmente existe no banco;
+    - o model esta falhando ao hidratar/carregar;
+    - ou se a excecao acontece em outra etapa do `GET /settings/fiscal`.

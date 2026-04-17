@@ -103,6 +103,8 @@ const DiagnosticsCard = ({ diagnostics }) => {
                 <p>Unidade selecionada: {diagnostics.selected_unit_id ?? '--'}</p>
                 <p>Configuracao encontrada no banco: {diagnostics.configuration_found ? 'Sim' : 'Nao'}</p>
                 <p>ID da configuracao fiscal: {diagnostics.configuration_id ?? '--'}</p>
+                <p>Configuracao crua encontrada no banco: {diagnostics.raw_configuration_found ? 'Sim' : 'Nao'}</p>
+                <p>ID cru da configuracao fiscal: {diagnostics.raw_configuration_id ?? '--'}</p>
                 <p>Caminho salvo do certificado: {diagnostics.storage_path || '--'}</p>
                 <p>Arquivo existe no storage deste ambiente: {diagnostics.storage_exists ? 'Sim' : 'Nao'}</p>
                 <p>Arquivo existe no caminho legado deste ambiente: {diagnostics.legacy_storage_exists ? 'Sim' : 'Nao'}</p>
@@ -110,6 +112,9 @@ const DiagnosticsCard = ({ diagnostics }) => {
                 <p>Senha compartilhada presente no banco: {diagnostics.shared_password_present ? 'Sim' : 'Nao'}</p>
                 <p>Fonte da senha lida neste ambiente: {diagnostics.password_source || '--'}</p>
                 <p className={statusClassName}>Leitura da senha neste ambiente: {diagnostics.password_status || '--'}</p>
+                {diagnostics.loading_error ? (
+                    <p className="text-rose-700 dark:text-rose-200">Falha de carregamento: {diagnostics.loading_error}</p>
+                ) : null}
             </div>
         </div>
     );

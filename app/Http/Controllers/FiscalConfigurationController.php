@@ -18,6 +18,7 @@ use Illuminate\Http\UploadedFile;
 use App\Support\ManagementScope;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -39,8 +40,10 @@ class FiscalConfigurationController extends Controller
         $this->ensureAdmin($user);
         $units = collect();
         $selectedUnitId = (int) $request->query('unit_id', 0);
+        $lastStep = 'inicializar tela fiscal';
 
         try {
+            $lastStep = 'carregar unidades gerenciadas';
             $units = ManagementScope::managedUnits($user, ['tb2_id', 'tb2_nome', 'tb2_cnpj'])
                 ->map(fn (Unidade $unit) => [
                     'id' => (int) $unit->tb2_id,
@@ -71,10 +74,12 @@ class FiscalConfigurationController extends Controller
                 );
             }
 
+            $lastStep = 'carregar configuracao fiscal da unidade';
             $configuration = $selectedUnitId > 0
                 ? ConfiguracaoFiscal::query()->where('tb2_id', $selectedUnitId)->first()
                 : null;
 
+            $lastStep = 'carregar dados da unidade';
             $unit = $selectedUnitId > 0
                 ? Unidade::query()->find($selectedUnitId)
                 : null;
@@ -84,6 +89,7 @@ class FiscalConfigurationController extends Controller
 
             if ($selectedUnitId > 0) {
                 try {
+                    $lastStep = 'carregar ultimas notas fiscais da unidade';
                     $invoices = NotaFiscal::query()
                         ->where('tb2_id', $selectedUnitId)
                         ->with([
@@ -122,6 +128,7 @@ class FiscalConfigurationController extends Controller
 
             if ($configuration && filled($configuration->tb26_uf) && filled($configuration->tb26_ambiente)) {
                 try {
+                    $lastStep = 'resolver endpoints da SEFAZ para a unidade';
                     $resolvedEndpoints = $fiscalWebserviceResolverService->resolveNfceEndpoints(
                         (string) $configuration->tb26_uf,
                         (string) $configuration->tb26_ambiente,
@@ -133,6 +140,7 @@ class FiscalConfigurationController extends Controller
                 }
             }
 
+            $lastStep = 'montar payload da configuracao fiscal para a tela';
             return $this->renderFiscalConfigPage(
                 $units,
                 $selectedUnitId,
@@ -147,6 +155,13 @@ class FiscalConfigurationController extends Controller
         } catch (Throwable $exception) {
             report($exception);
 
+            $fallbackDiagnostics = $this->buildRawConfigurationDiagnostics($selectedUnitId);
+            $fallbackDiagnostics['loading_error'] = sprintf(
+                'Etapa: %s | Detalhe: %s',
+                $lastStep,
+                $this->buildSafeExceptionMessage($exception)
+            );
+
             return $this->renderFiscalConfigPage(
                 $units,
                 $selectedUnitId,
@@ -154,8 +169,12 @@ class FiscalConfigurationController extends Controller
                 $this->defaultFiscalConfigurationPayload($selectedUnitId),
                 collect(),
                 null,
-                $this->defaultConfigurationDiagnostics($selectedUnitId),
-                'O ambiente de producao retornou um erro interno ao montar os dados fiscais. A tela foi preservada com dados minimos para evitar a falha 500.',
+                $fallbackDiagnostics,
+                sprintf(
+                    'O ambiente de producao retornou um erro interno ao montar os dados fiscais. Etapa: %s. Detalhe tecnico: %s',
+                    $lastStep,
+                    $this->buildSafeExceptionMessage($exception)
+                ),
                 null,
             );
         }
@@ -892,6 +911,9 @@ class FiscalConfigurationController extends Controller
             'password_decryptable' => null,
             'password_source' => null,
             'password_status' => 'Configuracao fiscal ainda nao encontrada no banco.',
+            'raw_configuration_found' => false,
+            'raw_configuration_id' => null,
+            'loading_error' => null,
         ];
     }
 
@@ -935,7 +957,54 @@ class FiscalConfigurationController extends Controller
         $diagnostics['password_decryptable'] = $passwordDecryption['decryptable'];
         $diagnostics['password_status'] = $passwordDecryption['message'];
         $diagnostics['password_source'] = $passwordDecryption['source'];
+        $diagnostics['raw_configuration_found'] = true;
+        $diagnostics['raw_configuration_id'] = (int) $configuration->tb26_id;
 
         return $diagnostics;
+    }
+
+    private function buildRawConfigurationDiagnostics(int $selectedUnitId): array
+    {
+        $diagnostics = $this->defaultConfigurationDiagnostics($selectedUnitId);
+
+        if ($selectedUnitId <= 0 || ! $this->fiscalTablesAreAvailable()) {
+            return $diagnostics;
+        }
+
+        try {
+            $row = DB::table('tb26_configuracoes_fiscais')
+                ->where('tb2_id', $selectedUnitId)
+                ->first([
+                    'tb26_id',
+                    'tb26_certificado_arquivo',
+                    'tb26_certificado_senha',
+                    'tb26_certificado_senha_compartilhada',
+                ]);
+
+            if (! $row) {
+                return $diagnostics;
+            }
+
+            $storagePath = $this->stringOrNull($row->tb26_certificado_arquivo ?? null);
+
+            $diagnostics['raw_configuration_found'] = true;
+            $diagnostics['raw_configuration_id'] = (int) $row->tb26_id;
+            $diagnostics['storage_path'] = $storagePath;
+            $diagnostics['storage_exists'] = $storagePath ? Storage::exists($storagePath) : false;
+            $diagnostics['legacy_storage_exists'] = $storagePath && ! str_starts_with($storagePath, 'private/')
+                ? Storage::exists('private/' . $storagePath)
+                : false;
+            $diagnostics['raw_password_present'] = trim((string) ($row->tb26_certificado_senha ?? '')) !== '';
+            $diagnostics['shared_password_present'] = trim((string) ($row->tb26_certificado_senha_compartilhada ?? '')) !== '';
+
+            return $diagnostics;
+        } catch (Throwable $exception) {
+            $diagnostics['loading_error'] = sprintf(
+                'Falha ao consultar a configuracao fiscal crua no banco: %s',
+                $this->buildSafeExceptionMessage($exception)
+            );
+
+            return $diagnostics;
+        }
     }
 }
