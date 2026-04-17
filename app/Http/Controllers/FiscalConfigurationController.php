@@ -954,7 +954,7 @@ class FiscalConfigurationController extends Controller
             : false;
         $diagnostics['raw_password_present'] = $rawPassword !== '' || $sharedPassword !== '';
         $diagnostics['shared_password_present'] = $sharedPassword !== '';
-        $diagnostics['password_decryptable'] = $passwordDecryption['decryptable'];
+        $diagnostics['password_decryptable'] = $passwordDecryption['readable'];
         $diagnostics['password_status'] = $passwordDecryption['message'];
         $diagnostics['password_source'] = $passwordDecryption['source'];
         $diagnostics['raw_configuration_found'] = true;

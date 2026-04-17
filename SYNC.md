@@ -1999,3 +1999,20 @@
     - o registro realmente existe no banco;
     - o model esta falhando ao hidratar/carregar;
     - ou se a excecao acontece em outra etapa do `GET /settings/fiscal`.
+## 17/04/26 - Correcao do diagnostico da tela fiscal por chave de array divergente
+
+- Arquivos alterados:
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+
+- Causa identificada:
+  - o `FiscalCertificateService` passou a devolver o status de leitura da senha na chave `readable`;
+  - o controller da tela fiscal ainda tentava ler `decryptable`;
+  - isso derrubava o `GET /settings/fiscal` na etapa `montar payload da configuracao fiscal para a tela` com o erro `Undefined array key "decryptable"`.
+
+- O que foi feito:
+  - `FiscalConfigurationController` passou a usar a chave correta `readable`;
+  - a prop exibida na interface continua sendo `password_decryptable` apenas como nome visual legado, mas agora preenchida com o valor certo retornado pelo servico.
+
+- Efeito esperado:
+  - `settings/fiscal` deve voltar a abrir em producao sem cair por esse erro de diagnostico;
+  - a partir disso, a tela passa a mostrar o estado real da configuracao fiscal da unidade.
