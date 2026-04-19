@@ -3174,3 +3174,63 @@
     - `resources/js/Pages/Dashboard.jsx`
   - nao depende de migration;
   - esta etapa e apenas de limpeza visual.
+
+## 19/04/26 - Fallback do CA bundle para producao com `APP_STORAGE` externo
+
+- Arquivos alterados:
+  - `app/Support/FiscalNfceTransmissionService.php`
+  - `SYNC.md`
+
+- Causa identificada:
+  - em producao, o projeto usa `APP_STORAGE=/home/site/storage`, entao `storage_path()` passa a apontar para fora de `/home/site/wwwroot`;
+  - o erro mostrou que a transmissao procurou o bundle apenas no storage externo e nos fallbacks globais, sem considerar o bundle que pode estar presente dentro do codigo publicado;
+  - por isso o local funcionava, mas a producao falhava com `nenhuma cadeia de certificados confiaveis foi encontrada no ambiente` quando o arquivo estava em `wwwroot/storage/app/private/...` e nao em `/home/site/storage/app/private/...`.
+
+- O que foi feito:
+  - a rotina `resolveCaBundlePath()` passou a considerar tambem estes fallbacks:
+    - `base_path('storage/app/private/fiscal-ca-bundle.pem')`;
+    - `base_path('storage/app/private/cacert.pem')`;
+  - os caminhos antigos continuam com prioridade:
+    - `services.fiscal.ca_bundle`;
+    - `storage_path('app/private/fiscal-ca-bundle.pem')`;
+    - `storage_path('app/private/cacert.pem')`;
+    - `php.ini`;
+    - `cacert.pem` globais.
+
+- Efeito esperado:
+  - em producao, a transmissao consegue usar o bundle que veio junto no deploy mesmo quando o `storage` real do Laravel esta fora do `wwwroot`;
+  - reduz falhas de ambiente causadas por diferenca entre layout local XAMPP e layout Linux/Azure.
+
+- Observacoes para sincronizar em `pec1`:
+  - levar junto:
+    - `app/Support/FiscalNfceTransmissionService.php`
+  - nao depende de migration;
+  - se o outro ambiente tambem usar `APP_STORAGE` externo, esse fallback ajuda a localizar o bundle publicado dentro do projeto.
+
+## 19/04/26 - Cadastro fiscal opcional em `products/create`
+
+- Arquivos alterados:
+  - `app/Http/Controllers/ProductController.php`
+  - `resources/js/Pages/Products/ProductCreate.jsx`
+  - `SYNC.md`
+
+- Causa identificada:
+  - a tela `products/create` mostrava o bloco `Cadastro fiscal` como obrigatorio, com asteriscos e atributos `required`;
+  - alem disso, o backend ainda executava `ensureRequiredFiscalFields()`, bloqueando o salvamento sem `NCM`, `CFOP` e sem ao menos um entre `CSOSN` ou `CST`;
+  - por isso, mesmo quando a intencao era cadastrar o produto sem configuracao fiscal naquele momento, o formulario era recusado.
+
+- O que foi feito:
+  - a validacao obrigatoria dos campos fiscais foi removida de `ProductController`;
+  - o formulario `products/create` deixou de marcar `NCM`, `CFOP`, `CSOSN` e `CST` como obrigatorios;
+  - o texto explicativo da tela passou a informar que todos os campos fiscais sao opcionais no cadastro.
+
+- Efeito esperado:
+  - o produto pode ser cadastrado sem preencher a secao `Cadastro fiscal`;
+  - quando algum campo fiscal for informado, as validacoes de formato continuam ativas;
+  - produtos sem cadastro fiscal continuam podendo ficar de fora da preparacao fiscal automatica ate serem completados depois.
+
+- Observacoes para sincronizar em `pec1`:
+  - levar junto:
+    - `app/Http/Controllers/ProductController.php`
+    - `resources/js/Pages/Products/ProductCreate.jsx`
+  - nao depende de migration.

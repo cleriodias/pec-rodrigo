@@ -397,7 +397,6 @@ class ProductController extends Controller
         }
 
         $this->ensurePriceEditingIsAuthorized($data, $product, $request->user());
-        $this->ensureRequiredFiscalFields($data, $product);
 
         $resolvedBarcode = $this->resolveProductBarcode($data, $product);
 
@@ -424,33 +423,6 @@ class ProductController extends Controller
         }
 
         return $data;
-    }
-
-    private function ensureRequiredFiscalFields(array $data, ?Produto $product = null): void
-    {
-        $ncm = $this->normalizeDigitsField($data['tb1_ncm'] ?? $product?->tb1_ncm ?? null, 8);
-        $cfop = $this->normalizeDigitsField($data['tb1_cfop'] ?? $product?->tb1_cfop ?? null, 4);
-        $csosn = $this->normalizeDigitsField($data['tb1_csosn'] ?? $product?->tb1_csosn ?? null, 4);
-        $cst = $this->normalizeDigitsField($data['tb1_cst'] ?? $product?->tb1_cst ?? null, 3);
-
-        $errors = [];
-
-        if ($ncm === null) {
-            $errors['tb1_ncm'] = 'Informe o NCM para permitir a emissao fiscal do produto.';
-        }
-
-        if ($cfop === null) {
-            $errors['tb1_cfop'] = 'Informe o CFOP para permitir a emissao fiscal do produto.';
-        }
-
-        if ($csosn === null && $cst === null) {
-            $errors['tb1_csosn'] = 'Informe o CSOSN ou o CST para permitir a emissao fiscal do produto.';
-            $errors['tb1_cst'] = 'Informe o CST ou o CSOSN para permitir a emissao fiscal do produto.';
-        }
-
-        if ($errors !== []) {
-            throw ValidationException::withMessages($errors);
-        }
     }
 
     private function formOptions(): array

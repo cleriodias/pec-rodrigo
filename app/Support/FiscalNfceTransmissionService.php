@@ -319,6 +319,8 @@ class FiscalNfceTransmissionService
             $configuredPath,
             storage_path('app/private/fiscal-ca-bundle.pem'),
             storage_path('app/private/cacert.pem'),
+            base_path('storage/app/private/fiscal-ca-bundle.pem'),
+            base_path('storage/app/private/cacert.pem'),
             $iniCurlPath,
             $iniOpenSslPath,
             base_path('cacert.pem'),
