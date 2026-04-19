@@ -220,49 +220,92 @@ class FiscalNfceTransmissionService
         string $soapEnvelope,
         array $certificateData,
     ): string {
-        $pemPath = $this->writeTemporaryPem(
-            (string) $certificateData['certificate_pem'],
+        [$certificatePath, $privateKeyPath] = $this->writeTemporaryPemPair(
+            (string) ($certificateData['certificate_chain_pem'] ?? $certificateData['certificate_pem']),
             (string) $certificateData['private_key_pem'],
         );
         $caBundlePath = $this->resolveCaBundlePath();
+        $caBundleDirectory = dirname($caBundlePath);
+        $openSslLegacyConfigPath = $this->resolveOpenSslLegacyConfigPath();
+        $previousOpenSslConf = getenv('OPENSSL_CONF');
+        $previousSslCertFile = getenv('SSL_CERT_FILE');
 
         try {
+            if ($openSslLegacyConfigPath !== null) {
+                putenv('OPENSSL_CONF=' . $openSslLegacyConfigPath);
+            }
+
+            putenv('SSL_CERT_FILE=' . $caBundlePath);
+
             $curl = curl_init($url);
+            $verboseStream = fopen('php://temp', 'w+');
 
-            curl_setopt_array($curl, [
-                CURLOPT_POST => true,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                CURLOPT_TIMEOUT => 45,
-                CURLOPT_SSLCERTTYPE => 'PEM',
-                CURLOPT_SSLCERT => $pemPath,
-                CURLOPT_SSLKEY => $pemPath,
-                CURLOPT_CAINFO => $caBundlePath,
-                CURLOPT_SSL_VERIFYPEER => true,
-                CURLOPT_SSL_VERIFYHOST => 2,
-                CURLOPT_POSTFIELDS => $soapEnvelope,
-                CURLOPT_HTTPHEADER => [
-                    'Content-Type: application/soap+xml; charset=utf-8; action="' . $soapAction . '"',
-                    'Content-Length: ' . strlen($soapEnvelope),
-                ],
-            ]);
+            try {
+                $curlOptions = [
+                    CURLOPT_POST => true,
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+                    CURLOPT_TIMEOUT => 90,
+                    CURLOPT_CONNECTTIMEOUT => 30,
+                    CURLOPT_SSLCERTTYPE => 'PEM',
+                    CURLOPT_SSLCERT => $certificatePath,
+                    CURLOPT_SSLKEY => $privateKeyPath,
+                    CURLOPT_SSLCERTPASSWD => (string) ($certificateData['password'] ?? ''),
+                    CURLOPT_CAINFO => $caBundlePath,
+                    CURLOPT_SSL_VERIFYPEER => true,
+                    CURLOPT_SSL_VERIFYHOST => 2,
+                    CURLOPT_POSTFIELDS => $soapEnvelope,
+                    CURLOPT_HTTPHEADER => [
+                        'Content-Type: application/soap+xml; charset=utf-8; action="' . $soapAction . '"',
+                        'Content-Length: ' . strlen($soapEnvelope),
+                    ],
+                    CURLOPT_VERBOSE => $verboseStream !== false,
+                    CURLOPT_STDERR => $verboseStream !== false ? $verboseStream : null,
+                ];
 
-            $response = curl_exec($curl);
-            $error = curl_error($curl);
-            $statusCode = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
-            curl_close($curl);
+                if (is_dir($caBundleDirectory)) {
+                    $curlOptions[CURLOPT_CAPATH] = $caBundleDirectory;
+                }
 
-            if ($response === false || $error !== '') {
-                throw new RuntimeException($this->buildSoapCommunicationErrorMessage($error, $caBundlePath));
+                curl_setopt_array($curl, $curlOptions);
+
+                $response = curl_exec($curl);
+                $error = curl_error($curl);
+                $errno = curl_errno($curl);
+                $statusCode = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
+                $verboseOutput = $this->readVerboseStream($verboseStream);
+                curl_close($curl);
+
+                if ($response === false || $error !== '' || $errno !== 0) {
+                    logger()->error('SEFAZ GO - cURL SSL Error', [
+                        'errno' => $errno,
+                        'error' => $error,
+                        'url' => $url,
+                        'http_code' => $statusCode,
+                        'ca_bundle' => $caBundlePath,
+                        'ca_path' => is_dir($caBundleDirectory) ? $caBundleDirectory : null,
+                        'openssl_conf' => $openSslLegacyConfigPath,
+                        'verbose' => $verboseOutput,
+                    ]);
+
+                    throw new RuntimeException($this->buildSoapCommunicationErrorMessage($error !== '' ? $error : ('cURL errno ' . $errno), $caBundlePath));
+                }
+
+                if ($statusCode >= 400) {
+                    throw new RuntimeException('A SEFAZ respondeu com erro HTTP ' . $statusCode . ' durante a autorizacao.');
+                }
+
+                return (string) $response;
+            } finally {
+                if (is_resource($verboseStream)) {
+                    fclose($verboseStream);
+                }
             }
-
-            if ($statusCode >= 400) {
-                throw new RuntimeException('A SEFAZ respondeu com erro HTTP ' . $statusCode . ' durante a autorizacao.');
-            }
-
-            return (string) $response;
         } finally {
-            @unlink($pemPath);
+            $this->restoreEnvironmentVariable('OPENSSL_CONF', $previousOpenSslConf);
+            $this->restoreEnvironmentVariable('SSL_CERT_FILE', $previousSslCertFile);
+            @unlink($certificatePath);
+            @unlink($privateKeyPath);
         }
     }
 
@@ -274,15 +317,20 @@ class FiscalNfceTransmissionService
 
         $candidates = array_filter([
             $configuredPath,
+            storage_path('app/private/fiscal-ca-bundle.pem'),
+            storage_path('app/private/cacert.pem'),
             $iniCurlPath,
             $iniOpenSslPath,
-            storage_path('app/private/cacert.pem'),
             base_path('cacert.pem'),
             'C:\\xampp\\php\\extras\\ssl\\cacert.pem',
             'C:\\php\\extras\\ssl\\cacert.pem',
         ]);
 
+        $checkedPaths = [];
+
         foreach ($candidates as $candidate) {
+            $checkedPaths[] = $candidate;
+
             if (is_file($candidate) && is_readable($candidate)) {
                 return $candidate;
             }
@@ -290,7 +338,8 @@ class FiscalNfceTransmissionService
 
         throw new RuntimeException(
             'Falha de comunicacao com o webservice da SEFAZ: nenhuma cadeia de certificados confiaveis foi encontrada no ambiente. '
-            . 'Configure um CA bundle valido em services.fiscal.ca_bundle, php.ini (curl.cainfo/openssl.cafile) ou em C:\\xampp\\php\\extras\\ssl\\cacert.pem.'
+            . 'Configure um CA bundle valido em services.fiscal.ca_bundle, php.ini (curl.cainfo/openssl.cafile) ou em C:\\xampp\\php\\extras\\ssl\\cacert.pem. '
+            . 'Caminhos verificados: ' . implode(' | ', $checkedPaths)
         );
     }
 
@@ -300,12 +349,54 @@ class FiscalNfceTransmissionService
 
         if (str_contains(strtolower($error), 'unable to get local issuer certificate')) {
             $message .= sprintf(
-                ' Cadeia SSL do servidor nao confiavel neste ambiente. CA bundle usado: %s.',
+                ' Cadeia SSL nao validada neste ambiente durante o handshake TLS/renegociacao com a SEFAZ. CA bundle usado: %s.',
                 $caBundlePath
             );
         }
 
         return $message;
+    }
+
+    private function resolveOpenSslLegacyConfigPath(): ?string
+    {
+        $configuredPath = trim((string) Config::get('services.fiscal.openssl_legacy_config', ''));
+
+        if ($configuredPath === '') {
+            return null;
+        }
+
+        return is_file($configuredPath) && is_readable($configuredPath)
+            ? $configuredPath
+            : null;
+    }
+
+    private function restoreEnvironmentVariable(string $name, string|false $previousValue): void
+    {
+        if ($previousValue === false) {
+            putenv($name);
+
+            return;
+        }
+
+        putenv($name . '=' . $previousValue);
+    }
+
+    private function readVerboseStream($stream): ?string
+    {
+        if (! is_resource($stream)) {
+            return null;
+        }
+
+        rewind($stream);
+        $content = stream_get_contents($stream);
+
+        if ($content === false) {
+            return null;
+        }
+
+        $content = trim($content);
+
+        return $content !== '' ? $content : null;
     }
 
     private function parseAuthorizationResponse(string $responseXml): array
@@ -413,21 +504,32 @@ class FiscalNfceTransmissionService
         return $normalized;
     }
 
-    private function writeTemporaryPem(string $certificatePem, string $privateKeyPem): string
+    private function writeTemporaryPemPair(string $certificatePem, string $privateKeyPem): array
     {
-        $path = tempnam(sys_get_temp_dir(), 'pec_nfce_');
+        $certificatePath = tempnam(sys_get_temp_dir(), 'pec_nfce_cert_');
+        $privateKeyPath = tempnam(sys_get_temp_dir(), 'pec_nfce_key_');
 
-        if ($path === false) {
-            throw new RuntimeException('Nao foi possivel criar arquivo temporario para o certificado da loja.');
+        if ($certificatePath === false || $privateKeyPath === false) {
+            if ($certificatePath !== false) {
+                @unlink($certificatePath);
+            }
+
+            if ($privateKeyPath !== false) {
+                @unlink($privateKeyPath);
+            }
+
+            throw new RuntimeException('Nao foi possivel criar arquivos temporarios para o certificado da loja.');
         }
 
-        $written = file_put_contents($path, $certificatePem . PHP_EOL . $privateKeyPem);
+        $certificateWritten = file_put_contents($certificatePath, trim($certificatePem) . PHP_EOL);
+        $privateKeyWritten = file_put_contents($privateKeyPath, trim($privateKeyPem) . PHP_EOL);
 
-        if ($written === false) {
-            @unlink($path);
+        if ($certificateWritten === false || $privateKeyWritten === false) {
+            @unlink($certificatePath);
+            @unlink($privateKeyPath);
             throw new RuntimeException('Nao foi possivel preparar o certificado da loja para transmissao.');
         }
 
-        return $path;
+        return [$certificatePath, $privateKeyPath];
     }
 }

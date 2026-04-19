@@ -127,10 +127,20 @@ class FiscalCertificateService
 
         $certificatePem = (string) ($certificates['cert'] ?? '');
         $privateKeyPem = (string) ($certificates['pkey'] ?? '');
+        $extraCaCertificates = $certificates['extracerts'] ?? [];
 
         if ($certificatePem === '' || $privateKeyPem === '') {
             throw new RuntimeException('O certificado informado nao contem os dados necessarios para assinatura.');
         }
+
+        if (is_string($extraCaCertificates)) {
+            $extraCaCertificates = [$extraCaCertificates];
+        }
+
+        $extraCaPem = collect(is_array($extraCaCertificates) ? $extraCaCertificates : [])
+            ->map(fn ($certificate) => trim((string) $certificate))
+            ->filter()
+            ->implode(PHP_EOL);
 
         $parsed = openssl_x509_parse($certificatePem);
 
@@ -143,7 +153,10 @@ class FiscalCertificateService
 
         return [
             'certificate_pem' => $certificatePem,
+            'certificate_chain_pem' => trim($certificatePem . PHP_EOL . $extraCaPem),
+            'extra_ca_pem' => $extraCaPem !== '' ? $extraCaPem : null,
             'private_key_pem' => $privateKeyPem,
+            'password' => $password,
             'public_certificate_base64' => $this->normalizeCertificateForXml($certificatePem),
             'common_name' => $commonName,
             'cnpj' => $document,

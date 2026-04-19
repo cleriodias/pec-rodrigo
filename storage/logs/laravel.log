@@ -3149,3 +3149,95 @@ Stack trace:
 #9 Standard input code(7): Illuminate\\Database\\Query\\Builder->first()
 #10 {main}
 "} 
+[2026-04-19 01:03:24] local.ERROR: Writing to C:/Users/Clerio/AppData/Roaming/PsySH/psysh_history is not allowed. {"exception":"[object] (ErrorException(code: 0): Writing to C:/Users/Clerio/AppData/Roaming/PsySH/psysh_history is not allowed. at C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\psy\\psysh\\src\\ConfigPaths.php:351)
+[stacktrace]
+#0 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\Bootstrap\\HandleExceptions.php(256): Illuminate\\Foundation\\Bootstrap\\HandleExceptions->handleError(1024, 'Writing to C:/U...', 'C:\\\\xampp\\\\htdocs...', 351)
+#1 [internal function]: Illuminate\\Foundation\\Bootstrap\\HandleExceptions->Illuminate\\Foundation\\Bootstrap\\{closure}(1024, 'Writing to C:/U...', 'C:\\\\xampp\\\\htdocs...', 351)
+#2 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\psy\\psysh\\src\\ConfigPaths.php(351): trigger_error('Writing to C:/U...', 1024)
+#3 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\psy\\psysh\\src\\Configuration.php(651): Psy\\ConfigPaths::touchFileWithMkdir('C:/Users/Clerio...')
+#4 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\psy\\psysh\\src\\Configuration.php(674): Psy\\Configuration->setHistoryFile('C:/Users/Clerio...')
+#5 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\psy\\psysh\\src\\Configuration.php(814): Psy\\Configuration->getHistoryFile()
+#6 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\psy\\psysh\\src\\Shell.php(88): Psy\\Configuration->getReadline()
+#7 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\tinker\\src\\Console\\TinkerCommand.php(59): Psy\\Shell->__construct(Object(Psy\\Configuration))
+#8 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\BoundMethod.php(36): Laravel\\Tinker\\Console\\TinkerCommand->handle()
+#9 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\Util.php(43): Illuminate\\Container\\BoundMethod::Illuminate\\Container\\{closure}()
+#10 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\BoundMethod.php(95): Illuminate\\Container\\Util::unwrapIfClosure(Object(Closure))
+#11 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\BoundMethod.php(35): Illuminate\\Container\\BoundMethod::callBoundMethod(Object(Illuminate\\Foundation\\Application), Array, Object(Closure))
+#12 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Container\\Container.php(690): Illuminate\\Container\\BoundMethod::call(Object(Illuminate\\Foundation\\Application), Array, Array, NULL)
+#13 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Console\\Command.php(213): Illuminate\\Container\\Container->call(Array)
+#14 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\symfony\\console\\Command\\Command.php(279): Illuminate\\Console\\Command->execute(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Illuminate\\Console\\OutputStyle))
+#15 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Console\\Command.php(182): Symfony\\Component\\Console\\Command\\Command->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Illuminate\\Console\\OutputStyle))
+#16 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\symfony\\console\\Application.php(1047): Illuminate\\Console\\Command->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#17 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\symfony\\console\\Application.php(316): Symfony\\Component\\Console\\Application->doRunCommand(Object(Laravel\\Tinker\\Console\\TinkerCommand), Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#18 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\symfony\\console\\Application.php(167): Symfony\\Component\\Console\\Application->doRun(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#19 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\Console\\Kernel.php(197): Symfony\\Component\\Console\\Application->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#20 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\Application.php(1203): Illuminate\\Foundation\\Console\\Kernel->handle(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#21 C:\\xampp\\htdocs\\pec-rodrigo\\artisan(13): Illuminate\\Foundation\\Application->handleCommand(Object(Symfony\\Component\\Console\\Input\\ArgvInput))
+#22 {main}
+"} 
+[2026-04-19 01:29:21] local.ERROR: SQLSTATE[HY000] [2002] An attempt was made to access a socket in a way forbidden by its access permissions (Connection: mysql, SQL: select * from `tb26_configuracoes_fiscais` order by `tb26_id` desc limit 1) {"exception":"[object] (Illuminate\\Database\\QueryException(code: 2002): SQLSTATE[HY000] [2002] An attempt was made to access a socket in a way forbidden by its access permissions (Connection: mysql, SQL: select * from `tb26_configuracoes_fiscais` order by `tb26_id` desc limit 1) at C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Connection.php:825)
+[stacktrace]
+#0 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Connection.php(779): Illuminate\\Database\\Connection->runQueryCallback('select * from `...', Array, Object(Closure))
+#1 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Connection.php(398): Illuminate\\Database\\Connection->run('select * from `...', Array, Object(Closure))
+#2 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Query\\Builder.php(3132): Illuminate\\Database\\Connection->select('select * from `...', Array, true)
+#3 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Query\\Builder.php(3117): Illuminate\\Database\\Query\\Builder->runSelect()
+#4 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Query\\Builder.php(3705): Illuminate\\Database\\Query\\Builder->Illuminate\\Database\\Query\\{closure}()
+#5 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Query\\Builder.php(3116): Illuminate\\Database\\Query\\Builder->onceWithColumns(Array, Object(Closure))
+#6 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Eloquent\\Builder.php(759): Illuminate\\Database\\Query\\Builder->get(Array)
+#7 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Eloquent\\Builder.php(741): Illuminate\\Database\\Eloquent\\Builder->getModels(Array)
+#8 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Concerns\\BuildsQueries.php(344): Illuminate\\Database\\Eloquent\\Builder->get(Array)
+#9 C:\\xampp\\htdocs\\pec-rodrigo\\.tmp_cert_check.php(6): Illuminate\\Database\\Eloquent\\Builder->first()
+#10 {main}
+
+[previous exception] [object] (PDOException(code: 2002): SQLSTATE[HY000] [2002] An attempt was made to access a socket in a way forbidden by its access permissions at C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Connectors\\Connector.php:66)
+[stacktrace]
+#0 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Connectors\\Connector.php(66): PDO->__construct('mysql:host=mysq...', 'paoecafe83', Object(SensitiveParameterValue), Array)
+#1 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Connectors\\Connector.php(44): Illuminate\\Database\\Connectors\\Connector->createPdoConnection('mysql:host=mysq...', 'paoecafe83', '1qaz2ws3e', Array)
+#2 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Connectors\\MySqlConnector.php(24): Illuminate\\Database\\Connectors\\Connector->createConnection('mysql:host=mysq...', Array, Array)
+#3 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Connectors\\ConnectionFactory.php(185): Illuminate\\Database\\Connectors\\MySqlConnector->connect(Array)
+#4 [internal function]: Illuminate\\Database\\Connectors\\ConnectionFactory->Illuminate\\Database\\Connectors\\{closure}()
+#5 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Connection.php(1231): call_user_func(Object(Closure))
+#6 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Connection.php(1267): Illuminate\\Database\\Connection->getPdo()
+#7 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Connection.php(512): Illuminate\\Database\\Connection->getReadPdo()
+#8 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Connection.php(407): Illuminate\\Database\\Connection->getPdoForSelect(true)
+#9 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Connection.php(812): Illuminate\\Database\\Connection->Illuminate\\Database\\{closure}('select * from `...', Array)
+#10 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Connection.php(779): Illuminate\\Database\\Connection->runQueryCallback('select * from `...', Array, Object(Closure))
+#11 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Connection.php(398): Illuminate\\Database\\Connection->run('select * from `...', Array, Object(Closure))
+#12 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Query\\Builder.php(3132): Illuminate\\Database\\Connection->select('select * from `...', Array, true)
+#13 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Query\\Builder.php(3117): Illuminate\\Database\\Query\\Builder->runSelect()
+#14 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Query\\Builder.php(3705): Illuminate\\Database\\Query\\Builder->Illuminate\\Database\\Query\\{closure}()
+#15 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Query\\Builder.php(3116): Illuminate\\Database\\Query\\Builder->onceWithColumns(Array, Object(Closure))
+#16 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Eloquent\\Builder.php(759): Illuminate\\Database\\Query\\Builder->get(Array)
+#17 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Eloquent\\Builder.php(741): Illuminate\\Database\\Eloquent\\Builder->getModels(Array)
+#18 C:\\xampp\\htdocs\\pec-rodrigo\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Concerns\\BuildsQueries.php(344): Illuminate\\Database\\Eloquent\\Builder->get(Array)
+#19 C:\\xampp\\htdocs\\pec-rodrigo\\.tmp_cert_check.php(6): Illuminate\\Database\\Eloquent\\Builder->first()
+#20 {main}
+"} 
+[2026-04-19 02:08:33] local.ERROR: SEFAZ GO - cURL SSL Error {"errno":60,"error":"SSL certificate problem: unable to get local issuer certificate","url":"https://nfe.sefaz.go.gov.br/nfe/services/NFeAutorizacao4","ca_bundle":"C:\\xampp\\htdocs\\pec-rodrigo\\storage\\app/private/cacert.pem","openssl_conf":"C:\\xampp\\htdocs\\pec-rodrigo\\config/openssl-sefaz-legacy.cnf","verbose":"*   Trying 45.183.245.247:443...
+* Connected to nfe.sefaz.go.gov.br (45.183.245.247) port 443
+* ALPN: curl offers http/1.1
+*  CAfile: C:\\xampp\\htdocs\\pec-rodrigo\\storage\\app/private/cacert.pem
+*  CApath: none
+* SSL certificate problem: unable to get local issuer certificate
+* Closing connection"} 
+[2026-04-19 02:17:04] local.ERROR: SEFAZ GO - cURL SSL Error {"errno":60,"error":"SSL certificate problem: unable to get local issuer certificate","url":"https://nfe.sefaz.go.gov.br/nfe/services/NFeAutorizacao4","http_code":0,"ca_bundle":"C:\\xampp\\htdocs\\pec-rodrigo\\storage\\app/private/cacert.pem","ca_path":"C:\\xampp\\htdocs\\pec-rodrigo\\storage\\app/private","openssl_conf":"C:\\xampp\\htdocs\\pec-rodrigo\\config/openssl-sefaz-legacy.cnf","verbose":"*   Trying 45.183.244.247:443...
+* Connected to nfe.sefaz.go.gov.br (45.183.244.247) port 443
+* ALPN: curl offers http/1.1
+*  CAfile: C:\\xampp\\htdocs\\pec-rodrigo\\storage\\app/private/cacert.pem
+*  CApath: C:\\xampp\\htdocs\\pec-rodrigo\\storage\\app/private
+* SSL certificate problem: unable to get local issuer certificate
+* Closing connection"} 
+[2026-04-19 02:23:49] local.ERROR: SEFAZ GO - cURL SSL Error {"errno":60,"error":"SSL certificate problem: unable to get local issuer certificate","url":"https://nfe.sefaz.go.gov.br/nfe/services/NFeAutorizacao4","http_code":0,"ca_bundle":"C:\\xampp\\htdocs\\pec-rodrigo\\storage\\app/private/cacert.pem","ca_path":"C:\\xampp\\htdocs\\pec-rodrigo\\storage\\app/private","openssl_conf":"C:\\xampp\\htdocs\\pec-rodrigo\\config/openssl-sefaz-legacy.cnf","verbose":"*   Trying 45.183.245.247:443...
+* Connected to nfe.sefaz.go.gov.br (45.183.245.247) port 443
+* ALPN: curl offers http/1.1
+*  CAfile: C:\\xampp\\htdocs\\pec-rodrigo\\storage\\app/private/cacert.pem
+*  CApath: C:\\xampp\\htdocs\\pec-rodrigo\\storage\\app/private
+* SSL certificate problem: unable to get local issuer certificate
+* Closing connection"} 
+[2026-04-19 02:32:18] local.ERROR: SEFAZ GO - cURL SSL Error {"errno":60,"error":"SSL certificate problem: unable to get local issuer certificate","url":"https://nfe.sefaz.go.gov.br/nfe/services/NFeAutorizacao4","http_code":0,"ca_bundle":"C:\\xampp\\htdocs\\pec-rodrigo\\storage\\app/private/fiscal-ca-bundle.pem","ca_path":"C:\\xampp\\htdocs\\pec-rodrigo\\storage\\app/private","openssl_conf":"C:\\xampp\\htdocs\\pec-rodrigo\\config/openssl-sefaz-legacy.cnf","verbose":"*   Trying 45.183.245.247:443...
+* Connected to nfe.sefaz.go.gov.br (45.183.245.247) port 443
+* ALPN: curl offers http/1.1
+*  CAfile: C:\\xampp\\htdocs\\pec-rodrigo\\storage\\app/private/fiscal-ca-bundle.pem
+*  CApath: C:\\xampp\\htdocs\\pec-rodrigo\\storage\\app/private
+* SSL certificate problem: unable to get local issuer certificate
+* Closing connection"} 

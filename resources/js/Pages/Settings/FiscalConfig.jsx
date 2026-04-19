@@ -120,27 +120,6 @@ const DiagnosticsCard = ({ diagnostics }) => {
     );
 };
 
-const XmlDebugCard = ({ xmlDebug }) => {
-    if (!xmlDebug) {
-        return '--';
-    }
-
-    return (
-        <div className="space-y-1 text-xs text-slate-700 dark:text-slate-200">
-            <p><span className="font-semibold">mod:</span> {xmlDebug.mod || '--'}</p>
-            <p><span className="font-semibold">tpImp:</span> {xmlDebug.tp_imp || '--'}</p>
-            <p><span className="font-semibold">dest:</span> {xmlDebug.dest_present ? 'sim' : 'nao'}</p>
-            <p><span className="font-semibold">doc:</span> {xmlDebug.dest_document || '--'}</p>
-            <p><span className="font-semibold">nome:</span> {xmlDebug.dest_name || '--'}</p>
-            <p><span className="font-semibold">cMun:</span> {xmlDebug.dest_city_code || '--'}</p>
-            <p><span className="font-semibold">card:</span> {xmlDebug.card_present ? 'sim' : 'nao'}</p>
-            <p><span className="font-semibold">csc_id:</span> {xmlDebug.csc_id || '--'}</p>
-            <p><span className="font-semibold">assinatura:</span> {xmlDebug.signature_present ? 'sim' : 'nao'}</p>
-            <p className="break-all"><span className="font-semibold">qr:</span> {xmlDebug.qr_code_data || '--'}</p>
-        </div>
-    );
-};
-
 const actionButtonClassName =
     'inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold';
 
@@ -179,7 +158,6 @@ const InvoiceTable = ({ invoices = [], onDeleteInvoice, onPrintFiscalReceipt }) 
                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Numero</th>
                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Status</th>
                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Mensagem</th>
-                            <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">XML debug</th>
                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Criada em</th>
                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Cupom</th>
                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Regenerar</th>
@@ -202,9 +180,6 @@ const InvoiceTable = ({ invoices = [], onDeleteInvoice, onPrintFiscalReceipt }) 
                                     </span>
                                 </td>
                                 <td className="px-3 py-3 text-gray-700 dark:text-gray-200">{invoice.mensagem ?? '--'}</td>
-                                <td className="px-3 py-3 align-top">
-                                    <XmlDebugCard xmlDebug={invoice.xml_debug} />
-                                </td>
                                 <td className="px-3 py-3 text-gray-700 dark:text-gray-200">{invoice.criada_em ?? '--'}</td>
                                 <td className="px-3 py-3 text-gray-700 dark:text-gray-200">
                                     {invoice.fiscal_receipt ? (

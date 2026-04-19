@@ -17,7 +17,7 @@ class FiscalWebserviceResolverService
                 'return' => 'https://homolog.sefaz.go.gov.br/nfe/services/NFeRetAutorizacao4',
                 'return_wsdl' => 'https://homolog.sefaz.go.gov.br/nfe/services/NFeRetAutorizacao4?wsdl',
                 'qr_code_url' => 'https://nfewebhomolog.sefaz.go.gov.br/nfeweb/sites/nfce/danfeNFCe',
-                'consultation_url' => 'https://nfewebhomolog.sefaz.go.gov.br/nfeweb/sites/nfe/consulta-completa',
+                'consultation_url' => 'http://www.sefaz.go.gov.br/nfce/consulta',
             ],
             'producao' => [
                 'authorization' => 'https://nfe.sefaz.go.gov.br/nfe/services/NFeAutorizacao4',
@@ -28,7 +28,7 @@ class FiscalWebserviceResolverService
                 'return' => 'https://nfe.sefaz.go.gov.br/nfe/services/NFeRetAutorizacao4',
                 'return_wsdl' => 'https://nfe.sefaz.go.gov.br/nfe/services/NFeRetAutorizacao4?wsdl',
                 'qr_code_url' => 'https://nfeweb.sefaz.go.gov.br/nfeweb/sites/nfce/danfeNFCe',
-                'consultation_url' => 'https://nfeweb.sefaz.go.gov.br/nfeweb/sites/nfe/consulta-completa',
+                'consultation_url' => 'http://www.sefaz.go.gov.br/nfce/consulta',
             ],
         ],
     ];

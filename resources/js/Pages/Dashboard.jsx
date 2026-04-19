@@ -1,7 +1,7 @@
 ﻿import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, usePage, router } from '@inertiajs/react';
 import { formatBrazilDate, formatBrazilDateTime } from '@/Utils/date';
-import { buildReceiptHtml, resolveReceiptComanda, resolveReceiptId } from '@/Utils/receipt';
+import { buildFiscalReceiptHtml, buildReceiptHtml, resolveReceiptComanda, resolveReceiptId } from '@/Utils/receipt';
 import axios from 'axios';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -41,26 +41,6 @@ const fiscalStatusLabels = {
     erro_transmissao: 'Erro de transmissao',
     emitida: 'Emitida',
     cancelada: 'Cancelada',
-};
-const renderFiscalXmlDebug = (xmlDebug) => {
-    if (!xmlDebug) {
-        return null;
-    }
-
-    return (
-        <div className="mt-2 rounded-lg border border-blue-200 bg-white/70 px-3 py-2 text-xs text-blue-900">
-            <p><span className="font-medium">mod:</span> {xmlDebug.mod || '--'}</p>
-            <p><span className="font-medium">tpImp:</span> {xmlDebug.tp_imp || '--'}</p>
-            <p><span className="font-medium">dest:</span> {xmlDebug.dest_present ? 'sim' : 'nao'}</p>
-            <p><span className="font-medium">doc:</span> {xmlDebug.dest_document || '--'}</p>
-            <p><span className="font-medium">nome:</span> {xmlDebug.dest_name || '--'}</p>
-            <p><span className="font-medium">cMun:</span> {xmlDebug.dest_city_code || '--'}</p>
-            <p><span className="font-medium">card:</span> {xmlDebug.card_present ? 'sim' : 'nao'}</p>
-            <p><span className="font-medium">csc_id:</span> {xmlDebug.csc_id || '--'}</p>
-            <p><span className="font-medium">assinatura:</span> {xmlDebug.signature_present ? 'sim' : 'nao'}</p>
-            <p className="break-all"><span className="font-medium">qr:</span> {xmlDebug.qr_code_data || '--'}</p>
-        </div>
-    );
 };
 const paymentOptions = [
     {
@@ -1331,6 +1311,62 @@ export default function Dashboard() {
         resetAfterReceipt();
     };
 
+    const handlePrintFiscalReceipt = () => {
+        if (!receiptData?.fiscal) {
+            return;
+        }
+
+        const printWindow = window.open('', '_blank', 'width=420,height=760');
+
+        if (!printWindow) {
+            setSaleError('Permita pop-ups para imprimir o cupom fiscal.');
+            return;
+        }
+
+        const fiscalReceiptPayload = {
+            title: 'DANFE NFC-e',
+            subtitle: 'Documento Auxiliar da Nota Fiscal de Consumidor Eletronica',
+            emitter_name: receiptData.unit_name || activeUnitName || 'EMITENTE NAO INFORMADO',
+            emitter_legal_name: receiptData.unit_name || activeUnitName || null,
+            emitter_document: receiptData.unit_cnpj || activeUnitCnpj || null,
+            emitter_address: receiptData.unit_address || activeUnitAddress || null,
+            payment_id: resolveReceiptId(receiptData),
+            model_label: (receiptData.fiscal.modelo || 'NF').toUpperCase(),
+            environment: receiptData.fiscal.ambiente === 'producao' ? 'Producao' : 'Homologacao',
+            serie: receiptData.fiscal.serie || '--',
+            number: receiptData.fiscal.numero || '--',
+            status: receiptData.fiscal.status || '--',
+            status_message: receiptData.fiscal.mensagem || null,
+            issued_at: receiptData.fiscal.emitida_em || receiptData.date_time,
+            consumer_name: 'CONSUMIDOR NAO IDENTIFICADO',
+            payment_label: receiptData.payment_label || '--',
+            total: receiptData.total,
+            amount_paid: receiptData.payment?.valor_pago,
+            change: receiptData.payment?.troco ?? 0,
+            additional_payment: receiptData.payment?.dois_pgto ?? 0,
+            access_key: receiptData.fiscal.chave_acesso || null,
+            protocol: receiptData.fiscal.protocolo || null,
+            receipt: receiptData.fiscal.recibo || null,
+            consulta_url: null,
+            qr_code_data: receiptData.fiscal.xml_debug?.qr_code_data || null,
+            is_preview: receiptData.fiscal.status !== 'emitida',
+            items: (receiptData.items || []).map((item) => ({
+                id: item.product_id ?? item.id ?? null,
+                product_name: item.product_name,
+                quantity: Number(item.quantity ?? 0),
+                unit_price: Number(item.unit_price ?? 0),
+                subtotal: Number(item.subtotal ?? 0),
+            })),
+        };
+
+        printWindow.document.write(buildFiscalReceiptHtml(fiscalReceiptPayload));
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.addEventListener('afterprint', () => {
+            printWindow.close();
+        }, { once: true });
+    };
+
     const handleTransmitFiscal = async () => {
         const fiscalId = Number(receiptData?.fiscal?.id ?? 0);
 
@@ -2223,7 +2259,6 @@ export default function Dashboard() {
                                                 {receiptData.fiscal.mensagem}
                                             </p>
                                         )}
-                                        {renderFiscalXmlDebug(receiptData.fiscal.xml_debug)}
                                     </div>
                                 )}
                                 <p className="text-lg font-bold text-indigo-600">
@@ -2249,6 +2284,15 @@ export default function Dashboard() {
                             >
                                 Fechar
                             </button>
+                            {receiptData.fiscal?.status === 'emitida' && (
+                                <button
+                                    type="button"
+                                    className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-sky-700"
+                                    onClick={handlePrintFiscalReceipt}
+                                >
+                                    Cupom Fiscal
+                                </button>
+                            )}
                             <button
                                 type="button"
                                 className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-indigo-700"

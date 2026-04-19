@@ -2717,3 +2717,460 @@
   - levar junto `app/Support/FiscalNfceTransmissionService.php` e `config/services.php`;
   - nao depende de migration;
   - se o outro ambiente tambem nao tiver `curl.cainfo`/`openssl.cafile`, manter um `cacert.pem` atualizado em um dos caminhos aceitos pela rotina.
+
+## 19/04/26 - Prioridade para `cacert.pem` local e diagnostico expandido da cadeia SSL
+
+- Arquivos alterados:
+  - `app/Support/FiscalNfceTransmissionService.php`
+  - `SYNC.md`
+
+- Causa identificada:
+  - mesmo apos a primeira correcao de SSL, ainda apareceu a mensagem dizendo que nenhuma cadeia confiavel foi encontrada;
+  - a verificacao do ambiente mostrou que o projeto ja tinha bundles acessiveis, entao o melhor ajuste era priorizar o `cacert.pem` local recem-baixado e ampliar o diagnostico da resolucao.
+
+- O que foi feito:
+  - `FiscalNfceTransmissionService` passou a priorizar primeiro `storage/app/private/cacert.pem`;
+  - quando nenhum bundle for aceito, a excecao agora informa tambem todos os caminhos que foram avaliados pela rotina.
+
+- Efeito esperado:
+  - o projeto passa a usar primeiro o `cacert.pem` local que foi baixado especificamente para esta correcao;
+  - se ainda houver falha, a mensagem mostrara exatamente os caminhos considerados, facilitando localizar diferencas entre processo web, CLI e ambiente carregado.
+
+- Observacoes para sincronizar em `pec1`:
+  - levar junto o ajuste em `app/Support/FiscalNfceTransmissionService.php`;
+  - nao depende de migration;
+  - manter o `cacert.pem` local atualizado caso a maquina tenha bundles globais antigos.
+
+## 19/04/26 - Inclusao da cadeia intermediaria do certificado cliente na transmissao SSL
+
+- Arquivos alterados:
+  - `app/Support/FiscalCertificateService.php`
+  - `app/Support/FiscalNfceTransmissionService.php`
+  - `SYNC.md`
+
+- Causa identificada:
+  - ao inspecionar o fluxo de transmissao, foi identificado que o PEM temporario usado no cURL levava apenas:
+    - certificado final da empresa;
+    - chave privada;
+  - se o endpoint da SEFAZ exigir a cadeia intermediaria do certificado cliente durante a renegociacao/autenticacao mutua TLS, a transmissao pode falhar mesmo com A1 valido e CA bundle configurado.
+
+- O que foi feito:
+  - `FiscalCertificateService` passou a extrair tambem `extracerts` do `.pfx/.p12` quando existirem;
+  - o retorno do service agora inclui:
+    - `certificate_chain_pem`;
+    - `extra_ca_pem`;
+  - `FiscalNfceTransmissionService` passou a montar o PEM temporario com:
+    - certificado cliente;
+    - cadeia intermediaria do cliente;
+    - chave privada;
+  - o arquivo PEM temporario tambem passou a ser gravado com separacao mais segura entre blocos.
+
+- Efeito esperado:
+  - a autenticacao mutua TLS com a SEFAZ passa a enviar a cadeia completa do certificado cliente quando ela estiver presente no `.pfx`;
+  - isso reduz falhas de handshake/renegociacao em ambientes em que o servidor espera a cadeia intermediaria do certificado do emitente.
+
+- Observacoes para sincronizar em `pec1`:
+  - levar junto `app/Support/FiscalCertificateService.php` e `app/Support/FiscalNfceTransmissionService.php`;
+  - nao depende de migration;
+  - manter o `.pfx/.p12` importado com a cadeia completa sempre que possivel.
+
+## 19/04/26 - Separacao entre arquivo temporario do certificado e da chave privada no handshake mutual TLS
+
+- Arquivos alterados:
+  - `app/Support/FiscalNfceTransmissionService.php`
+  - `SYNC.md`
+
+- Causa identificada:
+  - mesmo com bundle CA configurado e cadeia intermediaria do cliente incluida, a transmissao ainda falhava;
+  - a implementacao anterior usava o mesmo arquivo PEM para:
+    - `CURLOPT_SSLCERT`;
+    - `CURLOPT_SSLKEY`;
+  - em autenticacao mutua TLS isso pode gerar incompatibilidade de handshake/renegociacao com servidores mais sensiveis.
+
+- O que foi feito:
+  - a transmissao passou a gerar dois arquivos temporarios separados:
+    - um apenas para certificado + cadeia;
+    - outro apenas para chave privada;
+  - `CURLOPT_SSLCERT` agora aponta somente para o arquivo do certificado;
+  - `CURLOPT_SSLKEY` agora aponta somente para o arquivo da chave privada;
+  - a mensagem de erro para `unable to get local issuer certificate` foi ajustada para deixar claro que a falha ocorre durante o handshake TLS/renegociacao com a SEFAZ.
+
+- Efeito esperado:
+  - a autenticacao mutua fica mais compativel com o servidor da SEFAZ;
+  - reduz o risco de falha causada pela combinacao de certificado/cadeia/chave em um unico PEM durante a renegociacao TLS.
+
+- Observacoes para sincronizar em `pec1`:
+  - levar junto `app/Support/FiscalNfceTransmissionService.php`;
+  - nao depende de migration;
+  - manter tambem o ajuste anterior de inclusao da cadeia intermediaria do cliente.
+
+## 19/04/26 - Configuracao OpenSSL local para renegociacao legada da SEFAZ
+
+- Arquivos alterados:
+  - `app/Support/FiscalNfceTransmissionService.php`
+  - `config/services.php`
+  - `config/openssl-sefaz-legacy.cnf`
+  - `SYNC.md`
+
+- Causa identificada:
+  - a investigacao do endpoint homolog da SEFAZ de Goias mostrou que:
+    - a conexao TLS inicial era estabelecida;
+    - o servidor pedia renegociacao;
+    - a falha ocorria depois, no handshake/renegociacao;
+  - isso indica incompatibilidade de renegociacao TLS entre o ambiente OpenSSL do PHP e o endpoint da SEFAZ, e nao simples ausencia de CA publica.
+
+- O que foi feito:
+  - foi criado `config/openssl-sefaz-legacy.cnf` com `UnsafeLegacyRenegotiation`;
+  - `services.fiscal.openssl_legacy_config` passou a expor esse caminho de forma configuravel;
+  - antes da chamada cURL da transmissao fiscal, a rotina agora injeta temporariamente:
+    - `OPENSSL_CONF` apontando para o arquivo legacy;
+    - `SSL_CERT_FILE` apontando para o CA bundle resolvido;
+  - ao final da requisicao, essas variaveis de ambiente sao restauradas.
+
+- Efeito esperado:
+  - o processo de transmissao passa a usar uma politica OpenSSL mais compativel com renegociacao legada exigida por alguns endpoints da SEFAZ;
+  - isso aumenta a chance de o handshake mutual TLS concluir sem desativar verificacao SSL.
+
+- Observacoes para sincronizar em `pec1`:
+  - levar junto:
+    - `app/Support/FiscalNfceTransmissionService.php`
+    - `config/services.php`
+    - `config/openssl-sefaz-legacy.cnf`
+  - nao depende de migration;
+  - manter esse arquivo de configuracao no projeto para o mesmo comportamento de transmissao.
+
+## 19/04/26 - Refino do OpenSSL legacy e do diagnostico cURL da transmissao SEFAZ
+
+- Arquivos alterados:
+  - `app/Support/FiscalNfceTransmissionService.php`
+  - `config/openssl-sefaz-legacy.cnf`
+  - `SYNC.md`
+
+- Causa identificada:
+  - ainda era necessario melhorar dois pontos do ajuste anterior:
+    - o arquivo `openssl-sefaz-legacy.cnf` podia ficar mais compativel com OpenSSL 3.x;
+    - o `sendSoapRequest()` ainda nao registrava `curl_errno` nem a saida verbose do cURL, o que dificultava diagnosticar a etapa exata da falha com a SEFAZ.
+
+- O que foi feito:
+  - `config/openssl-sefaz-legacy.cnf` foi ajustado para:
+    - `openssl_conf = openssl_init`;
+    - `Options = UnsafeLegacyRenegotiation`;
+    - `CipherString = DEFAULT@SECLEVEL=0`;
+  - `FiscalNfceTransmissionService` passou a usar:
+    - `CURLOPT_TIMEOUT = 90`;
+    - `CURLOPT_CONNECTTIMEOUT = 30`;
+    - `CURLOPT_VERBOSE`;
+    - captura de `curl_errno`;
+    - leitura do stream verbose do cURL;
+  - em erro, a rotina agora grava log estruturado com:
+    - `errno`;
+    - `error`;
+    - `url`;
+    - `ca_bundle`;
+    - `openssl_conf`;
+    - `verbose`.
+
+- Efeito esperado:
+  - aumenta a compatibilidade com endpoints antigos da SEFAZ em OpenSSL 3.x;
+  - o proximo erro de transmissao passa a deixar um rastro tecnico muito mais util no log para identificar se a falha esta em handshake, renegociacao, certificado cliente ou transporte HTTP.
+
+- Observacoes para sincronizar em `pec1`:
+  - levar junto:
+    - `app/Support/FiscalNfceTransmissionService.php`
+    - `config/openssl-sefaz-legacy.cnf`
+  - nao depende de migration;
+  - importante manter o log verbose apenas para diagnostico; se no futuro isso ficar ruidoso demais, revisar depois de estabilizar a transmissao.
+
+## 19/04/26 - Reforco do cURL com `CAPATH`, senha explicita do certificado e legacy mais agressivo
+
+- Arquivos alterados:
+  - `app/Support/FiscalCertificateService.php`
+  - `app/Support/FiscalNfceTransmissionService.php`
+  - `config/openssl-sefaz-legacy.cnf`
+  - `SYNC.md`
+
+- Causa identificada:
+  - mesmo apos os ajustes anteriores, a falha SSL permanecia identica;
+  - faltavam ainda tres reforcos no transporte:
+    - passar a senha do certificado explicitamente ao cURL;
+    - informar tambem `CAPATH` alem de `CAINFO`;
+    - tornar a configuracao legacy do OpenSSL ainda mais agressiva para testes com endpoint antigo da SEFAZ.
+
+- O que foi feito:
+  - `FiscalCertificateService` passou a devolver tambem a `password` do certificado no payload carregado;
+  - `FiscalNfceTransmissionService` passou a configurar:
+    - `CURLOPT_SSLCERTPASSWD`;
+    - `CURLOPT_CAPATH` quando o diretorio do bundle existir;
+    - log com `http_code` e `ca_path`;
+  - `config/openssl-sefaz-legacy.cnf` foi ajustado para:
+    - `Options = UnsafeLegacyServerConnect,UnsafeLegacyRenegotiation`;
+    - `CipherString = DEFAULT@SECLEVEL=0`.
+
+- Efeito esperado:
+  - o cURL passa a receber um conjunto mais completo de parametros SSL/TLS para o handshake mutual TLS;
+  - se o endpoint exigir comportamento mais antigo de renegociacao, a chance de compatibilidade aumenta;
+  - o log tecnico fica ainda mais util caso a falha persista.
+
+- Observacoes para sincronizar em `pec1`:
+  - levar junto:
+    - `app/Support/FiscalCertificateService.php`
+    - `app/Support/FiscalNfceTransmissionService.php`
+    - `config/openssl-sefaz-legacy.cnf`
+  - nao depende de migration;
+  - estes ajustes sao especificamente para endurecer o diagnostico e flexibilizar o handshake com a SEFAZ sem desligar verificacao SSL.
+
+## 19/04/26 - Bundle fiscal reforcado com cadeia explicita da SEFAZ-GO
+
+- Arquivos alterados/criados:
+  - `app/Support/FiscalNfceTransmissionService.php`
+  - `config/services.php`
+  - `storage/app/private/letsencrypt-r12.pem`
+  - `storage/app/private/isrg-root-x1.pem`
+  - `storage/app/private/fiscal-ca-bundle.pem`
+  - `SYNC.md`
+
+- Causa identificada:
+  - o log verbose continuava mostrando `SSL certificate problem: unable to get local issuer certificate` antes de qualquer resposta HTTP;
+  - mesmo com `cacert.pem` valido, o OpenSSL/cURL do PHP nao estava conseguindo completar sozinho a cadeia publica entregue pelo endpoint da SEFAZ-GO;
+  - por isso foi necessario reforcar localmente o bundle com a cadeia publica explicita vista no endpoint.
+
+- O que foi feito:
+  - foram baixados os certificados publicos oficiais:
+    - `Let's Encrypt R12`;
+    - `ISRG Root X1`;
+  - foi criado `storage/app/private/fiscal-ca-bundle.pem` concatenando:
+    - `cacert.pem`;
+    - `letsencrypt-r12.pem`;
+    - `isrg-root-x1.pem`;
+  - `config/services.php` passou a apontar por padrao para `storage/app/private/fiscal-ca-bundle.pem`;
+  - `FiscalNfceTransmissionService` passou a priorizar:
+    - caminho configurado em `services.fiscal.ca_bundle`;
+    - `storage/app/private/fiscal-ca-bundle.pem`;
+    - `storage/app/private/cacert.pem`;
+    - demais fallbacks ja existentes.
+
+- Efeito esperado:
+  - o cURL passa a receber um bundle reforcado com a cadeia publica explicita do endpoint;
+  - reduz a dependencia do comportamento automatico de chain-building do OpenSSL do PHP/XAMPP;
+  - facilita sincronizar esse mesmo diagnostico/ajuste no `pec1`.
+
+- Observacoes para sincronizar em `pec1`:
+  - levar junto:
+    - `app/Support/FiscalNfceTransmissionService.php`
+    - `config/services.php`
+    - `storage/app/private/letsencrypt-r12.pem`
+    - `storage/app/private/isrg-root-x1.pem`
+    - `storage/app/private/fiscal-ca-bundle.pem`
+  - manter `config/openssl-sefaz-legacy.cnf` como ja estava na etapa anterior;
+  - nao depende de migration.
+
+## 19/04/26 - Correcao da cadeia real do endpoint de producao da SEFAZ-GO
+
+- Arquivos alterados/criados:
+  - `storage/app/private/ac-soluti-ssl-ev-g4.crt`
+  - `storage/app/private/ac-soluti-ssl-ev-g4.pem`
+  - `storage/app/private/icp-brasil-raiz-v10.crt`
+  - `storage/app/private/icp-brasil-raiz-v10.pem`
+  - `storage/app/private/fiscal-ca-bundle.pem`
+  - `SYNC.md`
+
+- Causa identificada:
+  - a investigacao anterior estava enviesada por endpoint/cadeia errados;
+  - ao validar diretamente `https://nfe.sefaz.go.gov.br/nfe/services/NFeAutorizacao4`, foi confirmado que a producao da SEFAZ-GO nao usa `Let's Encrypt`;
+  - a cadeia real do servidor e:
+    - certificado `nfe.sefaz.go.gov.br`;
+    - intermediaria `AC SOLUTI SSL EV G4`;
+    - raiz `Autoridade Certificadora Raiz Brasileira v10`;
+  - por isso o bundle baseado em `Let's Encrypt` nao resolveria o `unable to get local issuer certificate` em producao.
+
+- O que foi feito:
+  - foram baixados os certificados publicos corretos da cadeia ICP-Brasil/SOLUTI v10;
+  - foi reconstruido `storage/app/private/fiscal-ca-bundle.pem` concatenando:
+    - `cacert.pem`;
+    - `ac-soluti-ssl-ev-g4.pem`;
+    - `icp-brasil-raiz-v10.pem`;
+  - foi validado com `openssl s_client -CAfile fiscal-ca-bundle.pem` que a verificacao do certificado do servidor passou para:
+    - `Verification: OK`;
+    - `Verify return code: 0 (ok)`.
+
+- Efeito observado:
+  - a falha de cadeia publica do servidor foi efetivamente corrigida no teste direto com OpenSSL;
+  - o erro residual passou a ser `sslv3 alert certificate unknown`, o que indica que o proximo suspeito deixou de ser a cadeia do servidor e passou a ser a aceitacao do certificado cliente no mutual TLS.
+
+- Observacoes para sincronizar em `pec1`:
+  - levar junto:
+    - `storage/app/private/ac-soluti-ssl-ev-g4.crt`
+    - `storage/app/private/ac-soluti-ssl-ev-g4.pem`
+    - `storage/app/private/icp-brasil-raiz-v10.crt`
+    - `storage/app/private/icp-brasil-raiz-v10.pem`
+    - `storage/app/private/fiscal-ca-bundle.pem`
+  - o bundle antigo baseado em `Let's Encrypt` nao representa a cadeia real da producao da SEFAZ-GO;
+  - nao depende de migration.
+
+## 19/04/26 - Correcao do hash do QR Code da NFC-e (`cStat 464`)
+
+- Arquivos alterados:
+  - `app/Support/FiscalNfceXmlService.php`
+  - `SYNC.md`
+
+- Causa identificada:
+  - o calculo do `hashQRCode` da NFC-e online estava divergindo do padrao oficial da versao 2.00;
+  - a string enviada ao `SHA-1` estava errada em dois pontos:
+    - incluia um separador `|` extra antes do CSC;
+    - usava o `cscId` sem normalizar a remocao dos zeros nao significativos;
+  - com isso, a URL do QR Code era montada com parametros validos, mas o hash final nao batia com o recalculo da SEFAZ, gerando `cStat 464 - Rejeicao: Codigo de Hash no QR-Code difere do calculado`.
+
+- O que foi feito:
+  - `FiscalNfceXmlService::buildQrCodeUrl()` passou a:
+    - normalizar o `cscId` usando apenas digitos e removendo zeros a esquerda;
+    - montar a base do hash como:
+      - `<chave>|2|<tpAmb>|<cscId><CSC>`
+      - ou seja, sem `|` entre `cscId` e `CSC`, conforme o manual;
+  - a URL final continuou no formato:
+    - `?p=<chave>|2|<tpAmb>|<cscId>|<hash>`
+
+- Efeito esperado:
+  - a SEFAZ passa a recalcular exatamente o mesmo `hashQRCode` gerado pelo sistema;
+  - elimina a rejeicao `464` quando o CSC e o CSC ID cadastrados estiverem corretos para o ambiente da loja.
+
+- Observacoes para sincronizar em `pec1`:
+  - levar junto:
+    - `app/Support/FiscalNfceXmlService.php`
+  - nao depende de migration;
+  - esta etapa nao altera a URL base da consulta, apenas a forma de calcular o `hashQRCode`.
+
+## 19/04/26 - Correcao da `urlChave` de Goiás para eliminar `cStat 878`
+
+- Arquivos alterados:
+  - `app/Support/FiscalWebserviceResolverService.php`
+  - `SYNC.md`
+
+- Causa identificada:
+  - a rejeicao `878 - Endereco do site da UF da Consulta por chave de acesso diverge do previsto` nao tinha relacao com localizacao fisica do usuario;
+  - o problema estava no mapeamento da tag `urlChave` para Goiás;
+  - o sistema estava preenchendo `urlChave` com:
+    - `https://nfeweb.sefaz.go.gov.br/nfeweb/sites/nfe/consulta-completa`
+    - `https://nfewebhomolog.sefaz.go.gov.br/nfeweb/sites/nfe/consulta-completa`
+  - mas a SEFAZ-GO espera o endereco oficial de consulta por chave no portal publico do estado.
+
+- O que foi feito:
+  - `FiscalWebserviceResolverService` passou a usar para Goiás, em producao e homologacao:
+    - `http://www.sefaz.go.gov.br/nfce/consulta`
+  - a URL do QR Code foi mantida separadamente, sem alterar o mapeamento de `qr_code_url`.
+
+- Efeito esperado:
+  - a tag `urlChave` passa a refletir o endereco oficial esperado pela SEFAZ-GO;
+  - elimina a rejeicao `878` quando a nota for retransmitida com o novo XML.
+
+- Observacoes para sincronizar em `pec1`:
+  - levar junto:
+    - `app/Support/FiscalWebserviceResolverService.php`
+  - nao depende de migration;
+  - esta etapa corrige apenas `urlChave`; nao altera webservice de autorizacao nem a URL do QR Code.
+
+## 19/04/26 - Ajuste visual na tela fiscal e botao de cupom fiscal na modal do terminal
+
+- Arquivos alterados:
+  - `resources/js/Pages/Settings/FiscalConfig.jsx`
+  - `resources/js/Pages/Dashboard.jsx`
+  - `SYNC.md`
+
+- Causa identificada:
+  - a grade de configuracao fiscal ainda exibia a coluna `XML debug`, o que poluia a leitura das notas preparadas;
+  - a modal `Cupom pronto para impressao` do dashboard tinha botao apenas para o cupom comum, mesmo quando a venda ja possuia informacoes fiscais suficientes para gerar um cupom fiscal.
+
+- O que foi feito:
+  - foi removida a coluna visual `XML debug` da tabela de notas em `FiscalConfig.jsx`;
+  - foi removido da tabela o card visual que renderizava esse bloco de debug;
+  - `Dashboard.jsx` passou a importar `buildFiscalReceiptHtml`;
+  - foi criado o fluxo `handlePrintFiscalReceipt()` para montar um payload fiscal a partir dos dados ja presentes na modal da venda;
+  - foi adicionado o botao `Cupom Fiscal` na modal `Cupom pronto para impressao` sempre que existir bloco fiscal na venda.
+
+- Efeito esperado:
+  - a tabela fiscal fica mais limpa e focada nas acoes operacionais;
+  - o operador consegue imprimir o cupom fiscal diretamente da modal da venda, sem depender de outra tela.
+
+- Observacoes para sincronizar em `pec1`:
+  - levar junto:
+    - `resources/js/Pages/Settings/FiscalConfig.jsx`
+    - `resources/js/Pages/Dashboard.jsx`
+  - nao depende de migration;
+  - o botao novo gera o DANFE/NFC-e no frontend usando os dados fiscais ja retornados na venda.
+
+## 19/04/26 - Botao `Cupom Fiscal` exibido somente apos autorizacao da NFC-e
+
+- Arquivos alterados:
+  - `resources/js/Pages/Dashboard.jsx`
+  - `SYNC.md`
+
+- Causa identificada:
+  - o botao `Cupom Fiscal` estava aparecendo cedo demais, apenas pela existencia do bloco fiscal na venda;
+  - antes da transmissao/autorizacao, o recibo fiscal ainda pode nao ter `chave_acesso`, `protocolo` e QR Code finais, o que gera impressao incompleta.
+
+- O que foi feito:
+  - a regra da modal `Cupom pronto para impressao` passou a exibir o botao `Cupom Fiscal` somente quando:
+    - `receiptData.fiscal.status === 'emitida'`
+
+- Efeito esperado:
+  - evita impressao do cupom fiscal sem QR Code e chave de acesso definitivos;
+  - o operador continua com o botao normal `Imprimir` disponivel em qualquer momento da venda.
+
+- Observacoes para sincronizar em `pec1`:
+  - levar junto:
+    - `resources/js/Pages/Dashboard.jsx`
+  - nao depende de migration;
+  - a mudanca e apenas de regra visual/operacional da modal.
+
+## 19/04/26 - Impressao do cupom fiscal aguardando o carregamento do QR Code
+
+- Arquivos alterados:
+  - `resources/js/Pages/Dashboard.jsx`
+  - `SYNC.md`
+
+- Causa identificada:
+  - o QR Code continuava saindo em branco porque `Dashboard.jsx` ainda chamava `printWindow.print()` imediatamente apos escrever o HTML fiscal;
+  - isso atropelava o script interno de `buildFiscalReceiptHtml()`, que ja estava preparado para esperar o `load` da imagem `#qrCodeImage` antes de imprimir.
+
+- O que foi feito:
+  - foi removido o `printWindow.print()` imediato do fluxo `handlePrintFiscalReceipt()`;
+  - a janela fiscal passou a depender do script interno do HTML fiscal para decidir o momento correto do `print()`;
+  - `Dashboard.jsx` ficou responsavel apenas por fechar a janela no `afterprint`.
+
+- Efeito esperado:
+  - o QR Code tem tempo para carregar antes da impressao;
+  - o cupom fiscal deixa de sair com o quadro em branco quando a imagem externa responder normalmente.
+
+- Observacoes para sincronizar em `pec1`:
+  - levar junto:
+    - `resources/js/Pages/Dashboard.jsx`
+  - nao depende de migration;
+  - esta etapa depende do `buildFiscalReceiptHtml()` que ja estava com o script de espera do QR Code.
+
+## 19/04/26 - Remocao do `XML debug` da modal `Cupom pronto para impressao`
+
+- Arquivos alterados:
+  - `resources/js/Pages/Dashboard.jsx`
+  - `SYNC.md`
+
+- Causa identificada:
+  - mesmo apos limpar a tela de configuracao fiscal, a modal de fechamento da venda ainda exibia o bloco `XML debug`;
+  - isso acontecia porque `Dashboard.jsx` continuava renderizando `renderFiscalXmlDebug(receiptData.fiscal.xml_debug)` dentro do card azul da nota fiscal.
+
+- O que foi feito:
+  - foi removida a funcao `renderFiscalXmlDebug` de `Dashboard.jsx`;
+  - foi removida a chamada desse bloco dentro da modal `Cupom pronto para impressao`.
+
+- Efeito esperado:
+  - a modal passa a mostrar apenas o resumo fiscal operacional:
+    - numero;
+    - status;
+    - protocolo;
+    - recibo;
+    - mensagem;
+  - elimina a poluicao visual do debug tecnico na experiencia do caixa.
+
+- Observacoes para sincronizar em `pec1`:
+  - levar junto:
+    - `resources/js/Pages/Dashboard.jsx`
+  - nao depende de migration;
+  - esta etapa e apenas de limpeza visual.

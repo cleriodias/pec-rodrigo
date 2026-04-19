@@ -620,16 +620,28 @@ class FiscalNfceXmlService
         $baseUrl = rtrim($baseUrl, '?');
         $tpAmb = $configuration->tb26_ambiente === 'producao' ? '1' : '2';
         $qrCodeVersion = '2';
-        $cscId = trim((string) $configuration->tb26_csc_id);
+        $cscId = $this->normalizeQrCodeCscId($configuration->tb26_csc_id);
         $csc = trim((string) $configuration->tb26_csc);
 
         if ($cscId === '' || $csc === '') {
             throw new RuntimeException('CSC ID e CSC sao obrigatorios para montar o QR Code da NFC-e.');
         }
 
-        $hash = strtoupper(sha1(implode('|', [$accessKey, $qrCodeVersion, $tpAmb, $cscId, $csc])));
+        $hashBase = implode('|', [$accessKey, $qrCodeVersion, $tpAmb, $cscId]) . $csc;
+        $hash = strtoupper(sha1($hashBase));
 
         return $baseUrl . '?p=' . implode('|', [$accessKey, $qrCodeVersion, $tpAmb, $cscId, $hash]);
+    }
+
+    private function normalizeQrCodeCscId(?string $value): string
+    {
+        $digits = $this->onlyDigits($value);
+
+        if ($digits === '') {
+            return '';
+        }
+
+        return ltrim($digits, '0') ?: '0';
     }
 
     private function optionalDigits(?string $value, ?int $expectedLength = null): ?string

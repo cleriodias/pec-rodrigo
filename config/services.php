@@ -41,7 +41,8 @@ return [
     ],
 
     'fiscal' => [
-        'ca_bundle' => env('FISCAL_CA_BUNDLE'),
+        'ca_bundle' => env('FISCAL_CA_BUNDLE', storage_path('app/private/fiscal-ca-bundle.pem')),
+        'openssl_legacy_config' => env('FISCAL_OPENSSL_LEGACY_CONFIG', base_path('config/openssl-sefaz-legacy.cnf')),
     ],
 
 ];
