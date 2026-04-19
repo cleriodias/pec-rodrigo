@@ -16,6 +16,8 @@ use RuntimeException;
 
 class FiscalNfceXmlService
 {
+    private const HOMOLOGATION_ITEM_DESCRIPTION = 'NOTA FISCAL EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL';
+
     public function __construct(
         private readonly FiscalWebserviceResolverService $fiscalWebserviceResolverService,
     ) {
@@ -75,7 +77,7 @@ class FiscalNfceXmlService
 
         $this->appendIde($document, $infNfe, $configuration, $issueDate, $cUf, $cNf, $serie, $number, $verifierDigit);
         $this->appendEmitter($document, $infNfe, $configuration, $unitCnpj);
-        $this->appendItems($document, $infNfe, $sales, (int) $configuration->tb26_crt);
+        $this->appendItems($document, $infNfe, $sales, (int) $configuration->tb26_crt, $configuration);
         $documentTotal = (float) $sales->sum('valor_total');
 
         $this->appendTotals($document, $infNfe, $sales);
@@ -84,11 +86,23 @@ class FiscalNfceXmlService
         $this->appendAdditionalInfo($document, $infNfe, $payment, $unit->tb2_nome);
         $this->appendSupplementalInfo($document, $nfe, $configuration, $accessKey, $endpoints);
         $this->signDocument($document, $infNfe, $certificateData);
+        $signedXml = $document->saveXML();
+
+        if ($signedXml === false) {
+            throw new RuntimeException('Nao foi possivel serializar o XML fiscal assinado.');
+        }
+
+        $this->assertSignedXmlIsLocallyValid($signedXml, $certificateData);
 
         return [
-            'xml' => $document->saveXML(),
+            'xml' => $signedXml,
             'access_key' => $accessKey,
         ];
+    }
+
+    public function validateSignedXmlOrFail(string $signedXml, array $certificateData): void
+    {
+        $this->assertSignedXmlIsLocallyValid($signedXml, $certificateData);
     }
 
     private function appendIde(
@@ -166,7 +180,13 @@ class FiscalNfceXmlService
         $this->appendTextElement($document, $emit, 'CRT', (string) $configuration->tb26_crt);
     }
 
-    private function appendItems(DOMDocument $document, DOMElement $infNfe, $sales, int $crt): void
+    private function appendItems(
+        DOMDocument $document,
+        DOMElement $infNfe,
+        $sales,
+        int $crt,
+        ConfiguracaoFiscal $configuration,
+    ): void
     {
         foreach ($sales->values() as $index => $sale) {
             /** @var Venda $sale */
@@ -202,12 +222,15 @@ class FiscalNfceXmlService
 
             $ean = $this->normalizeGtIn($product->tb1_codbar);
             $quantity = number_format((float) $sale->quantidade, 4, '.', '');
-            $unitPrice = number_format((float) $sale->valor_unitario, 10, '.', '');
+            $unitPrice = number_format((float) $sale->valor_unitario, 4, '.', '');
             $total = number_format((float) $sale->valor_total, 2, '.', '');
+            $productDescription = $index === 0 && $configuration->tb26_ambiente === 'homologacao'
+                ? self::HOMOLOGATION_ITEM_DESCRIPTION
+                : (string) $sale->produto_nome;
 
             $this->appendTextElement($document, $prod, 'cProd', (string) $sale->tb1_id);
             $this->appendTextElement($document, $prod, 'cEAN', $ean);
-            $this->appendTextElement($document, $prod, 'xProd', (string) $sale->produto_nome);
+            $this->appendTextElement($document, $prod, 'xProd', $productDescription);
             $this->appendTextElement($document, $prod, 'NCM', $this->requiredDigits($product->tb1_ncm, 8, sprintf('NCM do produto %s', $sale->produto_nome)));
             $this->appendOptionalTextElement($document, $prod, 'CEST', $this->optionalDigits($product->tb1_cest, 7));
             $this->appendTextElement($document, $prod, 'CFOP', $this->requiredDigits($product->tb1_cfop, 4, sprintf('CFOP do produto %s', $sale->produto_nome)));
@@ -303,16 +326,30 @@ class FiscalNfceXmlService
         $paymentNode = $document->createElement('pag');
         $infNfe->appendChild($paymentNode);
 
-        $detail = $document->createElement('detPag');
-        $paymentNode->appendChild($detail);
-        $paymentData = $this->resolvePaymentData((string) $payment->tipo_pagamento);
-        $this->appendTextElement($document, $detail, 'tPag', $paymentData['code']);
+        foreach ($this->resolvePaymentDetails($payment, $documentTotal) as $paymentDetail) {
+            $detail = $document->createElement('detPag');
+            $paymentNode->appendChild($detail);
 
-        if ($paymentData['description'] !== null) {
-            $this->appendTextElement($document, $detail, 'xPag', $paymentData['description']);
+            $paymentData = $this->resolvePaymentData($paymentDetail['type']);
+            $this->appendTextElement($document, $detail, 'tPag', $paymentData['code']);
+
+            if ($paymentData['description'] !== null) {
+                $this->appendTextElement($document, $detail, 'xPag', $paymentData['description']);
+            }
+
+            $this->appendTextElement(
+                $document,
+                $detail,
+                'vPag',
+                number_format((float) $paymentDetail['amount'], 2, '.', ''),
+            );
+
+            if ($paymentData['requires_card']) {
+                $card = $document->createElement('card');
+                $detail->appendChild($card);
+                $this->appendTextElement($document, $card, 'tpIntegra', '2');
+            }
         }
-
-        $this->appendTextElement($document, $detail, 'vPag', number_format($documentTotal, 2, '.', ''));
     }
 
     private function appendAdditionalInfo(
@@ -378,10 +415,7 @@ class FiscalNfceXmlService
                 ]
             );
             $signature->sign($privateKey, $document->documentElement);
-            $signature->add509Cert((string) $certificateData['certificate_pem'], true, false, [
-                'subjectName' => true,
-                'issuerSerial' => true,
-            ]);
+            $signature->add509Cert((string) $certificateData['certificate_pem'], true, false);
         } catch (\Throwable $exception) {
             throw new RuntimeException(
                 'Falha ao assinar o XML fiscal com o certificado da loja.',
@@ -390,9 +424,80 @@ class FiscalNfceXmlService
         }
     }
 
+    private function assertSignedXmlIsLocallyValid(string $signedXml, array $certificateData): void
+    {
+        try {
+            $document = new DOMDocument();
+
+            if (! @$document->loadXML($signedXml)) {
+                throw new RuntimeException('O XML fiscal assinado gerado localmente nao e valido.');
+            }
+
+            $signature = new XMLSecurityDSig('');
+            $signatureNode = $signature->locateSignature($document);
+
+            if (! $signatureNode instanceof DOMElement) {
+                throw new RuntimeException('A assinatura digital nao foi localizada no XML fiscal gerado.');
+            }
+
+            try {
+                $signature->canonicalizeSignedInfo();
+                $signature->validateReference();
+            } catch (\Throwable $exception) {
+                throw new RuntimeException(sprintf(
+                    'A assinatura digital gerada ficou inconsistente no DigestValue/Reference do XML fiscal (URI %s).',
+                    $this->extractSignatureReferenceUri($document)
+                ), previous: $exception);
+            }
+
+            $publicKey = $signature->locateKey();
+
+            if (! $publicKey) {
+                throw new RuntimeException('Nao foi possivel localizar a chave publica da assinatura fiscal.');
+            }
+
+            try {
+                $publicKey->loadKey((string) $certificateData['certificate_pem'], false, true);
+            } catch (\Throwable $exception) {
+                throw new RuntimeException('Nao foi possivel carregar a chave publica do certificado para validar a assinatura fiscal.', previous: $exception);
+            }
+
+            try {
+                $verified = $signature->verify($publicKey);
+            } catch (\Throwable $exception) {
+                throw new RuntimeException('A assinatura digital gerada ficou inconsistente no SignatureValue do XML fiscal.', previous: $exception);
+            }
+
+            if ($verified !== 1 && $verified !== true) {
+                throw new RuntimeException(sprintf(
+                    'A assinatura digital gerada ficou inconsistente no SignatureValue do XML fiscal (retorno %s).',
+                    var_export($verified, true)
+                ));
+            }
+        } catch (RuntimeException $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            throw new RuntimeException(
+                'A assinatura digital gerada nao confere com o conteudo atual do XML fiscal.',
+                previous: $exception
+            );
+        }
+    }
+
+    private function extractSignatureReferenceUri(DOMDocument $document): string
+    {
+        $xpath = new \DOMXPath($document);
+        $xpath->registerNamespace('ds', 'http://www.w3.org/2000/09/xmldsig#');
+        $uri = trim((string) $xpath->evaluate('string(//ds:Signature/ds:SignedInfo/ds:Reference/@URI)'));
+
+        return $uri !== '' ? $uri : 'nao informada';
+    }
+
     private function appendTextElement(DOMDocument $document, DOMElement $parent, string $tag, string $value): void
     {
-        $parent->appendChild($document->createElement($tag, $value));
+        $element = $document->createElement($tag);
+        $element->appendChild($document->createTextNode($value));
+        $parent->appendChild($element);
     }
 
     private function appendOptionalTextElement(DOMDocument $document, DOMElement $parent, string $tag, ?string $value): void
@@ -455,13 +560,56 @@ class FiscalNfceXmlService
     private function resolvePaymentData(string $paymentType): array
     {
         return match ($paymentType) {
-            'dinheiro' => ['code' => '01', 'description' => null],
-            'vale' => ['code' => '10', 'description' => null],
-            'refeicao' => ['code' => '11', 'description' => null],
-            'faturar' => ['code' => '90', 'description' => null],
-            'maquina' => ['code' => '99', 'description' => 'MAQUINA'],
-            default => ['code' => '99', 'description' => strtoupper(str_replace('_', ' ', trim($paymentType))) ?: 'OUTROS'],
+            'dinheiro' => ['code' => '01', 'description' => null, 'requires_card' => false],
+            'cartao_credito', 'maquina' => ['code' => '03', 'description' => null, 'requires_card' => true],
+            'cartao_debito' => ['code' => '04', 'description' => null, 'requires_card' => true],
+            'vale' => ['code' => '10', 'description' => null, 'requires_card' => false],
+            'refeicao' => ['code' => '11', 'description' => null, 'requires_card' => false],
+            'faturar' => ['code' => '90', 'description' => null, 'requires_card' => false],
+            default => ['code' => '99', 'description' => strtoupper(str_replace('_', ' ', trim($paymentType))) ?: 'OUTROS', 'requires_card' => false],
         };
+    }
+
+    private function resolvePaymentDetails(VendaPagamento $payment, float $documentTotal): array
+    {
+        $paymentType = (string) $payment->tipo_pagamento;
+        $cardAmount = max((float) $payment->dois_pgto, 0);
+
+        if ($paymentType === 'dinheiro' && $cardAmount > 0) {
+            $paymentType = 'dinheiro_cartao_credito';
+        }
+
+        if (! in_array($paymentType, ['dinheiro_cartao_credito', 'dinheiro_cartao_debito'], true)) {
+            return [[
+                'type' => $paymentType,
+                'amount' => $documentTotal,
+            ]];
+        }
+
+        $cashAmount = max((float) $payment->valor_total - $cardAmount, 0);
+        $documentCashAmount = min($cashAmount, $documentTotal);
+        $documentCardAmount = max($documentTotal - $documentCashAmount, 0);
+        $cardPaymentType = str_ends_with($paymentType, 'debito') ? 'cartao_debito' : 'cartao_credito';
+        $details = [];
+
+        if ($documentCashAmount > 0) {
+            $details[] = [
+                'type' => 'dinheiro',
+                'amount' => $documentCashAmount,
+            ];
+        }
+
+        if ($documentCardAmount > 0) {
+            $details[] = [
+                'type' => $cardPaymentType,
+                'amount' => $documentCardAmount,
+            ];
+        }
+
+        return $details !== [] ? $details : [[
+            'type' => 'dinheiro',
+            'amount' => $documentTotal,
+        ]];
     }
 
     private function buildQrCodeUrl(
@@ -471,9 +619,17 @@ class FiscalNfceXmlService
     ): string {
         $baseUrl = rtrim($baseUrl, '?');
         $tpAmb = $configuration->tb26_ambiente === 'producao' ? '1' : '2';
-        $qrCodeVersion = '3';
+        $qrCodeVersion = '2';
+        $cscId = trim((string) $configuration->tb26_csc_id);
+        $csc = trim((string) $configuration->tb26_csc);
 
-        return $baseUrl . '?p=' . implode('|', [$accessKey, $qrCodeVersion, $tpAmb]);
+        if ($cscId === '' || $csc === '') {
+            throw new RuntimeException('CSC ID e CSC sao obrigatorios para montar o QR Code da NFC-e.');
+        }
+
+        $hash = strtoupper(sha1(implode('|', [$accessKey, $qrCodeVersion, $tpAmb, $cscId, $csc])));
+
+        return $baseUrl . '?p=' . implode('|', [$accessKey, $qrCodeVersion, $tpAmb, $cscId, $hash]);
     }
 
     private function optionalDigits(?string $value, ?int $expectedLength = null): ?string

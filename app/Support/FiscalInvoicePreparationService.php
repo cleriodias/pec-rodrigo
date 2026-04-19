@@ -67,6 +67,28 @@ class FiscalInvoicePreparationService
                         ->first();
                 }
 
+                if (! $this->supportsAutomaticFiscalGenerationForPaymentType($payment->tipo_pagamento)) {
+                    if (! $invoice) {
+                        return null;
+                    }
+
+                    if (in_array((string) $invoice->tb27_status, ['emitida', 'cancelada'], true)) {
+                        return $invoice;
+                    }
+
+                    $message = $this->buildNonFiscalPaymentMessage($payment->tipo_pagamento);
+
+                    $invoice->fill([
+                        'tb27_status' => 'erro_validacao',
+                        'tb27_erros' => [$message],
+                        'tb27_ultima_tentativa_em' => now(),
+                        'tb27_mensagem' => $message,
+                    ]);
+                    $invoice->save();
+
+                    return $invoice;
+                }
+
                 $nextNumber = $invoice?->tb27_numero;
                 $serie = $invoice?->tb27_serie;
                 $modelo = $invoice?->tb27_modelo ?? 'nfce';
@@ -167,6 +189,8 @@ class FiscalInvoicePreparationService
                 'pendente_configuracao',
                 'erro_validacao',
                 'pendente_emissao',
+                'xml_assinado',
+                'erro_transmissao',
             ])
             ->with('pagamento.vendas.produto', 'pagamento.vendas.unidade')
             ->get();
@@ -502,5 +526,32 @@ class FiscalInvoicePreparationService
         return str_contains($message, 'lock wait timeout exceeded')
             || str_contains($message, 'deadlock found')
             || in_array((string) $exception->getCode(), ['1205', '1213'], true);
+    }
+
+    private function supportsAutomaticFiscalGenerationForPaymentType(?string $paymentType): bool
+    {
+        return in_array((string) $paymentType, [
+            'dinheiro',
+            'cartao_credito',
+            'cartao_debito',
+            'dinheiro_cartao_credito',
+            'dinheiro_cartao_debito',
+            'maquina',
+        ], true);
+    }
+
+    private function buildNonFiscalPaymentMessage(?string $paymentType): string
+    {
+        $label = match ((string) $paymentType) {
+            'vale' => 'Vale',
+            'refeicao' => 'Refeicao',
+            'faturar' => 'Faturar',
+            default => strtoupper(str_replace('_', ' ', trim((string) $paymentType))) ?: 'NAO INFORMADO',
+        };
+
+        return sprintf(
+            'Pagamento %s e apenas controle interno e nao gera nota fiscal automatica.',
+            $label
+        );
     }
 }

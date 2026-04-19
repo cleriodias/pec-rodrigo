@@ -12,11 +12,27 @@ const WEIGHTED_BARCODE_PREFIX = '2';
 const WEIGHTED_BARCODE_LENGTH = 13;
 const paymentLabels = {
     maquina: 'Maquina',
+    cartao_credito: 'Cartao credito',
+    cartao_debito: 'Cartao debito',
     dinheiro: 'Dinheiro',
+    dinheiro_cartao_credito: 'Dinheiro + Cartao credito',
+    dinheiro_cartao_debito: 'Dinheiro + Cartao debito',
     vale: 'Vale',
     faturar: 'Faturar',
     refeicao: 'Refeição',
 };
+const cardTypeOptions = [
+    {
+        value: 'cartao_credito',
+        label: paymentLabels.cartao_credito,
+        classes: 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-200 text-white',
+    },
+    {
+        value: 'cartao_debito',
+        label: paymentLabels.cartao_debito,
+        classes: 'bg-sky-600 hover:bg-sky-700 focus:ring-sky-200 text-white',
+    },
+];
 const fiscalStatusLabels = {
     pendente_configuracao: 'Pendente configuracao',
     erro_validacao: 'Erro de validacao',
@@ -26,17 +42,33 @@ const fiscalStatusLabels = {
     emitida: 'Emitida',
     cancelada: 'Cancelada',
 };
+const renderFiscalXmlDebug = (xmlDebug) => {
+    if (!xmlDebug) {
+        return null;
+    }
+
+    return (
+        <div className="mt-2 rounded-lg border border-blue-200 bg-white/70 px-3 py-2 text-xs text-blue-900">
+            <p><span className="font-medium">mod:</span> {xmlDebug.mod || '--'}</p>
+            <p><span className="font-medium">tpImp:</span> {xmlDebug.tp_imp || '--'}</p>
+            <p><span className="font-medium">dest:</span> {xmlDebug.dest_present ? 'sim' : 'nao'}</p>
+            <p><span className="font-medium">doc:</span> {xmlDebug.dest_document || '--'}</p>
+            <p><span className="font-medium">nome:</span> {xmlDebug.dest_name || '--'}</p>
+            <p><span className="font-medium">cMun:</span> {xmlDebug.dest_city_code || '--'}</p>
+            <p><span className="font-medium">card:</span> {xmlDebug.card_present ? 'sim' : 'nao'}</p>
+            <p><span className="font-medium">csc_id:</span> {xmlDebug.csc_id || '--'}</p>
+            <p><span className="font-medium">assinatura:</span> {xmlDebug.signature_present ? 'sim' : 'nao'}</p>
+            <p className="break-all"><span className="font-medium">qr:</span> {xmlDebug.qr_code_data || '--'}</p>
+        </div>
+    );
+};
 const paymentOptions = [
     {
         value: 'dinheiro',
         label: paymentLabels.dinheiro,
         classes: 'bg-green-600 hover:bg-green-700 focus:ring-green-200 text-white',
     },
-    {
-        value: 'maquina',
-        label: paymentLabels.maquina,
-        classes: 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-200 text-white',
-    },
+    ...cardTypeOptions,
     {
         value: 'vale',
         label: paymentLabels.vale,
@@ -236,6 +268,7 @@ export default function Dashboard() {
     const [transmittingFiscal, setTransmittingFiscal] = useState(false);
     const [cashInputVisible, setCashInputVisible] = useState(false);
     const [cashValue, setCashValue] = useState('');
+    const [cashCardType, setCashCardType] = useState('');
     const [showFaturarWarning, setShowFaturarWarning] = useState(false);
     const cashInputRef = useRef(null);
     const [savedCarts, setSavedCarts] = useState([]);
@@ -719,6 +752,7 @@ export default function Dashboard() {
         if (items.length === 0) {
             setCashInputVisible(false);
             setCashValue('');
+            setCashCardType('');
             setShowChangeCard(false);
         }
     }, [items.length]);
@@ -998,14 +1032,25 @@ export default function Dashboard() {
             return;
         }
 
-        finalizeSale('dinheiro', { cashAmount: numericCashValue });
+        if (cashCardComplement > 0 && !cashCardType) {
+            setSaleError('Selecione se o restante no cartao sera no credito ou no debito.');
+            return;
+        }
+
+        finalizeSale('dinheiro', {
+            cashAmount: numericCashValue,
+            cardType: cashCardComplement > 0 ? cashCardType : null,
+        });
     };
 
     const closeFaturarWarning = () => {
         setShowFaturarWarning(false);
     };
 
-    const finalizeSale = (type, { valeUserId = null, valeType = null, cashAmount = null } = {}) => {
+    const finalizeSale = (
+        type,
+        { valeUserId = null, valeType = null, cashAmount = null, cardType = null } = {},
+    ) => {
         if (isSalesBlocked) {
             if (blockedSaleMessage) {
                 setSaleError(blockedSaleMessage);
@@ -1025,6 +1070,7 @@ export default function Dashboard() {
             vale_user_id: valeUserId,
             vale_type: type === 'vale' ? valeType : null,
             valor_pago: cashAmount,
+            card_type: cardType,
         };
 
         if (selectedComandaCode !== null) {
@@ -1071,6 +1117,7 @@ export default function Dashboard() {
                 resetValePicker();
                 setCashInputVisible(false);
                 setCashValue('');
+                setCashCardType('');
                 if (selectedComandaCode !== null) {
                     setSelectedComandaCode(null);
                     setItems([]);
@@ -1120,6 +1167,7 @@ export default function Dashboard() {
         if (type === 'vale') {
             setCashInputVisible(false);
             setCashValue('');
+            setCashCardType('');
             setValePickerVisible(true);
             setValeSearchTerm('');
             setValeResults([]);
@@ -1133,6 +1181,7 @@ export default function Dashboard() {
             setSaleError('');
             if (!cashInputVisible) {
                 setCashInputVisible(true);
+                setCashCardType('');
                 setShowChangeCard(true);
                 requestAnimationFrame(() => {
                     cashInputRef.current?.focus();
@@ -1146,7 +1195,15 @@ export default function Dashboard() {
                 return;
             }
 
-            finalizeSale('dinheiro', { cashAmount: numericCashValue });
+            if (cashCardComplement > 0 && !cashCardType) {
+                setSaleError('Selecione se o restante no cartao sera no credito ou no debito.');
+                return;
+            }
+
+            finalizeSale('dinheiro', {
+                cashAmount: numericCashValue,
+                cardType: cashCardComplement > 0 ? cashCardType : null,
+            });
             return;
         }
 
@@ -1154,6 +1211,7 @@ export default function Dashboard() {
         setCashInputVisible(false);
         setShowChangeCard(false);
         setCashValue('');
+        setCashCardType('');
         finalizeSale(type);
     };
 
@@ -1333,6 +1391,7 @@ export default function Dashboard() {
         resetValePicker();
         setCashInputVisible(false);
         setCashValue('');
+        setCashCardType('');
         setHideSuggestions(false);
         requestAnimationFrame(() => {
             inputRef.current?.focus();
@@ -1392,6 +1451,7 @@ export default function Dashboard() {
         setHideSuggestions(true);
         setCashInputVisible(false);
         setCashValue('');
+        setCashCardType('');
         if (typeof window !== 'undefined') {
             window.localStorage.setItem(
                 ITEMS_STORAGE_KEY,
@@ -1725,7 +1785,7 @@ export default function Dashboard() {
                                         <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
                                         </p>
                                     </div>
-                                    <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                                    <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                                         {paymentOptions.map((option) => (
                                             <button
                                                 type="button"
@@ -1817,9 +1877,39 @@ export default function Dashboard() {
                                                         placeholder="Ex.: 50.00"
                                                     />
                                                     {cashCardComplement > 0 && (
-                                                        <p className="mt-2 text-xs text-amber-700 dark:text-amber-200">
-                                                            Restante no cartao: {formatCurrency(cashCardComplement)}
-                                                        </p>
+                                                        <div className="mt-2 space-y-2">
+                                                            <p className="text-xs text-amber-700 dark:text-amber-200">
+                                                                Restante no cartao: {formatCurrency(cashCardComplement)}
+                                                            </p>
+                                                            <div>
+                                                                <p className="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">
+                                                                    Tipo do restante no cartao
+                                                                </p>
+                                                                <div className="mt-2 flex flex-wrap gap-2">
+                                                                    {cardTypeOptions.map((option) => {
+                                                                        const isSelected = cashCardType === option.value;
+
+                                                                        return (
+                                                                            <button
+                                                                                type="button"
+                                                                                key={`cash-${option.value}`}
+                                                                                onClick={() => {
+                                                                                    setCashCardType(option.value);
+                                                                                    setSaleError('');
+                                                                                }}
+                                                                                className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                                                                                    isSelected
+                                                                                        ? 'border-indigo-600 bg-indigo-600 text-white'
+                                                                                        : 'border-gray-300 bg-white text-gray-700 hover:border-indigo-400 hover:text-indigo-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200'
+                                                                                }`}
+                                                                            >
+                                                                                {option.label}
+                                                                            </button>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </div>
+                                                        </div>
                                                     )}
                                                     <p className="mt-2 text-xs text-gray-600 dark:text-gray-300">
                                                         Informe o valor recebido e pressione Enter para finalizar.
@@ -1992,7 +2082,7 @@ export default function Dashboard() {
                                 <p key={paragraph}>{paragraph}</p>
                             ))}
                         </div>
-                        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                             <button
                                 type="button"
                                 onClick={() => handleFaturarWarningChoice('dinheiro')}
@@ -2003,11 +2093,19 @@ export default function Dashboard() {
                             </button>
                             <button
                                 type="button"
-                                onClick={() => handleFaturarWarningChoice('maquina')}
+                                onClick={() => handleFaturarWarningChoice('cartao_credito')}
                                 disabled={saleLoading}
                                 className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow hover:bg-blue-700 disabled:opacity-60"
                             >
-                                Maquina
+                                Credito
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleFaturarWarningChoice('cartao_debito')}
+                                disabled={saleLoading}
+                                className="rounded-xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white shadow hover:bg-sky-700 disabled:opacity-60"
+                            >
+                                Debito
                             </button>
                             <button
                                 type="button"
@@ -2125,6 +2223,7 @@ export default function Dashboard() {
                                                 {receiptData.fiscal.mensagem}
                                             </p>
                                         )}
+                                        {renderFiscalXmlDebug(receiptData.fiscal.xml_debug)}
                                     </div>
                                 )}
                                 <p className="text-lg font-bold text-indigo-600">

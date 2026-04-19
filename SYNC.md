@@ -2573,3 +2573,147 @@
   - nao depende de migration;
   - depois de sincronizar, regenerar notas antigas que estavam em `erro_validacao` apenas por itens mistos, para que a nova regra parcial seja aplicada;
   - importante manter o uso de `valor_total_documento` e `itens_excluidos` no payload fiscal, porque eles passam a ser a referencia correta do documento quando a nota for parcial.
+
+## 19/04/26 - Clonagem da parte de nota fiscal do `pec1` para este projeto
+
+- Arquivos alterados:
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+  - `app/Http/Controllers/SaleController.php`
+  - `app/Support/FiscalInvoicePreparationService.php`
+  - `resources/js/Pages/Settings/FiscalConfig.jsx`
+  - `SYNC.md`
+
+- Causa identificada:
+  - a parte fiscal deste projeto estava divergente da copia em `C:\xampp\htdocs\pec1`;
+  - o fluxo de nota fiscal daqui tinha ficado misturado, com trechos mais novos locais e outros comportamentos diferentes do `pec1`;
+  - isso afetava principalmente:
+    - preparacao automatica da nota conforme tipo de pagamento;
+    - reprocessamento de notas;
+    - transmissao manual da nota;
+    - resumo/debug mostrado na tela fiscal;
+    - fluxo de venda com pagamentos em cartao e pagamento misto dinheiro + cartao.
+
+- O que foi feito:
+  - `FiscalInvoicePreparationService` foi alinhado ao `pec1`:
+    - voltou a bloquear geracao automatica para pagamentos que sao apenas controle interno;
+    - voltou a registrar mensagem especifica para `vale`, `refeicao` e `faturar` quando nao geram nota automatica;
+    - o reprocessamento voltou a incluir tambem notas `xml_assinado` e `erro_transmissao`;
+  - `FiscalConfigurationController` foi alinhado ao `pec1`:
+    - restaurado o fluxo de transmitir nota revalidando o pagamento e regenerando a nota antes da transmissao;
+    - restaurados os limites de tamanho dos campos do emitente conforme estavam no `pec1`;
+    - restaurado o enriquecimento da mensagem fiscal quando houver `cStat 462`, incluindo referencia ao `CSC ID`;
+    - restaurado o bloco `xml_debug` na listagem das notas;
+    - restaurado o suporte aos labels de pagamento com `cartao_credito`, `cartao_debito`, `dinheiro_cartao_credito` e `dinheiro_cartao_debito`;
+  - `resources/js/Pages/Settings/FiscalConfig.jsx` foi alinhado ao `pec1`:
+    - voltou a mostrar a coluna `XML debug`;
+    - voltou a sincronizar `tb2_id` e o formulario de reprocessamento com `useEffect`;
+    - voltou a exibir o erro de validacao de `tb2_id`;
+  - `SaleController` foi alinhado ao `pec1`:
+    - restaurado o aceite dos tipos `cartao_credito` e `cartao_debito`;
+    - restaurado o fluxo de pagamento misto `dinheiro + cartao`;
+    - restaurada a transmissao fiscal via caixa com regeneracao previa da nota;
+    - restaurado o `xml_debug` no resumo fiscal retornado pela API de venda/transmissao.
+
+- Efeito esperado:
+  - este projeto volta a ter o mesmo comportamento fiscal do `pec1` nos arquivos centrais comparados;
+  - a tela fiscal administrativa e o fluxo fiscal do caixa passam a responder do mesmo jeito da copia;
+  - diagnostico de XML, mensagens fiscais e regras de transmissao ficam padronizados entre os dois ambientes.
+
+- Observacoes para sincronizar em `pec1`:
+  - esta entrada documenta uma sincronizacao no sentido `pec1 -> pec-rodrigo`;
+  - se futuramente precisar repetir esta mesma clonagem em outro ambiente, usar exatamente os arquivos listados acima;
+  - nao houve migration nova nesta clonagem;
+  - os arquivos centrais comparados e alinhados contra o `pec1` foram:
+    - `app/Http/Controllers/FiscalConfigurationController.php`
+    - `app/Http/Controllers/SaleController.php`
+    - `app/Support/FiscalInvoicePreparationService.php`
+    - `resources/js/Pages/Settings/FiscalConfig.jsx`
+
+## 19/04/26 - Sincronizacao da branch `23` do `pec1` para este projeto
+
+- Arquivos alterados:
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+  - `app/Http/Controllers/SaleController.php`
+  - `app/Http/Controllers/SalesReportController.php`
+  - `app/Http/Controllers/UnitController.php`
+  - `app/Support/FiscalInvoicePreparationService.php`
+  - `app/Support/FiscalNfceTransmissionService.php`
+  - `app/Support/FiscalNfceXmlService.php`
+  - `resources/js/Pages/Dashboard.jsx`
+  - `resources/js/Pages/Settings/FiscalConfig.jsx`
+  - `resources/js/Pages/Units/UnitIndex.jsx`
+  - `resources/js/Utils/receipt.js`
+  - `routes/web.php`
+  - `tests/Feature/SaleCardPaymentTypesTest.php`
+  - `tests/Unit/FiscalInvoicePreparationServiceTest.php`
+  - `tests/Unit/FiscalNfceTransmissionServiceTest.php`
+  - `tests/Unit/FiscalNfceXmlServiceTest.php`
+  - `SYNC.md`
+
+- Causa identificada:
+  - a branch `23` do projeto `C:\xampp\htdocs\pec1` continha um pacote maior de ajustes fiscais e de fluxo de venda ainda nao refletido aqui;
+  - como este projeto ja tinha alteracoes locais recentes na area fiscal, era necessario trazer o conteudo da branch com selecao cuidadosa para nao copiar artefatos sensiveis de ambiente.
+
+- O que foi feito:
+  - foram trazidos para este projeto os arquivos de aplicacao da branch `23` relacionados a:
+    - configuracao fiscal;
+    - fluxo de venda e transmissao da nota;
+    - dashboard;
+    - listagem de unidades;
+    - utilitarios de recibo;
+    - testes da area fiscal e de pagamentos com cartao;
+  - a sincronizacao foi feita preservando a decisao de nao copiar:
+    - certificados `.p12` e `.pfx`;
+    - arquivos de debug em `storage/app/private`;
+    - arquivos sensiveis/temporarios do `storage`;
+  - com isso, o comportamento funcional da branch `23` foi trazido sem contaminar este ambiente com credenciais ou artefatos locais do outro projeto.
+
+- Efeito esperado:
+  - este projeto passa a refletir os ajustes funcionais da branch `23` do `pec1` nos arquivos de aplicacao sincronizados;
+  - os fluxos de nota fiscal e de pagamento com cartao ficam alinhados com o que estava sendo desenvolvido naquela branch;
+  - os testes especificos dessa area tambem passam a existir aqui para apoiar validacao futura.
+
+- Observacoes para sincronizar em `pec1`:
+  - esta entrada documenta a sincronizacao no sentido `pec1/branch 23 -> pec-rodrigo`;
+  - o commit de referencia da branch analisada foi `7f6c070` (`23.1`);
+  - os arquivos sensiveis de `storage` e certificados foram deliberadamente excluidos da copia;
+  - se futuramente for necessario repetir esta sincronizacao em outro ambiente, manter a mesma regra: copiar apenas arquivos de aplicacao e nunca certificados/debug do `storage`.
+
+## 19/04/26 - Correcao de cadeia SSL na transmissao com a SEFAZ
+
+- Arquivos alterados:
+  - `app/Support/FiscalNfceTransmissionService.php`
+  - `config/services.php`
+  - `SYNC.md`
+
+- Causa identificada:
+  - a transmissao fiscal via cURL usava o certificado cliente da empresa, mas nao informava explicitamente um CA bundle para validar a cadeia SSL do servidor da SEFAZ;
+  - o `php.ini` deste ambiente tambem nao tinha `curl.cainfo` nem `openssl.cafile` configurados;
+  - por isso o ambiente podia falhar com `SSL certificate problem: unable to get local issuer certificate` mesmo com o certificado A1 da empresa valido.
+
+- O que foi feito:
+  - `FiscalNfceTransmissionService` passou a localizar um CA bundle confiavel antes de abrir a conexao SSL;
+  - a ordem de busca ficou:
+    - `services.fiscal.ca_bundle`;
+    - `curl.cainfo` do `php.ini`;
+    - `openssl.cafile` do `php.ini`;
+    - `storage/app/private/cacert.pem`;
+    - `cacert.pem` na raiz do projeto;
+    - `C:\xampp\php\extras\ssl\cacert.pem`;
+    - `C:\php\extras\ssl\cacert.pem`;
+  - a transmissao agora define explicitamente:
+    - `CURLOPT_CAINFO`;
+    - `CURLOPT_SSL_VERIFYPEER = true`;
+    - `CURLOPT_SSL_VERIFYHOST = 2`;
+  - quando o erro for de cadeia SSL nao confiavel, a mensagem agora informa tambem qual CA bundle foi usado;
+  - quando nenhum bundle for encontrado, a falha passa a ser explicita antes mesmo do `curl_exec`.
+
+- Efeito esperado:
+  - o sistema deixa de depender apenas da configuracao global do PHP/OpenSSL para confiar na SEFAZ;
+  - ambientes XAMPP sem `curl.cainfo` configurado passam a funcionar desde que exista um `cacert.pem` em um dos caminhos suportados;
+  - o diagnostico de erro fica mais objetivo quando o problema for cadeia SSL.
+
+- Observacoes para sincronizar em `pec1`:
+  - levar junto `app/Support/FiscalNfceTransmissionService.php` e `config/services.php`;
+  - nao depende de migration;
+  - se o outro ambiente tambem nao tiver `curl.cainfo`/`openssl.cafile`, manter um `cacert.pem` atualizado em um dos caminhos aceitos pela rotina.

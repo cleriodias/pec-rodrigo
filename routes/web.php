@@ -210,6 +210,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/units/{unit}', [UnitController::class, 'show'])->name('units.show');
     Route::get('/units/{unit}/edit', [UnitController::class, 'edit'])->name('units.edit');
     Route::put('/units/{unit}', [UnitController::class, 'update'])->name('units.update');
+    Route::patch('/units/{unit}/fiscal-generation', [UnitController::class, 'toggleFiscalGeneration'])->name('units.fiscal-generation.toggle');
     Route::delete('/units/{unit}', [UnitController::class, 'destroy'])->name('units.destroy');
 
     Route::get('/products/discard', [ProductDiscardController::class, 'index'])->name('products.discard');

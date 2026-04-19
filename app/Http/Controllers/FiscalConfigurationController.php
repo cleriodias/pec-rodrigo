@@ -221,17 +221,17 @@ class FiscalConfigurationController extends Controller
             ],
             'tb26_certificado_senha' => ['nullable', 'string', 'max:255'],
             'remover_certificado' => ['nullable', 'boolean'],
-            'tb26_razao_social' => ['nullable', 'string', 'max:255'],
-            'tb26_nome_fantasia' => ['nullable', 'string', 'max:255'],
+            'tb26_razao_social' => ['nullable', 'string', 'max:60'],
+            'tb26_nome_fantasia' => ['nullable', 'string', 'max:60'],
             'tb26_ie' => ['nullable', 'string', 'max:20'],
             'tb26_im' => ['nullable', 'string', 'max:20'],
             'tb26_cnae' => ['nullable', 'string', 'max:10'],
-            'tb26_logradouro' => ['nullable', 'string', 'max:255'],
-            'tb26_numero' => ['nullable', 'string', 'max:20'],
-            'tb26_complemento' => ['nullable', 'string', 'max:255'],
-            'tb26_bairro' => ['nullable', 'string', 'max:120'],
+            'tb26_logradouro' => ['nullable', 'string', 'max:60'],
+            'tb26_numero' => ['nullable', 'string', 'max:60'],
+            'tb26_complemento' => ['nullable', 'string', 'max:60'],
+            'tb26_bairro' => ['nullable', 'string', 'max:60'],
             'tb26_codigo_municipio' => ['nullable', 'string', 'max:7'],
-            'tb26_municipio' => ['nullable', 'string', 'max:120'],
+            'tb26_municipio' => ['nullable', 'string', 'max:60'],
             'tb26_uf' => ['nullable', 'string', 'size:2'],
             'tb26_cep' => ['nullable', 'string', 'max:8'],
             'tb26_telefone' => ['nullable', 'string', 'max:20'],
@@ -475,6 +475,7 @@ class FiscalConfigurationController extends Controller
     public function transmit(
         Request $request,
         NotaFiscal $notaFiscal,
+        FiscalInvoicePreparationService $fiscalInvoicePreparationService,
         FiscalNfceTransmissionService $fiscalNfceTransmissionService,
     ): RedirectResponse {
         $user = $request->user();
@@ -485,7 +486,29 @@ class FiscalConfigurationController extends Controller
         }
 
         try {
-            $fiscalNfceTransmissionService->transmit($notaFiscal);
+            $notaFiscal->loadMissing('pagamento.vendas.produto', 'pagamento.vendas.unidade');
+
+            if (! $notaFiscal->pagamento) {
+                return redirect()
+                    ->route('settings.fiscal', ['unit_id' => $notaFiscal->tb2_id])
+                    ->with('error', 'Nao foi encontrado o pagamento vinculado a esta nota fiscal.');
+            }
+
+            $refreshedInvoice = $fiscalInvoicePreparationService->prepareForPayment($notaFiscal->pagamento);
+
+            if (! $refreshedInvoice) {
+                return redirect()
+                    ->route('settings.fiscal', ['unit_id' => $notaFiscal->tb2_id])
+                    ->with('error', 'Esta forma de pagamento nao gera nota fiscal automatica para transmissao.');
+            }
+
+            if (! filled($refreshedInvoice->tb27_xml_envio)) {
+                return redirect()
+                    ->route('settings.fiscal', ['unit_id' => $notaFiscal->tb2_id])
+                    ->with('error', $refreshedInvoice->tb27_mensagem ?: 'A nota ainda nao possui XML assinado para transmissao.');
+            }
+
+            $fiscalNfceTransmissionService->transmit($refreshedInvoice);
         } catch (RuntimeException $exception) {
             return redirect()
                 ->route('settings.fiscal', ['unit_id' => $notaFiscal->tb2_id])
@@ -650,6 +673,7 @@ class FiscalConfigurationController extends Controller
             ?: $firstSale?->unidade?->tb2_nome
             ?: 'EMITENTE NAO INFORMADO';
         $documentTotal = round((float) ($invoicePayload['valor_total_documento'] ?? $payment->valor_total), 2);
+        $statusMessage = $this->augmentFiscalStatusMessage($invoice->tb27_mensagem, $xmlData);
 
         return [
             'title' => strtolower((string) $invoice->tb27_modelo) === 'nfce' ? 'DANFE NFC-e' : 'Documento fiscal',
@@ -661,7 +685,7 @@ class FiscalConfigurationController extends Controller
             'serie' => $invoice->tb27_serie,
             'number' => $invoice->tb27_numero,
             'status' => $invoice->tb27_status,
-            'status_message' => $invoice->tb27_mensagem,
+            'status_message' => $statusMessage,
             'issued_at' => $issueDateTime?->toIso8601String(),
             'emitter_name' => $emitterName,
             'emitter_legal_name' => $configuration?->tb26_razao_social,
@@ -745,13 +769,28 @@ class FiscalConfigurationController extends Controller
 
         $xpath = new DOMXPath($document);
         $xpath->registerNamespace('nfe', 'http://www.portalfiscal.inf.br/nfe');
+        $xpath->registerNamespace('ds', 'http://www.w3.org/2000/09/xmldsig#');
+
+        $qrCodeData = $this->stringOrNull($xpath->evaluate('string(//nfe:infNFeSupl/nfe:qrCode)'));
+        $queryString = $qrCodeData ? (string) parse_url($qrCodeData, PHP_URL_QUERY) : '';
+        $payload = str_starts_with($queryString, 'p=') ? substr($queryString, 2) : $queryString;
+        $payloadParts = $payload !== '' ? explode('|', $payload) : [];
 
         return [
             'access_key' => $this->stringOrNull($xpath->evaluate('string(//nfe:infNFe/@Id)'))
                 ? preg_replace('/^NFe/', '', (string) $xpath->evaluate('string(//nfe:infNFe/@Id)'))
                 : null,
-            'qr_code_data' => $this->stringOrNull($xpath->evaluate('string(//nfe:infNFeSupl/nfe:qrCode)')),
+            'qr_code_data' => $qrCodeData,
             'consulta_url' => $this->stringOrNull($xpath->evaluate('string(//nfe:infNFeSupl/nfe:urlChave)')),
+            'mod' => $this->stringOrNull($xpath->evaluate('string(//nfe:infNFe/nfe:ide/nfe:mod)')),
+            'tp_imp' => $this->stringOrNull($xpath->evaluate('string(//nfe:infNFe/nfe:ide/nfe:tpImp)')),
+            'dest_present' => (bool) $xpath->evaluate('count(//nfe:infNFe/nfe:dest)'),
+            'dest_name' => $this->stringOrNull($xpath->evaluate('string(//nfe:infNFe/nfe:dest/nfe:xNome)')),
+            'dest_city_code' => $this->stringOrNull($xpath->evaluate('string(//nfe:infNFe/nfe:dest/nfe:enderDest/nfe:cMun)')),
+            'dest_document' => $this->stringOrNull($xpath->evaluate('string(//nfe:infNFe/nfe:dest/nfe:CPF | //nfe:infNFe/nfe:dest/nfe:CNPJ | //nfe:infNFe/nfe:dest/nfe:idEstrangeiro)')),
+            'card_present' => (bool) $xpath->evaluate('count(//nfe:infNFe/nfe:pag/nfe:detPag/nfe:card)'),
+            'signature_present' => (bool) $xpath->evaluate('count(//ds:Signature)'),
+            'csc_id' => $payloadParts[3] ?? null,
         ];
     }
 
@@ -762,10 +801,31 @@ class FiscalConfigurationController extends Controller
         return $value !== '' ? $value : null;
     }
 
+    private function augmentFiscalStatusMessage(?string $message, array $xmlData = []): ?string
+    {
+        $message = $this->stringOrNull($message);
+
+        if ($message === null || ! str_contains($message, 'cStat 462')) {
+            return $message;
+        }
+
+        $cscId = $xmlData['csc_id'] ?? null;
+        $suffix = sprintf(
+            ' Confira o CSC ID%s cadastrado na SEFAZ para o ambiente atual da loja.',
+            $cscId ? ' ' . $cscId : ''
+        );
+
+        return str_contains($message, $suffix) ? $message : $message . $suffix;
+    }
+
     private function resolvePaymentLabel(?string $paymentType): string
     {
         return match ((string) $paymentType) {
             'dinheiro' => 'Dinheiro',
+            'cartao_credito' => 'Cartao credito',
+            'cartao_debito' => 'Cartao debito',
+            'dinheiro_cartao_credito' => 'Dinheiro + Cartao credito',
+            'dinheiro_cartao_debito' => 'Dinheiro + Cartao debito',
             'maquina' => 'Maquina',
             'vale' => 'Vale',
             'refeicao' => 'Refeicao',
@@ -777,6 +837,7 @@ class FiscalConfigurationController extends Controller
     private function buildInvoiceListPayload(NotaFiscal $invoice): array
     {
         $invoicePayload = is_array($invoice->tb27_payload) ? $invoice->tb27_payload : [];
+        $xmlData = $this->extractFiscalReceiptXmlData($invoice->tb27_xml_envio);
 
         $payload = [
             'id' => (int) $invoice->tb27_id,
@@ -786,7 +847,7 @@ class FiscalConfigurationController extends Controller
             'serie' => $invoice->tb27_serie,
             'numero' => $invoice->tb27_numero,
             'status' => $invoice->tb27_status,
-            'mensagem' => $invoice->tb27_mensagem,
+            'mensagem' => $this->augmentFiscalStatusMessage($invoice->tb27_mensagem, $xmlData),
             'chave_acesso' => $invoice->tb27_chave_acesso,
             'protocolo' => $invoice->tb27_protocolo,
             'recibo' => $invoice->tb27_recibo,
@@ -799,9 +860,23 @@ class FiscalConfigurationController extends Controller
                 'erro_validacao',
                 'erro_transmissao',
                 'pendente_emissao',
+                'xml_assinado',
+                'emitida',
             ], true),
             'pode_excluir' => $this->canDeletePreparedInvoice($invoice),
             'itens_excluidos_qtd' => (int) ($invoicePayload['itens_excluidos_qtd'] ?? 0),
+            'xml_debug' => [
+                'mod' => $xmlData['mod'] ?? null,
+                'tp_imp' => $xmlData['tp_imp'] ?? null,
+                'dest_present' => $xmlData['dest_present'] ?? false,
+                'dest_document' => $xmlData['dest_document'] ?? null,
+                'dest_name' => $xmlData['dest_name'] ?? null,
+                'dest_city_code' => $xmlData['dest_city_code'] ?? null,
+                'card_present' => $xmlData['card_present'] ?? false,
+                'signature_present' => $xmlData['signature_present'] ?? false,
+                'csc_id' => $xmlData['csc_id'] ?? null,
+                'qr_code_data' => $xmlData['qr_code_data'] ?? null,
+            ],
             'fiscal_receipt' => null,
         ];
 

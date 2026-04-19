@@ -5,8 +5,8 @@ namespace App\Support;
 use App\Models\NotaFiscal;
 use Carbon\Carbon;
 use DOMDocument;
-use DOMElement;
 use DOMXPath;
+use Illuminate\Support\Facades\Config;
 use RuntimeException;
 
 class FiscalNfceTransmissionService
@@ -14,6 +14,7 @@ class FiscalNfceTransmissionService
     public function __construct(
         private readonly FiscalCertificateService $fiscalCertificateService,
         private readonly FiscalWebserviceResolverService $fiscalWebserviceResolverService,
+        private readonly FiscalNfceXmlService $fiscalNfceXmlService,
     ) {
     }
 
@@ -41,12 +42,15 @@ class FiscalNfceTransmissionService
 
         try {
             $certificateData = $this->fiscalCertificateService->loadCertificateForConfiguration($configuration);
+            $this->assertSignedXmlStructureOrFail((string) $invoice->tb27_xml_envio);
+            $this->fiscalNfceXmlService->validateSignedXmlOrFail((string) $invoice->tb27_xml_envio, $certificateData);
             $endpoints = $this->fiscalWebserviceResolverService->resolveNfceEndpoints(
                 (string) $configuration->tb26_uf,
                 (string) $configuration->tb26_ambiente,
             );
 
             $lotXml = $this->buildBatchXml($invoice->tb27_xml_envio, (int) $invoice->tb4_id);
+            $this->assertBatchPreservesSignedXmlOrFail((string) $invoice->tb27_xml_envio, $lotXml, $certificateData);
             $soapEnvelope = $this->buildSoapEnvelope(
                 $lotXml,
                 (string) $configuration->tb26_codigo_municipio,
@@ -105,51 +109,109 @@ class FiscalNfceTransmissionService
             throw new RuntimeException('Codigo do municipio da loja nao informado para transmissao da NFC-e.');
         }
 
-        $lotDocument = new DOMDocument('1.0', 'UTF-8');
-        $lotLoaded = @$lotDocument->loadXML($lotXml);
+        $cleanLotXml = preg_replace('/^\s*<\?xml[^>]+>\s*/', '', trim($lotXml));
 
-        if (! $lotLoaded || ! $lotDocument->documentElement instanceof DOMElement) {
+        if ($cleanLotXml === null || $cleanLotXml === '') {
             throw new RuntimeException('O lote fiscal assinado nao gerou um XML valido para montagem do SOAP.');
         }
 
         $document = new DOMDocument('1.0', 'UTF-8');
-        $document->formatOutput = false;
+        $loaded = @$document->loadXML($cleanLotXml);
 
-        $envelope = $document->createElementNS('http://www.w3.org/2003/05/soap-envelope', 'soap12:Envelope');
-        $document->appendChild($envelope);
-        $envelope->setAttributeNS(
-            'http://www.w3.org/2000/xmlns/',
-            'xmlns:xsi',
-            'http://www.w3.org/2001/XMLSchema-instance'
-        );
-        $envelope->setAttributeNS(
-            'http://www.w3.org/2000/xmlns/',
-            'xmlns:xsd',
-            'http://www.w3.org/2001/XMLSchema'
-        );
+        if (! $loaded) {
+            throw new RuntimeException('O lote fiscal assinado nao gerou um XML valido para montagem do SOAP.');
+        }
 
-        $header = $document->createElement('soap12:Header');
-        $envelope->appendChild($header);
+        return '<?xml version="1.0" encoding="UTF-8"?>'
+            . '<soap12:Envelope xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"'
+            . ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
+            . ' xmlns:xsd="http://www.w3.org/2001/XMLSchema">'
+            . '<soap12:Header>'
+            . '<nfeCabecMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4">'
+            . '<cUF>' . htmlspecialchars($cUf, ENT_XML1) . '</cUF>'
+            . '<versaoDados>4.00</versaoDados>'
+            . '</nfeCabecMsg>'
+            . '</soap12:Header>'
+            . '<soap12:Body>'
+            . '<nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4">'
+            . $cleanLotXml
+            . '</nfeDadosMsg>'
+            . '</soap12:Body>'
+            . '</soap12:Envelope>';
+    }
 
-        $nfeCabecMsg = $document->createElementNS(
-            'http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4',
-            'nfeCabecMsg'
-        );
-        $header->appendChild($nfeCabecMsg);
-        $nfeCabecMsg->appendChild($document->createElement('cUF', $cUf));
-        $nfeCabecMsg->appendChild($document->createElement('versaoDados', '4.00'));
+    private function assertSignedXmlStructureOrFail(string $signedXml): void
+    {
+        $document = new DOMDocument();
 
-        $body = $document->createElement('soap12:Body');
-        $envelope->appendChild($body);
+        if (! @$document->loadXML(trim($signedXml))) {
+            throw new RuntimeException('O XML fiscal salvo na nota nao e valido para transmissao.');
+        }
 
-        $nfeDadosMsg = $document->createElementNS(
-            'http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4',
-            'nfeDadosMsg'
-        );
-        $body->appendChild($nfeDadosMsg);
-        $nfeDadosMsg->appendChild($document->importNode($lotDocument->documentElement, true));
+        $xpath = new DOMXPath($document);
+        $xpath->registerNamespace('nfe', 'http://www.portalfiscal.inf.br/nfe');
 
-        return $document->saveXML() ?: throw new RuntimeException('Nao foi possivel montar o envelope SOAP da NFC-e.');
+        $model = trim((string) $xpath->evaluate('string(/nfe:NFe/nfe:infNFe/nfe:ide/nfe:mod)'));
+        $danfeType = trim((string) $xpath->evaluate('string(/nfe:NFe/nfe:infNFe/nfe:ide/nfe:tpImp)'));
+
+        if ($model !== '65') {
+            throw new RuntimeException(sprintf(
+                'O XML fiscal salvo na nota esta com modelo %s, mas a transmissao automatica desta etapa exige NFC-e modelo 65.',
+                $model !== '' ? $model : 'nao informado'
+            ));
+        }
+
+        if ($danfeType !== '4') {
+            throw new RuntimeException(sprintf(
+                'O XML fiscal salvo na nota esta com tpImp %s, mas a NFC-e desta etapa exige tpImp 4.',
+                $danfeType !== '' ? $danfeType : 'nao informado'
+            ));
+        }
+
+        $destinationNode = $xpath->query('/nfe:NFe/nfe:infNFe/nfe:dest')->item(0);
+
+        if (! $destinationNode) {
+            return;
+        }
+
+        $cpf = trim((string) $xpath->evaluate('string(/nfe:NFe/nfe:infNFe/nfe:dest/nfe:CPF)'));
+        $cnpj = trim((string) $xpath->evaluate('string(/nfe:NFe/nfe:infNFe/nfe:dest/nfe:CNPJ)'));
+        $foreignId = trim((string) $xpath->evaluate('string(/nfe:NFe/nfe:infNFe/nfe:dest/nfe:idEstrangeiro)'));
+        $name = trim((string) $xpath->evaluate('string(/nfe:NFe/nfe:infNFe/nfe:dest/nfe:xNome)'));
+        $cityCode = trim((string) $xpath->evaluate('string(/nfe:NFe/nfe:infNFe/nfe:dest/nfe:enderDest/nfe:cMun)'));
+        $address = trim((string) $xpath->evaluate('string(/nfe:NFe/nfe:infNFe/nfe:dest/nfe:enderDest/nfe:xLgr)'));
+
+        if ($cpf === '' && $cnpj === '' && $foreignId === '') {
+            throw new RuntimeException('O XML fiscal abriu o grupo dest, mas nao informou CPF, CNPJ ou idEstrangeiro do destinatario.');
+        }
+
+        if ($name === '') {
+            throw new RuntimeException('O XML fiscal abriu o grupo dest, mas nao informou o nome do destinatario.');
+        }
+
+        if ($cityCode === '' || $address === '') {
+            throw new RuntimeException('O XML fiscal abriu o grupo dest, mas nao informou endereco completo do destinatario.');
+        }
+    }
+
+    private function assertBatchPreservesSignedXmlOrFail(string $signedXml, string $lotXml, array $certificateData): void
+    {
+        $normalizedSignedXml = $this->normalizeXmlFragment($signedXml);
+        $extractedNfeXml = $this->extractSignedXmlFromBatch($lotXml);
+        $normalizedBatchXml = $this->normalizeXmlFragment($extractedNfeXml);
+
+        if ($normalizedSignedXml !== $normalizedBatchXml) {
+            throw new RuntimeException('O XML assinado salvo na nota foi alterado durante a montagem do lote SOAP.');
+        }
+
+        try {
+            $this->fiscalNfceXmlService->validateSignedXmlOrFail($extractedNfeXml, $certificateData);
+        } catch (RuntimeException $exception) {
+            throw new RuntimeException(
+                'A assinatura digital ficou invalida no XML enviado ao SOAP. ' . $exception->getMessage(),
+                previous: $exception
+            );
+        }
     }
 
     private function sendSoapRequest(
@@ -162,6 +224,7 @@ class FiscalNfceTransmissionService
             (string) $certificateData['certificate_pem'],
             (string) $certificateData['private_key_pem'],
         );
+        $caBundlePath = $this->resolveCaBundlePath();
 
         try {
             $curl = curl_init($url);
@@ -174,6 +237,9 @@ class FiscalNfceTransmissionService
                 CURLOPT_SSLCERTTYPE => 'PEM',
                 CURLOPT_SSLCERT => $pemPath,
                 CURLOPT_SSLKEY => $pemPath,
+                CURLOPT_CAINFO => $caBundlePath,
+                CURLOPT_SSL_VERIFYPEER => true,
+                CURLOPT_SSL_VERIFYHOST => 2,
                 CURLOPT_POSTFIELDS => $soapEnvelope,
                 CURLOPT_HTTPHEADER => [
                     'Content-Type: application/soap+xml; charset=utf-8; action="' . $soapAction . '"',
@@ -187,7 +253,7 @@ class FiscalNfceTransmissionService
             curl_close($curl);
 
             if ($response === false || $error !== '') {
-                throw new RuntimeException('Falha de comunicacao com o webservice da SEFAZ: ' . $error);
+                throw new RuntimeException($this->buildSoapCommunicationErrorMessage($error, $caBundlePath));
             }
 
             if ($statusCode >= 400) {
@@ -198,6 +264,48 @@ class FiscalNfceTransmissionService
         } finally {
             @unlink($pemPath);
         }
+    }
+
+    private function resolveCaBundlePath(): string
+    {
+        $configuredPath = trim((string) Config::get('services.fiscal.ca_bundle', ''));
+        $iniCurlPath = trim((string) ini_get('curl.cainfo'));
+        $iniOpenSslPath = trim((string) ini_get('openssl.cafile'));
+
+        $candidates = array_filter([
+            $configuredPath,
+            $iniCurlPath,
+            $iniOpenSslPath,
+            storage_path('app/private/cacert.pem'),
+            base_path('cacert.pem'),
+            'C:\\xampp\\php\\extras\\ssl\\cacert.pem',
+            'C:\\php\\extras\\ssl\\cacert.pem',
+        ]);
+
+        foreach ($candidates as $candidate) {
+            if (is_file($candidate) && is_readable($candidate)) {
+                return $candidate;
+            }
+        }
+
+        throw new RuntimeException(
+            'Falha de comunicacao com o webservice da SEFAZ: nenhuma cadeia de certificados confiaveis foi encontrada no ambiente. '
+            . 'Configure um CA bundle valido em services.fiscal.ca_bundle, php.ini (curl.cainfo/openssl.cafile) ou em C:\\xampp\\php\\extras\\ssl\\cacert.pem.'
+        );
+    }
+
+    private function buildSoapCommunicationErrorMessage(string $error, string $caBundlePath): string
+    {
+        $message = 'Falha de comunicacao com o webservice da SEFAZ: ' . $error;
+
+        if (str_contains(strtolower($error), 'unable to get local issuer certificate')) {
+            $message .= sprintf(
+                ' Cadeia SSL do servidor nao confiavel neste ambiente. CA bundle usado: %s.',
+                $caBundlePath
+            );
+        }
+
+        return $message;
     }
 
     private function parseAuthorizationResponse(string $responseXml): array
@@ -259,6 +367,50 @@ class FiscalNfceTransmissionService
     private function xpathValue(DOMXPath $xpath, string $expression): string
     {
         return trim((string) $xpath->evaluate($expression));
+    }
+
+    private function extractSignedXmlFromBatch(string $lotXml): string
+    {
+        $document = new DOMDocument();
+
+        if (! @$document->loadXML($lotXml)) {
+            throw new RuntimeException('O lote fiscal assinado nao gerou um XML valido para extrair a NFC-e antes do SOAP.');
+        }
+
+        $xpath = new DOMXPath($document);
+        $xpath->registerNamespace('nfe', 'http://www.portalfiscal.inf.br/nfe');
+        $nfeNode = $xpath->query('/nfe:enviNFe/nfe:NFe')->item(0);
+
+        if (! $nfeNode) {
+            throw new RuntimeException('O lote fiscal nao contem a NFC-e assinada esperada antes do SOAP.');
+        }
+
+        $xml = $document->saveXML($nfeNode);
+
+        if ($xml === false || trim($xml) === '') {
+            throw new RuntimeException('Nao foi possivel extrair a NFC-e assinada do lote fiscal antes do SOAP.');
+        }
+
+        return $xml;
+    }
+
+    private function normalizeXmlFragment(string $xml): string
+    {
+        $document = new DOMDocument('1.0', 'UTF-8');
+        $document->preserveWhiteSpace = false;
+        $document->formatOutput = false;
+
+        if (! @$document->loadXML(trim($xml))) {
+            throw new RuntimeException('Nao foi possivel normalizar o XML fiscal para comparacao antes do SOAP.');
+        }
+
+        $normalized = $document->saveXML($document->documentElement);
+
+        if ($normalized === false || trim($normalized) === '') {
+            throw new RuntimeException('Nao foi possivel serializar o XML fiscal normalizado antes do SOAP.');
+        }
+
+        return $normalized;
     }
 
     private function writeTemporaryPem(string $certificatePem, string $privateKeyPem): string

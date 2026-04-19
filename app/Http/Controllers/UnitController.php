@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ConfiguracaoFiscal;
 use App\Models\Unidade;
 use App\Support\ManagementScope;
 use Illuminate\Http\Request;
@@ -51,7 +52,7 @@ class UnitController extends Controller
 
         $units = $unitsQuery->paginate(10)->through(function (Unidade $unit) {
             $unit->tb2_nf_total = round((float) ($unit->tb2_nf_total ?? 0), 2);
-            $unit->tb26_geracao_automatica_ativa = (bool) optional($unit->configuracaoFiscal)->tb26_geracao_automatica_ativa;
+            $unit->tb26_geracao_automatica_ativa = (bool) (optional($unit->configuracaoFiscal)->tb26_geracao_automatica_ativa ?? true);
 
             return $unit;
         });
@@ -130,6 +131,30 @@ class UnitController extends Controller
 
         return Redirect::route('units.show', ['unit' => $unit->tb2_id])
             ->with('success', 'Unidade atualizada com sucesso!');
+    }
+
+    public function toggleFiscalGeneration(Request $request, Unidade $unit)
+    {
+        $this->ensureAuthorized();
+        $this->ensureCanManageUnit($request->user(), $unit);
+
+        $configuration = ConfiguracaoFiscal::firstOrNew([
+            'tb2_id' => $unit->tb2_id,
+        ]);
+
+        $currentStatus = $configuration->exists
+            ? (bool) $configuration->tb26_geracao_automatica_ativa
+            : true;
+
+        $configuration->tb26_geracao_automatica_ativa = ! $currentStatus;
+        $configuration->save();
+
+        return Redirect::back()->with(
+            'success',
+            $configuration->tb26_geracao_automatica_ativa
+                ? 'Geracao automatica de notas ativada com sucesso.'
+                : 'Geracao automatica de notas desativada com sucesso.'
+        );
     }
 
     public function destroy(Unidade $unit)

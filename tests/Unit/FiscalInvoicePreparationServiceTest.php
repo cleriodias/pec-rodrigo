@@ -139,6 +139,46 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         );
     }
 
+    public function test_supports_automatic_fiscal_generation_only_for_cash_and_card_payments(): void
+    {
+        $service = $this->makeService();
+        $reflection = new ReflectionClass($service);
+        $supportsMethod = $reflection->getMethod('supportsAutomaticFiscalGenerationForPaymentType');
+        $supportsMethod->setAccessible(true);
+
+        $this->assertTrue($supportsMethod->invoke($service, 'dinheiro'));
+        $this->assertTrue($supportsMethod->invoke($service, 'cartao_credito'));
+        $this->assertTrue($supportsMethod->invoke($service, 'cartao_debito'));
+        $this->assertTrue($supportsMethod->invoke($service, 'dinheiro_cartao_credito'));
+        $this->assertTrue($supportsMethod->invoke($service, 'dinheiro_cartao_debito'));
+        $this->assertTrue($supportsMethod->invoke($service, 'maquina'));
+
+        $this->assertFalse($supportsMethod->invoke($service, 'vale'));
+        $this->assertFalse($supportsMethod->invoke($service, 'refeicao'));
+        $this->assertFalse($supportsMethod->invoke($service, 'faturar'));
+    }
+
+    public function test_build_non_fiscal_payment_message_marks_internal_control_payments(): void
+    {
+        $service = $this->makeService();
+        $reflection = new ReflectionClass($service);
+        $messageMethod = $reflection->getMethod('buildNonFiscalPaymentMessage');
+        $messageMethod->setAccessible(true);
+
+        $this->assertSame(
+            'Pagamento Vale e apenas controle interno e nao gera nota fiscal automatica.',
+            $messageMethod->invoke($service, 'vale')
+        );
+        $this->assertSame(
+            'Pagamento Refeicao e apenas controle interno e nao gera nota fiscal automatica.',
+            $messageMethod->invoke($service, 'refeicao')
+        );
+        $this->assertSame(
+            'Pagamento Faturar e apenas controle interno e nao gera nota fiscal automatica.',
+            $messageMethod->invoke($service, 'faturar')
+        );
+    }
+
     private function makePaymentWithFiscalProduct(
         array $productOverrides = [],
         string $unitCnpj = '11.222.333/0001-44',

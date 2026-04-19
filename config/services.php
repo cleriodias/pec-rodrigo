@@ -40,4 +40,8 @@ return [
         'whatsapp_from' => env('TWILIO_WHATSAPP_FROM'),
     ],
 
+    'fiscal' => [
+        'ca_bundle' => env('FISCAL_CA_BUNDLE'),
+    ],
+
 ];

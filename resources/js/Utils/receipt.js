@@ -2,6 +2,10 @@ import { formatBrazilDateTime } from '@/Utils/date';
 
 export const RECEIPT_PAYMENT_LABELS = {
     dinheiro: 'Dinheiro',
+    cartao_credito: 'Cartao credito',
+    cartao_debito: 'Cartao debito',
+    dinheiro_cartao_credito: 'Dinheiro + Cartao credito',
+    dinheiro_cartao_debito: 'Dinheiro + Cartao debito',
     maquina: 'Maquina',
     vale: 'Vale',
     refeicao: 'Refeicao',

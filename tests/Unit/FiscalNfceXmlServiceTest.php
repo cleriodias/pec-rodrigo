@@ -12,6 +12,7 @@ use App\Support\FiscalWebserviceResolverService;
 use DOMDocument;
 use DOMElement;
 use DOMXPath;
+use RuntimeException;
 use App\Models\Venda;
 use ReflectionClass;
 use Tests\TestCase;
@@ -31,6 +32,8 @@ class FiscalNfceXmlServiceTest extends TestCase
 
         $config = new ConfiguracaoFiscal([
             'tb26_ambiente' => 'homologacao',
+            'tb26_csc_id' => '1',
+            'tb26_csc' => 'ABC123',
         ]);
 
         $method->invoke(
@@ -50,7 +53,7 @@ class FiscalNfceXmlServiceTest extends TestCase
         $this->assertNotFalse($xml);
         $this->assertStringContainsString('<infNFeSupl>', $xml);
         $this->assertStringContainsString(
-            '<qrCode>https://nfewebhomolog.sefaz.go.gov.br/nfeweb/sites/nfce/danfeNFCe?p=52260411222333000144650010000012341000012345|3|2</qrCode>',
+            '<qrCode>https://nfewebhomolog.sefaz.go.gov.br/nfeweb/sites/nfce/danfeNFCe?p=52260411222333000144650010000012341000012345|2|2|1|23199B6370AC548E90142E6EBD58007A66FE1FCD</qrCode>',
             $xml
         );
         $this->assertStringContainsString(
@@ -107,7 +110,7 @@ class FiscalNfceXmlServiceTest extends TestCase
         $sale->setRelation('produto', $product);
 
         $appendEmitter->invoke($service, $document, $infNfe, $config, '11222333000144');
-        $appendItems->invoke($service, $document, $infNfe, collect([$sale]), 1);
+        $appendItems->invoke($service, $document, $infNfe, collect([$sale]), 1, $config);
 
         $xml = $document->saveXML();
 
@@ -131,6 +134,10 @@ class FiscalNfceXmlServiceTest extends TestCase
         $document = new DOMDocument('1.0', 'UTF-8');
         $infNfe = $document->createElement('infNFe');
         $document->appendChild($infNfe);
+
+        $config = new ConfiguracaoFiscal([
+            'tb26_ambiente' => 'producao',
+        ]);
 
         $config = new ConfiguracaoFiscal([
             'tb26_razao_social' => 'EMPRESA TESTE LTDA',
@@ -157,30 +164,214 @@ class FiscalNfceXmlServiceTest extends TestCase
         $this->assertStringContainsString('<CNAE>4721102</CNAE>', $xml);
     }
 
-    public function test_append_payment_adds_xpag_for_maquina_and_specific_codes_for_vale(): void
+    public function test_append_emitter_escapes_ampersand_in_company_names(): void
+    {
+        $service = new FiscalNfceXmlService(new FiscalWebserviceResolverService());
+        $reflection = new ReflectionClass($service);
+        $appendEmitter = $reflection->getMethod('appendEmitter');
+        $appendEmitter->setAccessible(true);
+
+        $document = new DOMDocument('1.0', 'UTF-8');
+        $infNfe = $document->createElement('infNFe');
+        $document->appendChild($infNfe);
+
+        $config = new ConfiguracaoFiscal([
+            'tb26_razao_social' => 'PAO & CAFE PADARIA LTDA',
+            'tb26_nome_fantasia' => 'PAO & CAFE',
+            'tb26_logradouro' => 'RUA 1',
+            'tb26_numero' => '10',
+            'tb26_bairro' => 'CENTRO',
+            'tb26_codigo_municipio' => '5200258',
+            'tb26_municipio' => 'AGUAS LINDAS DE GOIAS',
+            'tb26_uf' => 'GO',
+            'tb26_cep' => '72920539',
+            'tb26_ie' => '202165639',
+            'tb26_crt' => 1,
+        ]);
+
+        $appendEmitter->invoke($service, $document, $infNfe, $config, '58493190000106');
+
+        $xml = $document->saveXML();
+
+        $this->assertNotFalse($xml);
+        $this->assertStringContainsString('<xNome>PAO &amp; CAFE PADARIA LTDA</xNome>', $xml);
+        $this->assertStringContainsString('<xFant>PAO &amp; CAFE</xFant>', $xml);
+    }
+
+    public function test_append_items_limits_unit_values_to_four_decimal_places(): void
+    {
+        $service = new FiscalNfceXmlService(new FiscalWebserviceResolverService());
+        $reflection = new ReflectionClass($service);
+        $appendItems = $reflection->getMethod('appendItems');
+        $appendItems->setAccessible(true);
+
+        $document = new DOMDocument('1.0', 'UTF-8');
+        $infNfe = $document->createElement('infNFe');
+        $document->appendChild($infNfe);
+
+        $config = new ConfiguracaoFiscal([
+            'tb26_ambiente' => 'producao',
+        ]);
+
+        $product = new Produto([
+            'tb1_ncm' => '19059090',
+            'tb1_cfop' => '5102',
+            'tb1_unidade_comercial' => 'UN',
+            'tb1_unidade_tributavel' => 'UN',
+            'tb1_origem' => 0,
+            'tb1_csosn' => '102',
+            'tb1_codbar' => null,
+        ]);
+
+        $sale = new Venda([
+            'tb1_id' => 10,
+            'produto_nome' => 'COXINHA',
+            'quantidade' => 1,
+            'valor_unitario' => 7.123456789,
+            'valor_total' => 7.12,
+        ]);
+        $sale->setRelation('produto', $product);
+
+        $appendItems->invoke($service, $document, $infNfe, collect([$sale]), 1, $config);
+
+        $xml = $document->saveXML();
+
+        $this->assertNotFalse($xml);
+        $this->assertStringContainsString('<vUnCom>7.1235</vUnCom>', $xml);
+        $this->assertStringContainsString('<vUnTrib>7.1235</vUnTrib>', $xml);
+    }
+
+    public function test_append_items_uses_homologation_description_on_first_item(): void
+    {
+        $service = new FiscalNfceXmlService(new FiscalWebserviceResolverService());
+        $reflection = new ReflectionClass($service);
+        $appendItems = $reflection->getMethod('appendItems');
+        $appendItems->setAccessible(true);
+
+        $document = new DOMDocument('1.0', 'UTF-8');
+        $infNfe = $document->createElement('infNFe');
+        $document->appendChild($infNfe);
+
+        $config = new ConfiguracaoFiscal([
+            'tb26_ambiente' => 'homologacao',
+        ]);
+
+        $product = new Produto([
+            'tb1_ncm' => '19059090',
+            'tb1_cfop' => '5102',
+            'tb1_unidade_comercial' => 'UN',
+            'tb1_unidade_tributavel' => 'UN',
+            'tb1_origem' => 0,
+            'tb1_csosn' => '102',
+            'tb1_codbar' => null,
+        ]);
+
+        $sale = new Venda([
+            'tb1_id' => 10,
+            'produto_nome' => 'COXINHA',
+            'quantidade' => 1,
+            'valor_unitario' => 7.5,
+            'valor_total' => 7.5,
+        ]);
+        $sale->setRelation('produto', $product);
+
+        $appendItems->invoke($service, $document, $infNfe, collect([$sale]), 1, $config);
+
+        $xml = $document->saveXML();
+
+        $this->assertNotFalse($xml);
+        $this->assertStringContainsString(
+            '<xProd>NOTA FISCAL EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL</xProd>',
+            $xml
+        );
+    }
+
+    public function test_append_payment_uses_official_codes_for_card_and_splits_cash_with_card(): void
     {
         $service = new FiscalNfceXmlService(new FiscalWebserviceResolverService());
         $reflection = new ReflectionClass($service);
         $appendPayment = $reflection->getMethod('appendPayment');
         $appendPayment->setAccessible(true);
 
-        $machineDocument = new DOMDocument('1.0', 'UTF-8');
-        $machineInfNfe = $machineDocument->createElement('infNFe');
-        $machineDocument->appendChild($machineInfNfe);
+        $legacyMachineDocument = new DOMDocument('1.0', 'UTF-8');
+        $legacyMachineInfNfe = $legacyMachineDocument->createElement('infNFe');
+        $legacyMachineDocument->appendChild($legacyMachineInfNfe);
 
-        $machinePayment = new VendaPagamento([
+        $legacyMachinePayment = new VendaPagamento([
             'tipo_pagamento' => 'maquina',
             'valor_total' => 4.2,
             'troco' => 0,
         ]);
 
-        $appendPayment->invoke($service, $machineDocument, $machineInfNfe, $machinePayment);
+        $appendPayment->invoke($service, $legacyMachineDocument, $legacyMachineInfNfe, $legacyMachinePayment, 4.2);
 
-        $machineXml = $machineDocument->saveXML();
+        $legacyMachineXml = $legacyMachineDocument->saveXML();
 
-        $this->assertNotFalse($machineXml);
-        $this->assertStringContainsString('<tPag>99</tPag>', $machineXml);
-        $this->assertStringContainsString('<xPag>MAQUINA</xPag>', $machineXml);
+        $this->assertNotFalse($legacyMachineXml);
+        $this->assertStringContainsString('<tPag>03</tPag>', $legacyMachineXml);
+        $this->assertStringNotContainsString('<xPag>', $legacyMachineXml);
+        $this->assertStringContainsString('<card><tpIntegra>2</tpIntegra></card>', $legacyMachineXml);
+
+        $creditDocument = new DOMDocument('1.0', 'UTF-8');
+        $creditInfNfe = $creditDocument->createElement('infNFe');
+        $creditDocument->appendChild($creditInfNfe);
+
+        $creditPayment = new VendaPagamento([
+            'tipo_pagamento' => 'cartao_credito',
+            'valor_total' => 4.2,
+            'troco' => 0,
+        ]);
+
+        $appendPayment->invoke($service, $creditDocument, $creditInfNfe, $creditPayment, 4.2);
+
+        $creditXml = $creditDocument->saveXML();
+
+        $this->assertNotFalse($creditXml);
+        $this->assertStringContainsString('<tPag>03</tPag>', $creditXml);
+        $this->assertStringNotContainsString('<xPag>', $creditXml);
+        $this->assertStringContainsString('<card><tpIntegra>2</tpIntegra></card>', $creditXml);
+
+        $debitDocument = new DOMDocument('1.0', 'UTF-8');
+        $debitInfNfe = $debitDocument->createElement('infNFe');
+        $debitDocument->appendChild($debitInfNfe);
+
+        $debitPayment = new VendaPagamento([
+            'tipo_pagamento' => 'cartao_debito',
+            'valor_total' => 4.2,
+            'troco' => 0,
+        ]);
+
+        $appendPayment->invoke($service, $debitDocument, $debitInfNfe, $debitPayment, 4.2);
+
+        $debitXml = $debitDocument->saveXML();
+
+        $this->assertNotFalse($debitXml);
+        $this->assertStringContainsString('<tPag>04</tPag>', $debitXml);
+        $this->assertStringNotContainsString('<xPag>', $debitXml);
+        $this->assertStringContainsString('<card><tpIntegra>2</tpIntegra></card>', $debitXml);
+
+        $mixedDocument = new DOMDocument('1.0', 'UTF-8');
+        $mixedInfNfe = $mixedDocument->createElement('infNFe');
+        $mixedDocument->appendChild($mixedInfNfe);
+
+        $mixedPayment = new VendaPagamento([
+            'tipo_pagamento' => 'dinheiro_cartao_debito',
+            'valor_total' => 10.0,
+            'valor_pago' => 6.0,
+            'troco' => 0,
+            'dois_pgto' => 4.0,
+        ]);
+
+        $appendPayment->invoke($service, $mixedDocument, $mixedInfNfe, $mixedPayment, 10.0);
+
+        $mixedXml = $mixedDocument->saveXML();
+
+        $this->assertNotFalse($mixedXml);
+        $this->assertStringContainsString('<tPag>01</tPag>', $mixedXml);
+        $this->assertStringContainsString('<vPag>6.00</vPag>', $mixedXml);
+        $this->assertStringContainsString('<tPag>04</tPag>', $mixedXml);
+        $this->assertStringContainsString('<vPag>4.00</vPag>', $mixedXml);
+        $this->assertStringContainsString('<card><tpIntegra>2</tpIntegra></card>', $mixedXml);
 
         $valeDocument = new DOMDocument('1.0', 'UTF-8');
         $valeInfNfe = $valeDocument->createElement('infNFe');
@@ -192,13 +383,14 @@ class FiscalNfceXmlServiceTest extends TestCase
             'troco' => 0,
         ]);
 
-        $appendPayment->invoke($service, $valeDocument, $valeInfNfe, $valePayment);
+        $appendPayment->invoke($service, $valeDocument, $valeInfNfe, $valePayment, 4.2);
 
         $valeXml = $valeDocument->saveXML();
 
         $this->assertNotFalse($valeXml);
         $this->assertStringContainsString('<tPag>10</tPag>', $valeXml);
         $this->assertStringNotContainsString('<xPag>', $valeXml);
+        $this->assertStringNotContainsString('<card>', $valeXml);
     }
 
     public function test_build_signed_xml_keeps_official_root_order_with_supplemental_info_before_signature(): void
@@ -248,13 +440,15 @@ class FiscalNfceXmlServiceTest extends TestCase
             'tb2_cnpj' => '62074471000156',
         ]));
 
+        $sales = collect([$sale]);
+
         $payment = new VendaPagamento([
             'tb4_id' => 999,
             'tipo_pagamento' => 'dinheiro',
             'valor_total' => 3.0,
             'troco' => 0,
         ]);
-        $payment->setRelation('vendas', collect([$sale]));
+        $payment->setRelation('vendas', $sales);
 
         $invoice = new NotaFiscal([
             'tb27_modelo' => 'nfce',
@@ -264,12 +458,17 @@ class FiscalNfceXmlServiceTest extends TestCase
 
         $certificateData = $this->createCertificateData();
 
-        $result = $service->buildSignedXml($invoice, $payment, $config, $certificateData);
+        $result = $service->buildSignedXml($invoice, $payment, $sales, $config, $certificateData);
 
         $document = new DOMDocument();
         $loaded = @$document->loadXML($result['xml']);
 
         $this->assertTrue($loaded);
+        $xpath = new DOMXPath($document);
+        $xpath->registerNamespace('nfe', 'http://www.portalfiscal.inf.br/nfe');
+        $xpath->registerNamespace('ds', 'http://www.w3.org/2000/09/xmldsig#');
+
+        $this->assertSame(0.0, $xpath->evaluate('count(/nfe:NFe/nfe:infNFe/nfe:dest)'));
 
         $rootChildren = [];
 
@@ -281,15 +480,88 @@ class FiscalNfceXmlServiceTest extends TestCase
 
         $this->assertSame(['infNFe', 'infNFeSupl', 'Signature'], $rootChildren);
 
-        $xpath = new DOMXPath($document);
-        $xpath->registerNamespace('nfe', 'http://www.portalfiscal.inf.br/nfe');
-        $xpath->registerNamespace('ds', 'http://www.w3.org/2000/09/xmldsig#');
-
         $this->assertSame('http://www.w3.org/2000/09/xmldsig#', $document->getElementsByTagName('Signature')->item(0)?->namespaceURI);
         $this->assertSame(1.0, $xpath->evaluate('count(/nfe:NFe/ds:Signature/ds:SignedInfo)'));
         $this->assertSame(1.0, $xpath->evaluate('count(/nfe:NFe/ds:Signature/ds:SignedInfo/ds:Reference)'));
         $this->assertSame(1.0, $xpath->evaluate('count(/nfe:NFe/ds:Signature/ds:SignatureValue)'));
         $this->assertSame(1.0, $xpath->evaluate('count(/nfe:NFe/ds:Signature/ds:KeyInfo/ds:X509Data/ds:X509Certificate)'));
+    }
+
+    public function test_assert_signed_xml_is_locally_valid_reports_reference_mismatch_for_tampered_xml(): void
+    {
+        $service = new FiscalNfceXmlService(new FiscalWebserviceResolverService());
+
+        $config = new ConfiguracaoFiscal([
+            'tb26_ambiente' => 'homologacao',
+            'tb26_uf' => 'GO',
+            'tb26_codigo_municipio' => '5200258',
+            'tb26_serie' => '1',
+            'tb26_crt' => 1,
+            'tb26_razao_social' => 'EMPRESA TESTE LTDA',
+            'tb26_nome_fantasia' => 'EMPRESA TESTE',
+            'tb26_logradouro' => 'RUA 1',
+            'tb26_numero' => '10',
+            'tb26_bairro' => 'CENTRO',
+            'tb26_municipio' => 'AGUAS LINDAS DE GOIAS',
+            'tb26_cep' => '72920076',
+            'tb26_ie' => '123456789',
+            'tb26_csc_id' => '1',
+            'tb26_csc' => 'ABC123',
+        ]);
+
+        $product = new Produto([
+            'tb1_ncm' => '19059090',
+            'tb1_cfop' => '5102',
+            'tb1_unidade_comercial' => 'UN',
+            'tb1_unidade_tributavel' => 'UN',
+            'tb1_origem' => 0,
+            'tb1_csosn' => '102',
+            'tb1_codbar' => null,
+        ]);
+
+        $sale = new Venda([
+            'tb1_id' => 1,
+            'id_unidade' => 3,
+            'produto_nome' => 'PAO DE SAL',
+            'quantidade' => 2,
+            'valor_unitario' => 1.5,
+            'valor_total' => 3.0,
+        ]);
+        $sale->setRelation('produto', $product);
+        $sale->setRelation('unidade', new Unidade([
+            'tb2_id' => 3,
+            'tb2_nome' => 'BARRAGEM 1',
+            'tb2_cnpj' => '62074471000156',
+        ]));
+
+        $sales = collect([$sale]);
+
+        $payment = new VendaPagamento([
+            'tb4_id' => 1001,
+            'tipo_pagamento' => 'dinheiro',
+            'valor_total' => 3.0,
+            'troco' => 0,
+        ]);
+        $payment->setRelation('vendas', $sales);
+
+        $invoice = new NotaFiscal([
+            'tb27_modelo' => 'nfce',
+            'tb27_serie' => '1',
+            'tb27_numero' => 1,
+        ]);
+
+        $certificateData = $this->createCertificateData();
+        $result = $service->buildSignedXml($invoice, $payment, $sales, $config, $certificateData);
+        $tamperedXml = str_replace('PAO DE SAL', 'PAO DOCE', $result['xml']);
+
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('assertSignedXmlIsLocallyValid');
+        $method->setAccessible(true);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('DigestValue/Reference');
+
+        $method->invoke($service, $tamperedXml, $certificateData);
     }
 
     private function createCertificateData(): array

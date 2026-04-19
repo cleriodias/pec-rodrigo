@@ -4,7 +4,7 @@ import InputError from '@/Components/InputError';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { buildFiscalReceiptHtml, formatReceiptCurrency } from '@/Utils/receipt';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 const STATUS_CLASS = {
     pendente_configuracao: 'border-amber-200 bg-amber-50 text-amber-800',
@@ -120,6 +120,27 @@ const DiagnosticsCard = ({ diagnostics }) => {
     );
 };
 
+const XmlDebugCard = ({ xmlDebug }) => {
+    if (!xmlDebug) {
+        return '--';
+    }
+
+    return (
+        <div className="space-y-1 text-xs text-slate-700 dark:text-slate-200">
+            <p><span className="font-semibold">mod:</span> {xmlDebug.mod || '--'}</p>
+            <p><span className="font-semibold">tpImp:</span> {xmlDebug.tp_imp || '--'}</p>
+            <p><span className="font-semibold">dest:</span> {xmlDebug.dest_present ? 'sim' : 'nao'}</p>
+            <p><span className="font-semibold">doc:</span> {xmlDebug.dest_document || '--'}</p>
+            <p><span className="font-semibold">nome:</span> {xmlDebug.dest_name || '--'}</p>
+            <p><span className="font-semibold">cMun:</span> {xmlDebug.dest_city_code || '--'}</p>
+            <p><span className="font-semibold">card:</span> {xmlDebug.card_present ? 'sim' : 'nao'}</p>
+            <p><span className="font-semibold">csc_id:</span> {xmlDebug.csc_id || '--'}</p>
+            <p><span className="font-semibold">assinatura:</span> {xmlDebug.signature_present ? 'sim' : 'nao'}</p>
+            <p className="break-all"><span className="font-semibold">qr:</span> {xmlDebug.qr_code_data || '--'}</p>
+        </div>
+    );
+};
+
 const actionButtonClassName =
     'inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold';
 
@@ -158,6 +179,7 @@ const InvoiceTable = ({ invoices = [], onDeleteInvoice, onPrintFiscalReceipt }) 
                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Numero</th>
                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Status</th>
                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Mensagem</th>
+                            <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">XML debug</th>
                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Criada em</th>
                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Cupom</th>
                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Regenerar</th>
@@ -180,6 +202,9 @@ const InvoiceTable = ({ invoices = [], onDeleteInvoice, onPrintFiscalReceipt }) 
                                     </span>
                                 </td>
                                 <td className="px-3 py-3 text-gray-700 dark:text-gray-200">{invoice.mensagem ?? '--'}</td>
+                                <td className="px-3 py-3 align-top">
+                                    <XmlDebugCard xmlDebug={invoice.xml_debug} />
+                                </td>
                                 <td className="px-3 py-3 text-gray-700 dark:text-gray-200">{invoice.criada_em ?? '--'}</td>
                                 <td className="px-3 py-3 text-gray-700 dark:text-gray-200">
                                     {invoice.fiscal_receipt ? (
@@ -313,6 +338,14 @@ export default function FiscalConfig({
     const reprocess = useForm({
         tb2_id: selectedUnitId ?? '',
     });
+
+    useEffect(() => {
+        setData('tb2_id', configuration?.tb2_id ?? selectedUnitId ?? '');
+    }, [configuration?.tb2_id, selectedUnitId, setData]);
+
+    useEffect(() => {
+        reprocess.setData('tb2_id', selectedUnitId ?? '');
+    }, [reprocess.setData, selectedUnitId]);
 
     const handleFilterSubmit = (event) => {
         event.preventDefault();
@@ -449,6 +482,8 @@ export default function FiscalConfig({
                                 onSubmit={handleSubmit}
                                 className="space-y-6 rounded-2xl bg-white p-6 shadow dark:bg-gray-800"
                             >
+                                <InputError message={errors.tb2_id} className="mt-2" />
+
                                 <section className="space-y-4">
                                     <div>
                                         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
