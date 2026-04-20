@@ -1,3 +1,265 @@
+## 20/04/26 - NF Consumidor com destinatario identificado no caixa
+
+- causa do problema:
+  - o fluxo atual do caixa gerava a NFC-e sempre como consumidor nao identificado;
+  - na pratica isso era uma NF de balcão, porque o sistema nao coletava dados fiscais do consumidor;
+  - o XML era montado sem a tag `<dest>`, entao nao existia forma de emitir NF Consumidor a partir da venda ja registrada.
+
+- regra adotada neste ajuste:
+  - a venda continua sendo criada normalmente;
+  - a nota segue como balcao enquanto nao houver destinatario informado;
+  - no modal final da venda foi criado o botao `NF Consumidor`;
+  - ao informar os dados fiscais do cliente, a mesma nota e reprocessada com destinatario identificado;
+  - o codigo do municipio IBGE do consumidor passou a ser obrigatorio na modal para garantir XML valido sem depender de consulta externa.
+
+- o que foi ajustado:
+  - o modal final da venda agora mostra o consumidor atual da nota;
+  - o botao de impressao da nota deixou de exibir `Cupom Fiscal` e passou a identificar a nota como `NF Balcao` ou `NF Consumidor`;
+  - foi criado um endpoint para atualizar a nota fiscal da venda com os dados do consumidor;
+  - o backend passou a validar e salvar os dados do consumidor dentro de `tb27_payload['consumer']`;
+  - o gerador do XML da NFC-e passou a incluir a tag `<dest>` e `enderDest` quando houver consumidor informado;
+  - o DANFE 80mm passou a imprimir tambem documento e endereco do consumidor quando a nota for identificada.
+
+- backend envolvido:
+  - `routes/web.php`
+    - adicionada a rota `sales.fiscal.consumer`.
+  - `app/Http/Controllers/SaleController.php`
+    - criado o metodo `updateConsumerFiscalInvoice`;
+    - adicionada validacao/sanitizacao dos dados fiscais do consumidor;
+    - o resumo da nota (`buildFiscalSummary`) agora devolve o consumidor salvo no payload.
+  - `app/Support/FiscalInvoicePreparationService.php`
+    - `prepareForPayment` agora aceita opcionalmente os dados do consumidor;
+    - o payload da nota passou a armazenar `consumer`;
+    - a validacao fiscal agora valida CPF/CNPJ, CEP, UF e codigo IBGE do consumidor;
+    - a nota reaproveita o consumidor salvo no payload quando for reprocessada.
+  - `app/Support/FiscalNfceXmlService.php`
+    - `buildSignedXml` passou a receber o consumidor;
+    - criada a montagem do grupo `dest` e `enderDest` no XML da NFC-e.
+
+- frontend envolvido:
+  - `resources/js/Pages/Dashboard.jsx`
+    - adicionada modal `NF Consumidor` no fechamento da venda;
+    - adicionado formulario com nome, CPF/CNPJ, CEP, logradouro, numero, complemento, bairro, municipio, codigo municipio IBGE e UF;
+    - adicionado envio para o novo endpoint da nota;
+    - o botao de impressao fiscal agora mostra `NF Balcao` quando a nota nao tem destinatario e `NF Consumidor` quando a nota tem destinatario.
+  - `resources/js/Utils/receipt.js`
+    - o DANFE 80mm passou a mostrar documento e endereco do consumidor.
+
+- testes/validacao executados:
+  - `php -l app/Http/Controllers/SaleController.php`
+  - `php -l app/Support/FiscalInvoicePreparationService.php`
+  - `php -l app/Support/FiscalNfceXmlService.php`
+  - `php artisan test --filter=FiscalInvoicePreparationServiceTest`
+  - `php artisan test --filter=FiscalNfceXmlServiceTest`
+  - `npm run build`
+
+- observacoes importantes para sincronizar em `pec1`:
+  - sincronizar exatamente:
+    - `routes/web.php`
+    - `app/Http/Controllers/SaleController.php`
+    - `app/Support/FiscalInvoicePreparationService.php`
+    - `app/Support/FiscalNfceXmlService.php`
+    - `resources/js/Pages/Dashboard.jsx`
+    - `resources/js/Utils/receipt.js`
+    - `tests/Unit/FiscalInvoicePreparationServiceTest.php`
+    - `tests/Unit/FiscalNfceXmlServiceTest.php`
+  - nao depende de migration;
+  - nao cria tabela nova;
+  - os dados do consumidor ficam em `tb27_payload['consumer']`;
+  - para emitir NF Consumidor e obrigatorio informar o codigo do municipio IBGE do cliente;
+  - o botao `NF Consumidor` so faz sentido antes da nota ser finalizada/transmitida definitivamente; depois de `emitida`, a troca para consumidor fica bloqueada.
+
+## 20/04/26 - Correcao do schema XML da NF Consumidor no grupo `dest`
+
+- causa do problema:
+  - a primeira implementacao da `NF Consumidor` montou o grupo `dest` na ordem errada;
+  - o XML estava saindo com `indIEDest` antes de `enderDest`;
+  - no schema da SEFAZ, depois de `indIEDest` o parser passa a esperar `IE`, `ISUF` ou `IM`, entao a presenca de `enderDest` nessa posicao causava a rejeicao:
+    - `Falha de Esquema: O elemento pai: 'dest' não estava esperando o elemento 'enderDest'. O elemento esperado é: 'IE, ISUF,IM,'`.
+
+- o que foi ajustado:
+  - corrigida a ordem dos elementos filhos de `dest`;
+  - `enderDest` agora e montado antes de `indIEDest`;
+  - adicionado teste unitario validando explicitamente a ordem:
+    - `CPF/CNPJ`
+    - `xNome`
+    - `enderDest`
+    - `indIEDest`
+
+- arquivos alterados:
+  - `app/Support/FiscalNfceXmlService.php`
+  - `tests/Unit/FiscalNfceXmlServiceTest.php`
+  - `SYNC.md`
+
+- observacoes para sincronizar em `pec1`:
+  - sincronizar exatamente:
+    - `app/Support/FiscalNfceXmlService.php`
+    - `tests/Unit/FiscalNfceXmlServiceTest.php`
+  - esta correcao nao altera banco;
+  - esta correcao nao altera rotas nem frontend;
+  - ela e obrigatoria para a `NF Consumidor` ser aceita pelo schema da SEFAZ.
+
+## 20/04/26 - Ajuste do `urlChave` de GO para eliminar `cStat 878` na NFC-e
+
+- Arquivos alterados:
+  - `app/Support/FiscalWebserviceResolverService.php`
+  - `tests/Unit/FiscalWebserviceResolverServiceTest.php`
+  - `SYNC.md`
+
+- Causa identificada:
+  - a `NF Consumidor` estava alternando entre erros, mas o retorno atual confirmado da SEFAZ passou a ser:
+    - `cStat 878 - Rejeicao: Endereco do site da UF da Consulta por chave de acesso diverge do previsto`
+  - isso aponta diretamente para o valor preenchido em `infNFeSupl/urlChave`;
+  - o resolver de GO estava entregando `consulta-completa`, mas esse endereco nao foi aceito pela SEFAZ neste fluxo real.
+
+- O que foi feito:
+  - o `FiscalWebserviceResolverService` voltou a mapear `urlChave` de GO para:
+    - `http://www.sefaz.go.gov.br/nfce/consulta`
+  - o ajuste foi aplicado em homologacao e producao;
+  - os testes unitarios do resolver foram atualizados para refletir o endereco esperado.
+
+- Efeito esperado:
+  - novas NFC-e deixam de sair com `urlChave` rejeitada pela SEFAZ-GO;
+  - a `NF Consumidor` regenerada passa a carregar a URL de consulta por chave alinhada com o retorno real do ambiente.
+
+- Observacoes para sincronizar em `pec1`:
+  - levar juntos:
+    - `app/Support/FiscalWebserviceResolverService.php`
+    - `tests/Unit/FiscalWebserviceResolverServiceTest.php`
+  - nao depende de migration;
+  - reprocessar as NFC-e ja geradas com `urlChave` anterior, porque o XML antigo continua salvo com o endereco rejeitado;
+  - esta etapa corrige apenas a `urlChave`; nao altera `tpImp`, assinatura, `qrCode` nem a separacao funcional entre `Nota fiscal balcao`, `NF Consumidor` e futuro `cupom fiscal`.
+
+## 20/04/26 - Reversao do `tpImp` da NFC-e para `4` apos rejeicao real `709`
+
+- Arquivos alterados:
+  - `app/Support/FiscalNfceXmlService.php`
+  - `app/Support/FiscalNfceTransmissionService.php`
+  - `tests/Unit/FiscalNfceTransmissionServiceTest.php`
+  - `tests/Unit/FiscalNfceXmlServiceTest.php`
+  - `SYNC.md`
+
+- Causa identificada:
+  - uma correcao anterior tinha alterado o fluxo da NFC-e para `tpImp = 1`;
+  - porem a evidencia real da nota `520` (`chave 52260462074417000156650010000005201023178152`) mostrou retorno oficial da SEFAZ em `20/04/26` com:
+    - `cStat 709 - Rejeicao: NFC-e com formato de DANFE invalido`
+  - o XML salvo dessa nota foi transmitido com `mod = 65` e `tpImp = 1`;
+  - isso confirmou, no ambiente real deste projeto, que a NFC-e precisa continuar com `tpImp = 4`.
+
+- O que foi feito:
+  - `FiscalNfceXmlService` voltou a gerar NFC-e com `tpImp = 4`;
+  - `FiscalNfceTransmissionService` voltou a validar a estrutura exigindo `tpImp = 4`;
+  - os testes foram atualizados para refletir novamente a regra correta.
+
+- Efeito esperado:
+  - novas NFC-e deixam de sair com `tpImp = 1`, que estava provocando `709`;
+  - o gerador e a transmissao voltam a ficar coerentes com o retorno real da SEFAZ;
+  - as notas de `balcao`, `consumidor` e a representacao de `cupom fiscal` continuam cobertas por esta mesma regra sempre que o modelo fiscal gerado for `65` (NFC-e).
+
+- Observacoes para sincronizar em `pec1`:
+  - levar juntos:
+    - `app/Support/FiscalNfceXmlService.php`
+    - `app/Support/FiscalNfceTransmissionService.php`
+    - `tests/Unit/FiscalNfceTransmissionServiceTest.php`
+    - `tests/Unit/FiscalNfceXmlServiceTest.php`
+  - nao depende de migration;
+  - reprocessar as NFC-e geradas com `tpImp = 1`, porque o XML antigo continua salvo com a regra errada;
+  - esta etapa nao muda a distincao visual entre `Nota fiscal balcao`, `Nota fiscal Consumidor` e `cupom fiscal`; ela corrige apenas o `tpImp` do XML quando o documento emitido e `NFC-e`.
+
+## 20/04/26 - Correcao do `tpImp` da NFC-e para eliminar a rejeicao `710`
+
+- Arquivos alterados:
+  - `app/Support/FiscalNfceXmlService.php`
+  - `app/Support/FiscalNfceTransmissionService.php`
+  - `tests/Unit/FiscalNfceTransmissionServiceTest.php`
+  - `tests/Unit/FiscalNfceXmlServiceTest.php`
+  - `SYNC.md`
+
+- Causa identificada:
+  - o fluxo da NFC-e estava inteiro baseado na premissa errada de que o DANFE deveria sair com `tpImp = 4`;
+  - com isso, o gerador do XML criava a tag `<tpImp>4</tpImp>`;
+  - em seguida, a transmissao interna ainda validava que a NFC-e "correta" desta etapa precisava continuar com `tpImp 4`;
+  - isso mantinha o sistema preso a um formato que a SEFAZ rejeita com `710 - NF-e com formato de DANFE invalido`.
+
+- O que foi feito:
+  - `FiscalNfceXmlService` passou a gerar a NFC-e com `tpImp = 1`;
+  - `FiscalNfceTransmissionService` foi alinhado para exigir `tpImp = 1` antes do envio, removendo a regra antiga que obrigava `4`;
+  - os testes unitarios foram atualizados para refletir a regra correta e evitar regressao futura.
+
+- Efeito esperado:
+  - novas NFC-e deixam de nascer com o formato de DANFE rejeitado pela SEFAZ;
+  - o proprio fluxo interno de transmissao deixa de bloquear XML valido por esperar o valor antigo;
+  - a rejeicao `710` deixa de ocorrer nas notas regeneradas com esse ajuste.
+
+- Observacoes para sincronizar em `pec1`:
+  - levar juntos:
+    - `app/Support/FiscalNfceXmlService.php`
+    - `app/Support/FiscalNfceTransmissionService.php`
+    - `tests/Unit/FiscalNfceTransmissionServiceTest.php`
+    - `tests/Unit/FiscalNfceXmlServiceTest.php`
+  - nao depende de migration;
+  - reprocessar qualquer NFC-e gerada antes desta correcao, porque o XML antigo continua salvo com `tpImp = 4`;
+  - manter os demais ajustes ja feitos para `urlChave`, `qrCode` e assinatura, pois esta etapa corrige especificamente o formato do DANFE no `ide`.
+
+## 20/04/26 - Correcao da assinatura fiscal: NFC-e deste ambiente permanece em SHA1
+
+- causa do problema:
+  - a tentativa de migrar a assinatura da NFC-e para `SHA-256` gerou rejeicao de schema;
+  - a SEFAZ deste ambiente respondeu explicitamente que o XML esperado continua com:
+    - `SignatureMethod = rsa-sha1`
+    - `DigestMethod = sha1`
+  - com isso, o XML assinado em `rsa-sha256` e `sha256` passou a ser rejeitado por incompatibilidade com o schema carregado neste fluxo.
+
+- o que foi ajustado:
+  - a geracao da assinatura foi revertida para:
+    - `XMLSecurityKey::RSA_SHA1`
+    - `XMLSecurityDSig::SHA1`
+  - o teste unitario voltou a validar explicitamente:
+    - `SignatureMethod = rsa-sha1`
+    - `DigestMethod = sha1`
+  - notas que tinham sido reprocessadas com `SHA-256` precisam ser reprocessadas novamente para voltar ao formato aceito por este ambiente.
+
+- arquivos alterados:
+  - `app/Support/FiscalNfceXmlService.php`
+  - `tests/Unit/FiscalNfceXmlServiceTest.php`
+  - `SYNC.md`
+
+- observacoes para sincronizar em `pec1`:
+  - sincronizar exatamente:
+    - `app/Support/FiscalNfceXmlService.php`
+    - `tests/Unit/FiscalNfceXmlServiceTest.php`
+  - nao depende de migration;
+  - neste ambiente, a NFC-e deve permanecer em `SHA1`;
+  - se alguma nota tiver sido regenerada com `SHA-256`, ela precisa ser reprocessada para voltar a `SHA1`.
+
+## 20/04/26 - Correcao do `urlChave` da NFC-e em GO
+
+- causa do problema:
+  - o XML da NFC-e em GO estava sendo gerado com `urlChave` legado:
+    - `http://www.sefaz.go.gov.br/nfce/consulta`
+  - esse valor nao seguia o mesmo padrao atual do portal NFC-e usado no `qrCode`;
+  - como o erro reportado pela SEFAZ seguia apontando `formato de DANFE invalido` mesmo com `tpImp = 4`, assinatura em `SHA1` e estrutura do `dest` correta, o bloco `infNFeSupl` passou a ser o principal suspeito.
+
+- o que foi ajustado:
+  - atualizado o mapeamento dos endpoints de GO para usar `consulta-completa`;
+  - agora os valores ficaram:
+    - homologacao:
+      - `https://nfewebhomolog.sefaz.go.gov.br/nfeweb/sites/nfe/consulta-completa`
+    - producao:
+      - `https://nfeweb.sefaz.go.gov.br/nfeweb/sites/nfe/consulta-completa`
+
+- arquivos alterados:
+  - `app/Support/FiscalWebserviceResolverService.php`
+  - `tests/Unit/FiscalWebserviceResolverServiceTest.php`
+  - `SYNC.md`
+
+- observacoes para sincronizar em `pec1`:
+  - sincronizar exatamente:
+    - `app/Support/FiscalWebserviceResolverService.php`
+    - `tests/Unit/FiscalWebserviceResolverServiceTest.php`
+  - nao depende de migration;
+  - depois de sincronizar, reprocessar as notas que estiverem com `urlChave` antiga para regenerar o `infNFeSupl`.
+
 ## 16/04/26 - Nomes de produtos convertidos e protegidos em maiusculo
 
 - causa do problema:
@@ -3233,4 +3495,481 @@
   - levar junto:
     - `app/Http/Controllers/ProductController.php`
     - `resources/js/Pages/Products/ProductCreate.jsx`
+  - nao depende de migration.
+
+## 19/04/26 - Padronizacao fiscal dos produtos com `tb1_tipo = 1`
+
+- Arquivos alterados:
+  - `SYNC.md`
+
+- Causa identificada:
+  - os produtos do tipo `1` precisavam ficar com o mesmo cadastro fiscal para evitar divergencia de emissao e de preparacao fiscal entre itens equivalentes.
+
+- O que foi feito:
+  - foi executado update direto no banco na tabela `tb1_produto` para todos os registros com `tb1_tipo = 1`;
+  - os seguintes campos foram padronizados:
+    - `tb1_ncm = 19059090`
+    - `tb1_cfop = 5102`
+    - `tb1_csosn = 102`
+    - `tb1_cst = 040`
+    - `tb1_origem = 0`
+
+- Resultado observado:
+  - total de produtos com `tb1_tipo = 1`: `315`
+  - linhas efetivamente alteradas pelo `UPDATE`: `314`
+  - depois da execucao, `315` de `315` produtos desse tipo ficaram com o padrao solicitado.
+
+- Observacoes para sincronizar em `pec1`:
+  - replicar o mesmo `UPDATE` diretamente no banco do outro projeto;
+  - nao depende de migration;
+  - SQL aplicado:
+
+```sql
+UPDATE tb1_produto
+SET
+    tb1_ncm = '19059090',
+    tb1_cfop = '5102',
+    tb1_csosn = '102',
+    tb1_cst = '040',
+    tb1_origem = 0
+WHERE tb1_tipo = 1;
+```
+
+## 19/04/26 - Padronizacao fiscal de toda a `tb1_produto`
+
+- Arquivos alterados:
+  - `SYNC.md`
+
+- Causa identificada:
+  - foi solicitado aplicar o mesmo cadastro fiscal para todos os itens da tabela de produtos, sem restringir por tipo;
+  - antes disso, apenas os produtos com `tb1_tipo = 1` tinham recebido esse padrao.
+
+- O que foi feito:
+  - foi executado update direto no banco na tabela `tb1_produto` para todos os registros;
+  - os seguintes campos foram padronizados em toda a tabela:
+    - `tb1_ncm = 19059090`
+    - `tb1_cfop = 5102`
+    - `tb1_csosn = 102`
+    - `tb1_cst = 040`
+    - `tb1_origem = 0`
+
+- Resultado observado:
+  - total de produtos na tabela `tb1_produto`: `1904`
+  - linhas efetivamente alteradas pelo `UPDATE`: `1589`
+  - depois da execucao, `1904` de `1904` produtos ficaram com o padrao solicitado.
+
+- Observacoes para sincronizar em `pec1`:
+  - replicar o mesmo `UPDATE` diretamente no banco do outro projeto;
+  - nao depende de migration;
+  - SQL aplicado:
+
+```sql
+UPDATE tb1_produto
+SET
+    tb1_ncm = '19059090',
+    tb1_cfop = '5102',
+    tb1_csosn = '102',
+    tb1_cst = '040',
+    tb1_origem = 0;
+```
+
+## 19/04/26 - Limpeza dos dados fiscais dos produtos que nao sao de balanca
+
+- Arquivos alterados:
+  - `SYNC.md`
+
+- Causa identificada:
+  - depois do update que aplicou o mesmo padrao fiscal em toda a `tb1_produto`, os produtos que nao sao de balanca tambem ficaram com os dados do pao;
+  - como esses itens nao deveriam herdar esse padrao, foi necessario desfazer o impacto neles limpando o cadastro fiscal.
+
+- O que foi feito:
+  - foi executado update direto no banco para todos os produtos com `tb1_tipo <> 1`;
+  - os seguintes campos fiscais foram limpos:
+    - `tb1_ncm = NULL`
+    - `tb1_cest = NULL`
+    - `tb1_cfop = NULL`
+    - `tb1_csosn = NULL`
+    - `tb1_cst = NULL`
+  - os campos numericos/default foram redefinidos para:
+    - `tb1_origem = 0`
+    - `tb1_aliquota_icms = 0`
+
+- Resultado observado:
+  - total de produtos com `tb1_tipo <> 1`: `1589`
+  - linhas efetivamente alteradas pelo `UPDATE`: `1589`
+  - depois da execucao, `1589` de `1589` produtos nao-balanca ficaram com os campos fiscais limpos.
+
+- Observacoes para sincronizar em `pec1`:
+  - replicar o mesmo `UPDATE` diretamente no banco do outro projeto apenas se la tambem tiver ocorrido a aplicacao indevida do padrao fiscal em todos os produtos;
+  - nao depende de migration;
+  - SQL aplicado:
+
+```sql
+UPDATE tb1_produto
+SET
+    tb1_ncm = NULL,
+    tb1_cest = NULL,
+    tb1_cfop = NULL,
+    tb1_csosn = NULL,
+    tb1_cst = NULL,
+    tb1_origem = 0,
+    tb1_aliquota_icms = 0
+WHERE tb1_tipo <> 1;
+```
+
+## 19/04/26 - Correcao do erro em venda mista `dinheiro + cartao`
+
+- Arquivos alterados:
+  - `database/migrations/2026_04_19_120000_expand_tipo_pagamento_length_on_tb4_vendas_pg.php`
+  - `SYNC.md`
+
+- Causa identificada:
+  - apos o desmembramento de `maquina` em `cartao_credito` e `cartao_debito`, o sistema passou a salvar em `tb4_vendas_pg.tipo_pagamento` os tipos mistos:
+    - `dinheiro_cartao_credito`
+    - `dinheiro_cartao_debito`
+  - a coluna `tb4_vendas_pg.tipo_pagamento` ainda estava definida como `VARCHAR(20)`;
+  - esses novos valores ultrapassam 20 caracteres, causando erro de gravacao quando a venda era parte em dinheiro e o restante no cartao.
+
+- O que foi feito:
+  - a coluna `tb4_vendas_pg.tipo_pagamento` foi ampliada de `VARCHAR(20)` para `VARCHAR(40)`;
+  - foi criada migration para manter esse ajuste versionado no projeto;
+  - o `ALTER TABLE` tambem foi aplicado no banco atual para remover o erro imediatamente.
+
+- Efeito esperado:
+  - vendas mistas em `dinheiro + cartao credito` e `dinheiro + cartao debito` deixam de gerar `Server Error`;
+  - o backend passa a persistir corretamente os novos tipos longos em `tb4_vendas_pg`.
+
+- Observacoes para sincronizar em `pec1`:
+  - levar junto:
+    - `database/migrations/2026_04_19_120000_expand_tipo_pagamento_length_on_tb4_vendas_pg.php`
+  - aplicar tambem o ajuste no banco do outro projeto;
+  - nao depende de mudanca em tela;
+  - SQL aplicado:
+
+```sql
+ALTER TABLE tb4_vendas_pg
+MODIFY tipo_pagamento VARCHAR(40) NOT NULL;
+```
+
+## 19/04/26 - Atualizacao fiscal por GTIN para produtos com codigo de barras
+
+- Arquivos alterados:
+  - `SYNC.md`
+
+- Causa identificada:
+  - foi solicitado atualizar os dados fiscais apenas dos produtos com codigo de barras;
+  - como `CFOP`, `CSOSN` e `CST` nao podem ser inferidos com seguranca apenas pelo GTIN, a atualizacao segura ficou restrita a:
+    - `tb1_ncm`
+    - `tb1_cest`
+
+- Fonte utilizada:
+  - consulta publica por GTIN no endpoint `https://ean.blendo.com.br/ean_consulta.php`;
+  - o endpoint retornou JSON com campos como:
+    - `ncm`
+    - `cest`
+    - `nome`
+    - `categoria`
+  - exemplo validado durante a execucao:
+    - GTIN `7894900027013` (`COCA COLA 2L`) retornou `ncm = 22021000`.
+
+- O que foi feito:
+  - foram considerados apenas produtos com `tb1_codbar` em formato numerico valido de `8` a `14` digitos;
+  - para cada GTIN valido, foi feita consulta externa;
+  - quando a resposta trouxe `ncm` valido com `8` digitos, o produto foi atualizado;
+  - quando a resposta trouxe `cest` valido com `7` digitos, ele tambem foi salvo;
+  - nenhum ajuste foi feito em:
+    - `tb1_cfop`
+    - `tb1_csosn`
+    - `tb1_cst`
+    - `tb1_origem`
+
+- Resultado observado:
+  - total de produtos com GTIN valido considerado no lote: `1528`
+  - produtos com `NCM` resolvido automaticamente pela consulta: `267`
+  - produtos com `CEST` resolvido automaticamente: `31`
+  - atualizacoes efetivamente aplicadas no banco durante o lote: `267`
+  - consultas sem retorno fiscal util para preenchimento automatico: `1261`
+  - erros tecnicos durante o lote: `0`
+
+- Observacoes para sincronizar em `pec1`:
+  - nao foi criada migration;
+  - a atualizacao foi operacional, via consulta externa por GTIN;
+  - repetir apenas se o outro ambiente tambem puder consultar a mesma fonte externa;
+  - manter o mesmo criterio de seguranca:
+    - atualizar somente `NCM`;
+    - atualizar `CEST` apenas quando a fonte retornar valor valido;
+    - nao preencher `CFOP/CSOSN/CST` automaticamente por GTIN.
+
+## 19/04/26 - Filtros fiscais e botoes em icone na tela `products`
+
+- Arquivos alterados:
+  - `app/Http/Controllers/ProductController.php`
+  - `resources/js/Pages/Products/ProductIndex.jsx`
+  - `SYNC.md`
+
+- Causa identificada:
+  - a barra de acoes da tela `products` ainda mostrava os botoes `VR Credito` e `Estoque` com texto, ocupando mais espaco do que o necessario;
+  - alem disso, nao existia atalho para listar produtos com cadastro fiscal completo ou incompleto considerando os quatro campos obrigatorios operacionais:
+    - `NCM`
+    - `CFOP`
+    - `CSOSN`
+    - `CST`
+
+- O que foi feito:
+  - os botoes `VR Credito` e `Estoque` passaram a exibir apenas icones, mantendo `title` e `aria-label`;
+  - foram adicionados dois novos botoes com icone:
+    - um para listar produtos com cadastro fiscal incompleto;
+    - outro para listar produtos com cadastro fiscal completo;
+  - o backend de `products.index` passou a aceitar o filtro `fiscal_status` com os valores:
+    - `complete`
+    - `incomplete`
+  - produto fiscal completo foi definido como aquele que possui simultaneamente:
+    - `tb1_ncm`
+    - `tb1_cfop`
+    - `tb1_csosn`
+    - `tb1_cst`
+  - produto fiscal incompleto foi definido como aquele em que qualquer um desses quatro campos esteja vazio ou nulo.
+
+- Efeito esperado:
+  - a barra superior da listagem fica mais compacta;
+  - o usuario consegue localizar rapidamente produtos com cadastro fiscal faltando ou completo;
+  - o filtro fiscal pode ser combinado com busca, ordenacao e filtro de `VR Credito`.
+
+- Observacoes para sincronizar em `pec1`:
+  - levar junto:
+    - `app/Http/Controllers/ProductController.php`
+    - `resources/js/Pages/Products/ProductIndex.jsx`
+  - nao depende de migration.
+
+## 19/04/26 - Fila de atualizacao fiscal em lote na tela `products`
+
+- Arquivos alterados:
+  - `app/Http/Controllers/ProductController.php`
+  - `resources/js/Pages/Products/ProductIndex.jsx`
+  - `resources/js/Pages/Products/ProductFiscalQueue.jsx`
+  - `routes/web.php`
+  - `SYNC.md`
+
+- Causa identificada:
+  - a atualizacao manual dos dados fiscais produto por produto exigia abrir formulario individual, salvar e esperar a tela recarregar;
+  - isso tornava o preenchimento de `NCM`, `CFOP`, `CSOSN` e `CST` lento e repetitivo para muitos itens pendentes.
+
+- O que foi feito:
+  - foi criado um novo icone na tela `products` para abrir a fila de atualizacao fiscal;
+  - foi criada a tela `ProductFiscalQueue.jsx`;
+  - a fila carrega `20` produtos por vez com cadastro fiscal incompleto;
+  - cada linha mostra:
+    - nome do produto;
+    - codigo de barras;
+    - campos `NCM`, `CFOP`, `CSOSN`, `CST`;
+    - botao para gravar;
+  - a gravacao e assincrona por linha, sem submit/reload da pagina;
+  - ao gravar com sucesso:
+    - a linha some imediatamente;
+    - a contagem de pendentes e atualizada;
+  - quando os `20` itens terminam:
+    - a proxima lista e carregada sem recarregar a tela.
+
+- Rotas adicionadas:
+  - `products.fiscal-queue`
+  - `products.fiscal-queue.items`
+  - `products.fiscal-queue.update`
+
+- Efeito esperado:
+  - o usuario consegue preencher dados fiscais em fluxo continuo;
+  - nao precisa voltar ao indice nem reabrir formulario individual a cada produto;
+  - a fila sempre apresenta o proximo bloco de itens pendentes.
+
+- Observacoes para sincronizar em `pec1`:
+  - levar junto:
+    - `app/Http/Controllers/ProductController.php`
+    - `resources/js/Pages/Products/ProductIndex.jsx`
+    - `resources/js/Pages/Products/ProductFiscalQueue.jsx`
+    - `routes/web.php`
+  - nao depende de migration.
+
+## 20/04/26 - Filtros por tipo e placeholders na fila fiscal
+
+- Arquivos alterados:
+  - `app/Http/Controllers/ProductController.php`
+  - `resources/js/Pages/Products/ProductFiscalQueue.jsx`
+  - `SYNC.md`
+
+- Causa identificada:
+  - a fila fiscal trazia todos os produtos pendentes misturados, sem separar `Industria`, `Balanca`, `Servico` e `Producao`;
+  - isso dificultava o preenchimento por categoria;
+  - os campos fiscais tambem nao tinham placeholders de referencia, deixando a digitacao menos guiada.
+
+- O que foi feito:
+  - a tela `products/fiscal-queue` passou a exibir filtros por tipo:
+    - `Industria`
+    - `Balanca`
+    - `Servico`
+    - `Producao`
+    - `Todos`
+  - o backend agora aceita o parametro `type` na fila fiscal;
+  - tanto a carga inicial quanto a busca dos proximos `20` itens respeitam o filtro selecionado;
+  - foi adicionado resumo visual do tipo selecionado na tela;
+  - os campos passaram a exibir placeholders:
+    - `NCM`: `19059090`
+    - `CFOP`: `5102`
+    - `CSOSN`: `102`
+    - `CST`: `040`
+
+- Efeito esperado:
+  - o usuario consegue trabalhar a fila fiscal por categoria de produto;
+  - ao concluir um lote, os proximos `20` continuam sendo carregados dentro do mesmo tipo escolhido;
+  - os placeholders servem como referencia visual rapida durante o preenchimento.
+
+- Observacoes para sincronizar em `pec1`:
+  - levar junto:
+    - `app/Http/Controllers/ProductController.php`
+    - `resources/js/Pages/Products/ProductFiscalQueue.jsx`
+  - nao depende de migration.
+
+## 20/04/26 - Novo tipo fiscal `cupom fiscal` com CPF apenas
+
+- causa do problema:
+  - o caixa so tratava dois cenarios fiscais:
+    - `NF Balcao` sem destinatario;
+    - `NF Consumidor` com nome e endereco completos;
+  - qualquer consumidor informado era validado como se fosse obrigatoriamente `NF Consumidor`;
+  - por isso nao existia o terceiro fluxo pedido agora:
+    - `cupom fiscal` identificado apenas por CPF.
+
+- o que foi ajustado:
+  - a identificacao fiscal passou a ter tres modos funcionais:
+    - `balcao`
+    - `cupom_fiscal`
+    - `consumidor`
+  - a modal final da venda agora permite escolher:
+    - `Cupom fiscal` com CPF apenas;
+    - `NF Consumidor` com nome e endereco completos;
+  - o payload fiscal salvo em `tb27_payload['consumer']` agora guarda tambem `type`;
+  - a validacao fiscal passou a tratar `cupom_fiscal` como CPF-only;
+  - a `NF Consumidor` continua exigindo nome e endereco completos;
+  - o XML da NFC-e passou a montar o grupo `dest` em dois formatos:
+    - `cupom_fiscal`: somente `CPF` + `indIEDest`;
+    - `consumidor`: `CPF/CNPJ` + `xNome` + `enderDest` + `indIEDest`;
+  - a modal e a impressao passaram a mostrar corretamente:
+    - `NF Balcao`
+    - `Cupom Fiscal`
+    - `NF Consumidor`
+
+- backend envolvido:
+  - `app/Http/Controllers/SaleController.php`
+    - `updateConsumerFiscalInvoice` agora recebe `consumer.type`;
+    - `normalizeFiscalConsumerInput` passou a sanitizar separadamente `cupom_fiscal` e `NF Consumidor`;
+    - `buildFiscalSummary` passou a devolver `consumer_type`;
+    - `extractFiscalConsumer` passou a inferir e preservar o tipo fiscal salvo.
+  - `app/Support/FiscalInvoicePreparationService.php`
+    - o payload do consumidor agora e normalizado com `type`;
+    - `cupom_fiscal` limpa campos de endereco e preserva apenas o CPF;
+    - `validatePayload` passou a validar CPF-only para cupom e endereco completo apenas para `NF Consumidor`.
+  - `app/Support/FiscalNfceXmlService.php`
+    - `appendDestination` passou a gerar o `dest` reduzido quando o tipo for `cupom_fiscal`.
+
+- frontend envolvido:
+  - `resources/js/Pages/Dashboard.jsx`
+    - a modal `Identificacao fiscal` agora permite alternar entre `Cupom fiscal` e `NF Consumidor`;
+    - ao selecionar `Cupom fiscal`, a tela exige apenas CPF;
+    - os rotulos da nota e da impressao passaram a refletir o tipo fiscal real.
+  - `resources/js/Utils/receipt.js`
+    - o DANFE 80mm passou a exibir o tipo fiscal impresso.
+
+- testes/validacao executados:
+  - `php -l app/Http/Controllers/SaleController.php`
+  - `php -l app/Support/FiscalInvoicePreparationService.php`
+  - `php -l app/Support/FiscalNfceXmlService.php`
+  - `php -l tests/Unit/FiscalInvoicePreparationServiceTest.php`
+  - `php -l tests/Unit/FiscalNfceXmlServiceTest.php`
+  - `php artisan test --filter=FiscalInvoicePreparationServiceTest`
+  - `php artisan test --filter=FiscalNfceXmlServiceTest`
+  - `npm run build`
+
+- observacoes importantes para sincronizar em `pec1`:
+  - sincronizar exatamente:
+    - `app/Http/Controllers/SaleController.php`
+    - `app/Support/FiscalInvoicePreparationService.php`
+    - `app/Support/FiscalNfceXmlService.php`
+    - `resources/js/Pages/Dashboard.jsx`
+    - `resources/js/Utils/receipt.js`
+    - `tests/Unit/FiscalInvoicePreparationServiceTest.php`
+    - `tests/Unit/FiscalNfceXmlServiceTest.php`
+  - nao depende de migration;
+  - nao cria tabela nova;
+  - o tipo fiscal do consumidor fica salvo em `tb27_payload['consumer']['type']`;
+  - notas antigas sem `type` continuam funcionando porque o sistema infere:
+    - sem documento: `balcao`
+    - com documento e sem nome: `cupom_fiscal`
+    - com documento e nome: `consumidor`
+
+## 20/04/26 - Correcao da transmissao da NFC-e para aceitar `cupom fiscal` com CPF-only
+
+- causa do problema:
+  - o gerador do XML da NFC-e foi ajustado para o novo modo `cupom_fiscal`, abrindo o grupo `dest` apenas com:
+    - `CPF`
+    - `indIEDest`
+  - porem a camada de transmissao ainda estava presa a regra antiga de `NF Consumidor`;
+  - ao validar o XML antes do SOAP, `FiscalNfceTransmissionService` exigia sempre:
+    - nome do destinatario (`xNome`)
+    - endereco completo (`enderDest`)
+  - por isso o `cupom fiscal` falhava com a mensagem:
+    - `O XML fiscal abriu o grupo dest, mas nao informou o nome do destinatario.`
+
+- o que foi ajustado:
+  - `FiscalNfceTransmissionService` passou a reconhecer o caso de `cupom fiscal`;
+  - quando o `dest` vier somente com CPF, sem `xNome` e sem `enderDest`, a transmissao passa a aceitar;
+  - a exigencia de nome e endereco completo continua valendo para destinatario completo (`NF Consumidor`).
+
+- arquivos alterados:
+  - `app/Support/FiscalNfceTransmissionService.php`
+  - `tests/Unit/FiscalNfceTransmissionServiceTest.php`
+  - `SYNC.md`
+
+- testes/validacao executados:
+  - `php -l app/Support/FiscalNfceTransmissionService.php`
+  - `php -l tests/Unit/FiscalNfceTransmissionServiceTest.php`
+  - `php artisan test --filter=FiscalNfceTransmissionServiceTest`
+
+- observacoes importantes para sincronizar em `pec1`:
+  - sincronizar exatamente:
+    - `app/Support/FiscalNfceTransmissionService.php`
+    - `tests/Unit/FiscalNfceTransmissionServiceTest.php`
+  - nao depende de migration;
+  - sem essa etapa, o outro projeto vai continuar rejeitando `cupom fiscal` mesmo com o XML correto.
+
+## 20/04/26 - Busca automatica na fila fiscal
+
+- Arquivos alterados:
+  - `app/Http/Controllers/ProductController.php`
+  - `resources/js/Pages/Products/ProductFiscalQueue.jsx`
+  - `SYNC.md`
+
+- Causa identificada:
+  - a fila fiscal tinha filtro por tipo, mas nao permitia localizar rapidamente um item especifico por nome, ID ou codigo de barras;
+  - isso obrigava o usuario a depender apenas do lote visivel de `20` itens.
+
+- O que foi feito:
+  - foi adicionado um campo de busca ao lado dos botoes de filtro em `products/fiscal-queue`;
+  - a busca dispara automaticamente ao digitar `4` caracteres ou mais;
+  - quando o campo fica vazio, a fila volta automaticamente para a listagem sem busca;
+  - o backend passou a aceitar o parametro `search` na fila fiscal;
+  - a busca funciona em:
+    - `tb1_nome`
+    - `tb1_id`
+    - `tb1_codbar`
+  - a busca foi integrada com o filtro por tipo;
+  - a carga dos proximos `20` itens continua respeitando:
+    - tipo selecionado
+    - termo pesquisado
+
+- Efeito esperado:
+  - o usuario consegue localizar e preencher rapidamente produtos especificos dentro da fila fiscal;
+  - o comportamento assincrono da fila continua igual, sem recarregar a tela inteira.
+
+- Observacoes para sincronizar em `pec1`:
+  - levar junto:
+    - `app/Http/Controllers/ProductController.php`
+    - `resources/js/Pages/Products/ProductFiscalQueue.jsx`
   - nao depende de migration.

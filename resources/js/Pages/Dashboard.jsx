@@ -1,4 +1,5 @@
 ﻿import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import Modal from '@/Components/Modal';
 import { Head, Link, usePage, router } from '@inertiajs/react';
 import { formatBrazilDate, formatBrazilDateTime } from '@/Utils/date';
 import { buildFiscalReceiptHtml, buildReceiptHtml, resolveReceiptComanda, resolveReceiptId } from '@/Utils/receipt';
@@ -70,6 +71,74 @@ const faturarWarningText = [
 
 const createCartItemId = (productId, price) =>
     `product-${Number(productId ?? 0)}-price-${Number(price ?? 0).toFixed(2)}`;
+
+const DEFAULT_FISCAL_CONSUMER_FORM = {
+    type: 'cupom_fiscal',
+    name: '',
+    document: '',
+    cep: '',
+    street: '',
+    number: '',
+    complement: '',
+    neighborhood: '',
+    city: '',
+    city_code: '',
+    state: '',
+};
+
+const sanitizeDocumentDigits = (value) => String(value ?? '').replace(/\D/g, '');
+
+const resolveFiscalConsumerType = (consumer) => {
+    const explicitType = String(consumer?.type ?? consumer?.consumer_type ?? '').trim();
+    const document = sanitizeDocumentDigits(
+        consumer?.document ?? consumer?.consumer_document ?? consumer?.dest_document ?? '',
+    );
+    const name = String(consumer?.name ?? consumer?.consumer_name ?? '').trim();
+
+    if (explicitType) {
+        return explicitType;
+    }
+
+    if (!document) {
+        return 'balcao';
+    }
+
+    return name ? 'consumidor' : 'cupom_fiscal';
+};
+
+const hasIdentifiedConsumer = (consumer) => resolveFiscalConsumerType(consumer) !== 'balcao';
+
+const isFullConsumerFiscalType = (consumer) => resolveFiscalConsumerType(consumer) === 'consumidor';
+
+const resolveFiscalConsumerLabel = (consumer) => {
+    const type = resolveFiscalConsumerType(consumer);
+
+    if (type === 'cupom_fiscal') {
+        return 'Cupom Fiscal';
+    }
+
+    if (type === 'consumidor') {
+        return 'NF Consumidor';
+    }
+
+    return 'NF Balcao';
+};
+
+const buildConsumerFiscalForm = (consumer = null) => ({
+    type: resolveFiscalConsumerType(consumer) === 'balcao'
+        ? 'cupom_fiscal'
+        : resolveFiscalConsumerType(consumer),
+    name: String(consumer?.name ?? consumer?.consumer_name ?? '').trim(),
+    document: String(consumer?.document ?? consumer?.consumer_document ?? consumer?.dest_document ?? '').trim(),
+    cep: String(consumer?.cep ?? '').trim(),
+    street: String(consumer?.street ?? consumer?.logradouro ?? '').trim(),
+    number: String(consumer?.number ?? consumer?.numero ?? '').trim(),
+    complement: String(consumer?.complement ?? consumer?.complemento ?? '').trim(),
+    neighborhood: String(consumer?.neighborhood ?? consumer?.bairro ?? '').trim(),
+    city: String(consumer?.city ?? consumer?.municipio ?? '').trim(),
+    city_code: String(consumer?.city_code ?? consumer?.codigo_municipio ?? consumer?.dest_city_code ?? '').trim(),
+    state: String(consumer?.state ?? consumer?.uf ?? '').trim(),
+});
 
 const resolveProductId = (item) => {
     const candidate = item?.productId ?? item?.product_id ?? item?.tb1_id ?? item?.id;
@@ -246,6 +315,10 @@ export default function Dashboard() {
     const [receiptData, setReceiptData] = useState(null);
     const [showReceipt, setShowReceipt] = useState(false);
     const [transmittingFiscal, setTransmittingFiscal] = useState(false);
+    const [showConsumerFiscalModal, setShowConsumerFiscalModal] = useState(false);
+    const [consumerFiscalLoading, setConsumerFiscalLoading] = useState(false);
+    const [consumerFiscalErrors, setConsumerFiscalErrors] = useState({});
+    const [consumerFiscalForm, setConsumerFiscalForm] = useState(DEFAULT_FISCAL_CONSUMER_FORM);
     const [cashInputVisible, setCashInputVisible] = useState(false);
     const [cashValue, setCashValue] = useState('');
     const [cashCardType, setCashCardType] = useState('');
@@ -1323,6 +1396,19 @@ export default function Dashboard() {
             return;
         }
 
+        const fiscalConsumer = receiptData.fiscal.consumer ?? null;
+        const fiscalConsumerType = resolveFiscalConsumerType(fiscalConsumer);
+        const fiscalConsumerAddress = isFullConsumerFiscalType(fiscalConsumer)
+            ? [
+                fiscalConsumer?.street,
+                fiscalConsumer?.number,
+                fiscalConsumer?.complement,
+                fiscalConsumer?.neighborhood,
+                fiscalConsumer?.city,
+                fiscalConsumer?.state,
+                fiscalConsumer?.cep,
+            ].filter(Boolean).join(', ')
+            : null;
         const fiscalReceiptPayload = {
             title: 'DANFE NFC-e',
             subtitle: 'Documento Auxiliar da Nota Fiscal de Consumidor Eletronica',
@@ -1338,7 +1424,12 @@ export default function Dashboard() {
             status: receiptData.fiscal.status || '--',
             status_message: receiptData.fiscal.mensagem || null,
             issued_at: receiptData.fiscal.emitida_em || receiptData.date_time,
-            consumer_name: 'CONSUMIDOR NAO IDENTIFICADO',
+            consumer_type: fiscalConsumerType,
+            consumer_name: fiscalConsumerType === 'cupom_fiscal'
+                ? 'CPF INFORMADO'
+                : (fiscalConsumer?.name || receiptData.fiscal.xml_debug?.dest_name || 'CONSUMIDOR NAO IDENTIFICADO'),
+            consumer_document: fiscalConsumer?.document || receiptData.fiscal.xml_debug?.dest_document || null,
+            consumer_address: fiscalConsumerAddress,
             payment_label: receiptData.payment_label || '--',
             total: receiptData.total,
             amount_paid: receiptData.payment?.valor_pago,
@@ -1365,6 +1456,129 @@ export default function Dashboard() {
         printWindow.addEventListener('afterprint', () => {
             printWindow.close();
         }, { once: true });
+    };
+
+    const closeConsumerFiscalModal = () => {
+        if (consumerFiscalLoading) {
+            return;
+        }
+
+        setShowConsumerFiscalModal(false);
+        setConsumerFiscalErrors({});
+    };
+
+    const handleOpenConsumerFiscalModal = () => {
+        if (!receiptData?.fiscal?.id) {
+            setSaleError('Nao foi encontrada nota fiscal para identificar o consumidor.');
+            return;
+        }
+
+        setSaleError('');
+        setConsumerFiscalErrors({});
+        setConsumerFiscalForm(buildConsumerFiscalForm(receiptData.fiscal.consumer));
+        setShowConsumerFiscalModal(true);
+    };
+
+    const handleConsumerFiscalFieldChange = (field, value) => {
+        setConsumerFiscalForm((current) => {
+            const normalizedValue = field === 'state' ? String(value ?? '').toUpperCase().slice(0, 2) : value;
+            const next = {
+                ...current,
+                [field]: normalizedValue,
+            };
+
+            if (field === 'type' && normalizedValue === 'cupom_fiscal') {
+                next.name = '';
+                next.cep = '';
+                next.street = '';
+                next.number = '';
+                next.complement = '';
+                next.neighborhood = '';
+                next.city = '';
+                next.city_code = '';
+                next.state = '';
+            }
+
+            return next;
+        });
+
+        setConsumerFiscalErrors((current) => {
+            if (!current[field]) {
+                return current;
+            }
+
+            const next = { ...current };
+            delete next[field];
+
+                return next;
+        });
+    };
+
+    const handleSubmitConsumerFiscal = async (event) => {
+        event.preventDefault();
+
+        const fiscalId = Number(receiptData?.fiscal?.id ?? 0);
+
+        if (!fiscalId || consumerFiscalLoading) {
+            return;
+        }
+
+        setConsumerFiscalLoading(true);
+        setConsumerFiscalErrors({});
+        setSaleError('');
+
+        try {
+            const response = await axios.post(route('sales.fiscal.consumer', { notaFiscal: fiscalId }), {
+                consumer: consumerFiscalForm,
+            });
+            const payload = response?.data ?? {};
+
+            setReceiptData((current) => (
+                current
+                    ? {
+                        ...current,
+                        fiscal: payload.fiscal ?? current.fiscal,
+                    }
+                    : current
+            ));
+            setShowConsumerFiscalModal(false);
+        } catch (error) {
+            const backendErrors = error.response?.data?.errors ?? {};
+
+            if (backendErrors && typeof backendErrors === 'object') {
+                const normalizedErrors = {};
+
+                Object.entries(backendErrors).forEach(([key, messages]) => {
+                    const normalizedKey = key.startsWith('consumer.') ? key.slice('consumer.'.length) : key;
+                    normalizedErrors[normalizedKey] = Array.isArray(messages) ? messages[0] : messages;
+                });
+
+                setConsumerFiscalErrors(normalizedErrors);
+            }
+
+            let message = `Nao foi possivel preparar ${consumerFiscalForm.type === 'cupom_fiscal' ? 'o cupom fiscal' : 'a NF Consumidor'}.`;
+
+            if (error.response?.data?.message) {
+                message = error.response.data.message;
+            } else if (error.message) {
+                message = error.message;
+            }
+
+            setSaleError(message);
+
+            if (error.response?.data?.fiscal) {
+                setReceiptData((current) => (
+                    current
+                        ? {
+                            ...current,
+                            fiscal: error.response.data.fiscal,
+                        }
+                        : current
+                ));
+            }
+        } finally {
+            setConsumerFiscalLoading(false);
+        }
     };
 
     const handleTransmitFiscal = async () => {
@@ -1439,6 +1653,10 @@ export default function Dashboard() {
         setReceiptData(null);
         setShowReceipt(false);
         setTransmittingFiscal(false);
+        setShowConsumerFiscalModal(false);
+        setConsumerFiscalLoading(false);
+        setConsumerFiscalErrors({});
+        setConsumerFiscalForm(DEFAULT_FISCAL_CONSUMER_FORM);
     };
 
     const handleCloseReceipt = () => {
@@ -2259,6 +2477,19 @@ export default function Dashboard() {
                                                 {receiptData.fiscal.mensagem}
                                             </p>
                                         )}
+                                        <p>
+                                            <span className="font-medium">Tipo:</span>{' '}
+                                            {resolveFiscalConsumerLabel(receiptData.fiscal.consumer)}
+                                        </p>
+                                        <p>
+                                            <span className="font-medium">Consumidor:</span>{' '}
+                                            {resolveFiscalConsumerType(receiptData.fiscal.consumer) === 'cupom_fiscal'
+                                                ? 'CPF INFORMADO'
+                                                : (receiptData.fiscal.consumer?.name || 'CONSUMIDOR NAO IDENTIFICADO')}
+                                            {receiptData.fiscal.consumer?.document && (
+                                                <span> ({receiptData.fiscal.consumer.document})</span>
+                                            )}
+                                        </p>
                                     </div>
                                 )}
                                 <p className="text-lg font-bold text-indigo-600">
@@ -2267,6 +2498,16 @@ export default function Dashboard() {
                             </div>
                         </div>
                         <div className="flex justify-end gap-3 border-t border-gray-200 px-6 py-4 dark:border-gray-700">
+                            {receiptData.fiscal && !['emitida', 'cancelada'].includes(receiptData.fiscal.status) && (
+                                <button
+                                    type="button"
+                                    className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                    onClick={handleOpenConsumerFiscalModal}
+                                    disabled={consumerFiscalLoading || transmittingFiscal}
+                                >
+                                    Identificacao fiscal
+                                </button>
+                            )}
                             {receiptData.fiscal && ['xml_assinado', 'erro_transmissao'].includes(receiptData.fiscal.status) && (
                                 <button
                                     type="button"
@@ -2290,7 +2531,7 @@ export default function Dashboard() {
                                     className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-sky-700"
                                     onClick={handlePrintFiscalReceipt}
                                 >
-                                    Cupom Fiscal
+                                    {resolveFiscalConsumerLabel(receiptData.fiscal.consumer)}
                                 </button>
                             )}
                             <button
@@ -2304,6 +2545,218 @@ export default function Dashboard() {
                     </div>
                 </div>
             )}
+            <Modal show={showConsumerFiscalModal} onClose={closeConsumerFiscalModal} maxWidth="2xl" tone="light">
+                <form onSubmit={handleSubmitConsumerFiscal}>
+                    <div className="border-b border-gray-200 px-6 py-4">
+                        <h3 className="text-lg font-semibold text-gray-900">
+                            Identificacao fiscal
+                        </h3>
+                        <p className="mt-1 text-sm text-gray-600">
+                            Escolha entre cupom fiscal com CPF ou NF Consumidor completa e regenere a NFC-e com o destinatario correto.
+                        </p>
+                    </div>
+                    <div className="grid gap-4 px-6 py-5 sm:grid-cols-2">
+                        <div className="sm:col-span-2">
+                            <label className="text-sm font-medium text-gray-700">Tipo fiscal</label>
+                            <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                                <button
+                                    type="button"
+                                    onClick={() => handleConsumerFiscalFieldChange('type', 'cupom_fiscal')}
+                                    className={`rounded-xl border px-4 py-3 text-left text-sm transition ${
+                                        consumerFiscalForm.type === 'cupom_fiscal'
+                                            ? 'border-cyan-500 bg-cyan-50 text-cyan-900'
+                                            : 'border-gray-300 bg-white text-gray-700 hover:border-cyan-300'
+                                    }`}
+                                >
+                                    <span className="block font-semibold">Cupom fiscal</span>
+                                    <span className="mt-1 block text-xs">Informa somente o CPF do consumidor.</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleConsumerFiscalFieldChange('type', 'consumidor')}
+                                    className={`rounded-xl border px-4 py-3 text-left text-sm transition ${
+                                        consumerFiscalForm.type === 'consumidor'
+                                            ? 'border-cyan-500 bg-cyan-50 text-cyan-900'
+                                            : 'border-gray-300 bg-white text-gray-700 hover:border-cyan-300'
+                                    }`}
+                                >
+                                    <span className="block font-semibold">NF Consumidor</span>
+                                    <span className="mt-1 block text-xs">Informa nome e endereco fiscal completos.</span>
+                                </button>
+                            </div>
+                            {consumerFiscalErrors.type && (
+                                <p className="mt-1 text-xs text-red-600">{consumerFiscalErrors.type}</p>
+                            )}
+                        </div>
+                        {consumerFiscalForm.type === 'consumidor' && (
+                        <div className="sm:col-span-2">
+                            <label className="text-sm font-medium text-gray-700">Nome ou razao social</label>
+                            <input
+                                type="text"
+                                value={consumerFiscalForm.name}
+                                onChange={(event) => handleConsumerFiscalFieldChange('name', event.target.value)}
+                                className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                                maxLength={60}
+                                required
+                            />
+                            {consumerFiscalErrors.name && (
+                                <p className="mt-1 text-xs text-red-600">{consumerFiscalErrors.name}</p>
+                            )}
+                        </div>
+                        )}
+                        <div>
+                            <label className="text-sm font-medium text-gray-700">
+                                {consumerFiscalForm.type === 'cupom_fiscal' ? 'CPF' : 'CPF ou CNPJ'}
+                            </label>
+                            <input
+                                type="text"
+                                value={consumerFiscalForm.document}
+                                onChange={(event) => handleConsumerFiscalFieldChange('document', event.target.value)}
+                                className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                                maxLength={18}
+                                required
+                            />
+                            {consumerFiscalErrors.document && (
+                                <p className="mt-1 text-xs text-red-600">{consumerFiscalErrors.document}</p>
+                            )}
+                        </div>
+                        {consumerFiscalForm.type === 'consumidor' && (
+                        <>
+                        <div>
+                            <label className="text-sm font-medium text-gray-700">CEP</label>
+                            <input
+                                type="text"
+                                value={consumerFiscalForm.cep}
+                                onChange={(event) => handleConsumerFiscalFieldChange('cep', event.target.value)}
+                                className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                                maxLength={9}
+                                required
+                            />
+                            {consumerFiscalErrors.cep && (
+                                <p className="mt-1 text-xs text-red-600">{consumerFiscalErrors.cep}</p>
+                            )}
+                        </div>
+                        <div className="sm:col-span-2">
+                            <label className="text-sm font-medium text-gray-700">Logradouro</label>
+                            <input
+                                type="text"
+                                value={consumerFiscalForm.street}
+                                onChange={(event) => handleConsumerFiscalFieldChange('street', event.target.value)}
+                                className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                                maxLength={60}
+                                required
+                            />
+                            {consumerFiscalErrors.street && (
+                                <p className="mt-1 text-xs text-red-600">{consumerFiscalErrors.street}</p>
+                            )}
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium text-gray-700">Numero</label>
+                            <input
+                                type="text"
+                                value={consumerFiscalForm.number}
+                                onChange={(event) => handleConsumerFiscalFieldChange('number', event.target.value)}
+                                className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                                maxLength={20}
+                                required
+                            />
+                            {consumerFiscalErrors.number && (
+                                <p className="mt-1 text-xs text-red-600">{consumerFiscalErrors.number}</p>
+                            )}
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium text-gray-700">Complemento</label>
+                            <input
+                                type="text"
+                                value={consumerFiscalForm.complement}
+                                onChange={(event) => handleConsumerFiscalFieldChange('complement', event.target.value)}
+                                className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                                maxLength={60}
+                            />
+                            {consumerFiscalErrors.complement && (
+                                <p className="mt-1 text-xs text-red-600">{consumerFiscalErrors.complement}</p>
+                            )}
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium text-gray-700">Bairro</label>
+                            <input
+                                type="text"
+                                value={consumerFiscalForm.neighborhood}
+                                onChange={(event) => handleConsumerFiscalFieldChange('neighborhood', event.target.value)}
+                                className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                                maxLength={60}
+                                required
+                            />
+                            {consumerFiscalErrors.neighborhood && (
+                                <p className="mt-1 text-xs text-red-600">{consumerFiscalErrors.neighborhood}</p>
+                            )}
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium text-gray-700">Municipio</label>
+                            <input
+                                type="text"
+                                value={consumerFiscalForm.city}
+                                onChange={(event) => handleConsumerFiscalFieldChange('city', event.target.value)}
+                                className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                                maxLength={60}
+                                required
+                            />
+                            {consumerFiscalErrors.city && (
+                                <p className="mt-1 text-xs text-red-600">{consumerFiscalErrors.city}</p>
+                            )}
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium text-gray-700">Codigo municipio IBGE</label>
+                            <input
+                                type="text"
+                                value={consumerFiscalForm.city_code}
+                                onChange={(event) => handleConsumerFiscalFieldChange('city_code', event.target.value)}
+                                className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                                maxLength={7}
+                                required
+                            />
+                            {consumerFiscalErrors.city_code && (
+                                <p className="mt-1 text-xs text-red-600">{consumerFiscalErrors.city_code}</p>
+                            )}
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium text-gray-700">UF</label>
+                            <input
+                                type="text"
+                                value={consumerFiscalForm.state}
+                                onChange={(event) => handleConsumerFiscalFieldChange('state', event.target.value)}
+                                className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm uppercase text-gray-900 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                                maxLength={2}
+                                required
+                            />
+                            {consumerFiscalErrors.state && (
+                                <p className="mt-1 text-xs text-red-600">{consumerFiscalErrors.state}</p>
+                            )}
+                        </div>
+                        </>
+                        )}
+                    </div>
+                    <div className="flex justify-end gap-3 border-t border-gray-200 px-6 py-4">
+                        <button
+                            type="button"
+                            className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+                            onClick={closeConsumerFiscalModal}
+                            disabled={consumerFiscalLoading}
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="submit"
+                            className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={consumerFiscalLoading}
+                        >
+                            {consumerFiscalLoading
+                                ? 'Gerando...'
+                                : (consumerFiscalForm.type === 'cupom_fiscal' ? 'Salvar cupom fiscal' : 'Salvar NF Consumidor')}
+                        </button>
+                    </div>
+                </form>
+            </Modal>
         </AuthenticatedLayout>
     );
 }

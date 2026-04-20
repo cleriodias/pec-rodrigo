@@ -19,7 +19,7 @@ class FiscalInvoicePreparationService
     ) {
     }
 
-    public function prepareForPayment(VendaPagamento $payment): ?NotaFiscal
+    public function prepareForPayment(VendaPagamento $payment, ?array $consumer = null): ?NotaFiscal
     {
         $payment->loadMissing([
             'vendas.produto',
@@ -38,7 +38,7 @@ class FiscalInvoicePreparationService
         }
 
         try {
-            return DB::transaction(function () use ($payment, $unitId) {
+            return DB::transaction(function () use ($payment, $unitId, $consumer) {
                 $config = null;
                 $invoice = NotaFiscal::query()
                     ->where('tb4_id', $payment->tb4_id)
@@ -105,6 +105,7 @@ class FiscalInvoicePreparationService
                 }
 
                 [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment);
+                $consumerPayload = $this->resolveConsumerPayload($invoice, $consumer);
                 $payload = $this->buildPayload(
                     $payment,
                     $config,
@@ -112,10 +113,11 @@ class FiscalInvoicePreparationService
                     $ambiente,
                     $serie,
                     $nextNumber,
+                    $consumerPayload,
                     $eligibleSales,
                     $excludedItems,
                 );
-                $errors = $this->validatePayload($payment, $config, $modelo, $eligibleSales, $excludedItems);
+                $errors = $this->validatePayload($payment, $config, $modelo, $consumerPayload, $eligibleSales, $excludedItems);
                 $status = $this->resolveStatus($config, $errors);
                 $signedXml = null;
                 $accessKey = null;
@@ -131,6 +133,7 @@ class FiscalInvoicePreparationService
                             ]),
                             $payment,
                             $eligibleSales,
+                            $consumerPayload,
                             $config,
                             $certificateData,
                         );
@@ -211,12 +214,14 @@ class FiscalInvoicePreparationService
         string $ambiente,
         ?string $serie,
         ?int $numero,
+        ?array $consumer,
         $eligibleSales,
         array $excludedItems,
     ): array {
         $sales = $payment->vendas;
         $unit = $sales->first()?->unidade;
         $documentTotal = round((float) $eligibleSales->sum('valor_total'), 2);
+        $consumer = $this->normalizeConsumerPayload($consumer);
 
         return [
             'pagamento_id' => (int) $payment->tb4_id,
@@ -228,6 +233,7 @@ class FiscalInvoicePreparationService
             'valor_total_venda' => round((float) $payment->valor_total, 2),
             'valor_total_documento' => $documentTotal,
             'itens_excluidos_qtd' => count($excludedItems),
+            'consumer' => $consumer,
             'emitente' => [
                 'unit_id' => (int) ($unit?->tb2_id ?? 0),
                 'nome_unidade' => $unit?->tb2_nome,
@@ -278,6 +284,7 @@ class FiscalInvoicePreparationService
         VendaPagamento $payment,
         ?ConfiguracaoFiscal $config,
         string $modelo,
+        ?array $consumer,
         $eligibleSales,
         array $excludedItems,
     ): array
@@ -326,6 +333,74 @@ class FiscalInvoicePreparationService
 
         if ($modelo === 'nfe') {
             $errors[] = 'NF-e modelo 55 ainda nao pode ser gerada automaticamente porque a venda atual nao armazena destinatario fiscal.';
+        }
+
+        if ($consumer !== null) {
+            $consumerType = $this->resolveConsumerType($consumer);
+            $document = $this->onlyDigits($consumer['document'] ?? null);
+            $cep = $this->onlyDigits($consumer['cep'] ?? null);
+            $cityCode = $this->onlyDigits($consumer['city_code'] ?? null);
+            $state = strtoupper(trim((string) ($consumer['state'] ?? '')));
+
+            if (! in_array($consumerType, ['cupom_fiscal', 'consumidor'], true)) {
+                $errors[] = 'Tipo de identificacao do consumidor invalido para a nota fiscal.';
+            }
+
+            if ($consumerType === 'consumidor' && trim((string) ($consumer['name'] ?? '')) === '') {
+                $errors[] = 'Nome do consumidor nao informado para a NF Consumidor.';
+            }
+
+            if ($consumerType === 'cupom_fiscal' && strlen($document) !== 11) {
+                $errors[] = 'Documento do consumidor invalido. Informe um CPF com 11 digitos para o cupom fiscal.';
+            }
+
+            if ($consumerType === 'consumidor' && ! in_array(strlen($document), [11, 14], true)) {
+                $errors[] = 'Documento do consumidor invalido. Informe CPF com 11 digitos ou CNPJ com 14 digitos.';
+            }
+
+            if ($consumerType === 'consumidor' && trim((string) ($consumer['street'] ?? '')) === '') {
+                $errors[] = 'Logradouro do consumidor nao informado para a NF Consumidor.';
+            }
+
+            if ($consumerType === 'consumidor' && trim((string) ($consumer['number'] ?? '')) === '') {
+                $errors[] = 'Numero do endereco do consumidor nao informado para a NF Consumidor.';
+            }
+
+            if ($consumerType === 'consumidor' && trim((string) ($consumer['neighborhood'] ?? '')) === '') {
+                $errors[] = 'Bairro do consumidor nao informado para a NF Consumidor.';
+            }
+
+            if ($consumerType === 'consumidor' && trim((string) ($consumer['city'] ?? '')) === '') {
+                $errors[] = 'Municipio do consumidor nao informado para a NF Consumidor.';
+            }
+
+            if ($consumerType === 'consumidor' && strlen($cep) !== 8) {
+                $errors[] = 'CEP do consumidor invalido para a NF Consumidor.';
+            }
+
+            if ($consumerType === 'consumidor' && strlen($cityCode) !== 7) {
+                $errors[] = 'Codigo do municipio IBGE do consumidor invalido para a NF Consumidor.';
+            }
+
+            if ($consumerType === 'consumidor' && strlen($state) !== 2) {
+                $errors[] = 'UF do consumidor invalida para a NF Consumidor.';
+            }
+
+            if (
+                $consumerType === 'consumidor'
+                && strlen($state) === 2
+                && strlen($cityCode) === 7
+                && ! $this->fiscalMunicipalityCodeService->matchesUf($state, $cityCode)
+            ) {
+                $expectedPrefix = $this->fiscalMunicipalityCodeService->expectedPrefixForUf($state);
+
+                $errors[] = sprintf(
+                    'O codigo do municipio IBGE %s nao pertence a UF %s do consumidor. Use um codigo iniciado por %s.',
+                    $cityCode !== '' ? $cityCode : '--',
+                    $state !== '' ? $state : '--',
+                    $expectedPrefix ?? '--'
+                );
+            }
         }
 
         $unitCnpj = $this->onlyDigits($payment->vendas->first()?->unidade?->tb2_cnpj);
@@ -416,6 +491,71 @@ class FiscalInvoicePreparationService
         }
 
         return array_values(array_unique($errors));
+    }
+
+    private function resolveConsumerPayload(?NotaFiscal $invoice, ?array $consumer): ?array
+    {
+        if (is_array($consumer)) {
+            return $this->normalizeConsumerPayload($consumer);
+        }
+
+        $payload = is_array($invoice?->tb27_payload) ? $invoice->tb27_payload : [];
+        $storedConsumer = $payload['consumer'] ?? null;
+
+        return is_array($storedConsumer) ? $this->normalizeConsumerPayload($storedConsumer) : null;
+    }
+
+    private function normalizeConsumerPayload(?array $consumer): ?array
+    {
+        if (! is_array($consumer)) {
+            return null;
+        }
+
+        $normalized = [
+            'type' => $this->resolveConsumerType($consumer),
+            'name' => trim((string) ($consumer['name'] ?? '')),
+            'document' => $this->onlyDigits($consumer['document'] ?? null),
+            'cep' => $this->onlyDigits($consumer['cep'] ?? null),
+            'street' => trim((string) ($consumer['street'] ?? '')),
+            'number' => trim((string) ($consumer['number'] ?? '')),
+            'complement' => trim((string) ($consumer['complement'] ?? '')),
+            'neighborhood' => trim((string) ($consumer['neighborhood'] ?? '')),
+            'city' => trim((string) ($consumer['city'] ?? '')),
+            'city_code' => $this->onlyDigits($consumer['city_code'] ?? null),
+            'state' => strtoupper(trim((string) ($consumer['state'] ?? ''))),
+        ];
+
+        if ($normalized['type'] === 'cupom_fiscal') {
+            $normalized['name'] = '';
+            $normalized['cep'] = null;
+            $normalized['street'] = '';
+            $normalized['number'] = '';
+            $normalized['complement'] = '';
+            $normalized['neighborhood'] = '';
+            $normalized['city'] = '';
+            $normalized['city_code'] = null;
+            $normalized['state'] = '';
+        }
+
+        return $normalized;
+    }
+
+    private function resolveConsumerType(array $consumer): string
+    {
+        $declaredType = trim((string) ($consumer['type'] ?? ''));
+
+        if (in_array($declaredType, ['cupom_fiscal', 'consumidor'], true)) {
+            return $declaredType;
+        }
+
+        $document = $this->onlyDigits($consumer['document'] ?? null);
+        $name = trim((string) ($consumer['name'] ?? ''));
+
+        if ($document && $name === '') {
+            return 'cupom_fiscal';
+        }
+
+        return 'consumidor';
     }
 
     private function resolveStatus(?ConfiguracaoFiscal $config, array $errors): string

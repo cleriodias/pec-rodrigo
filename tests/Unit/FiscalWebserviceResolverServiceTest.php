@@ -27,8 +27,15 @@ class FiscalWebserviceResolverServiceTest extends TestCase
             $endpoints['qr_code_url']
         );
         $this->assertSame(
-            'https://nfewebhomolog.sefaz.go.gov.br/nfeweb/sites/nfe/consulta-completa',
+            'http://www.sefaz.go.gov.br/nfce/consulta',
             $endpoints['consultation_url']
+        );
+
+        $productionEndpoints = $service->resolveNfceEndpoints('GO', 'producao');
+
+        $this->assertSame(
+            'http://www.sefaz.go.gov.br/nfce/consulta',
+            $productionEndpoints['consultation_url']
         );
     }
 

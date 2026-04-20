@@ -26,7 +26,7 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         $payment = $this->makePaymentWithFiscalProduct();
         [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment, $service);
 
-        $errors = $validatePayload->invoke($service, $payment, null, 'nfce', $eligibleSales, $excludedItems);
+        $errors = $validatePayload->invoke($service, $payment, null, 'nfce', null, $eligibleSales, $excludedItems);
 
         $this->assertSame(
             ['Configure a emissao fiscal da unidade antes de gerar a nota.'],
@@ -45,9 +45,49 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         $config = $this->makeConfiguration();
         [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment, $service);
 
-        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', $eligibleSales, $excludedItems);
+        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', null, $eligibleSales, $excludedItems);
 
         $this->assertSame([], $errors);
+    }
+
+    public function test_validate_payload_accepts_fiscal_coupon_with_cpf_only(): void
+    {
+        $service = $this->makeService();
+        $reflection = new ReflectionClass($service);
+        $validatePayload = $reflection->getMethod('validatePayload');
+        $validatePayload->setAccessible(true);
+
+        $payment = $this->makePaymentWithFiscalProduct();
+        $config = $this->makeConfiguration();
+        [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment, $service);
+
+        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', [
+            'type' => 'cupom_fiscal',
+            'document' => '12345678901',
+        ], $eligibleSales, $excludedItems);
+
+        $this->assertSame([], $errors);
+    }
+
+    public function test_validate_payload_requires_full_address_for_nf_consumidor(): void
+    {
+        $service = $this->makeService();
+        $reflection = new ReflectionClass($service);
+        $validatePayload = $reflection->getMethod('validatePayload');
+        $validatePayload->setAccessible(true);
+
+        $payment = $this->makePaymentWithFiscalProduct();
+        $config = $this->makeConfiguration();
+        [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment, $service);
+
+        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', [
+            'type' => 'consumidor',
+            'name' => 'RODRIGO TESTE',
+            'document' => '12345678901',
+        ], $eligibleSales, $excludedItems);
+
+        $this->assertContains('Logradouro do consumidor nao informado para a NF Consumidor.', $errors);
+        $this->assertContains('CEP do consumidor invalido para a NF Consumidor.', $errors);
     }
 
     public function test_validate_payload_flags_when_all_items_are_without_minimum_tax_fields(): void
@@ -66,7 +106,7 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         $config = $this->makeConfiguration();
         [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment, $service);
 
-        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', $eligibleSales, $excludedItems);
+        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', null, $eligibleSales, $excludedItems);
 
         $productError = collect($errors)->first(fn (string $error) => str_contains($error, 'Nenhum item da venda possui dados fiscais minimos'));
 
@@ -87,7 +127,7 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         ]);
         [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment, $service);
 
-        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', $eligibleSales, $excludedItems);
+        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', null, $eligibleSales, $excludedItems);
 
         $this->assertContains(
             'O CNPJ do certificado nao pertence ao mesmo CNPJ base da loja da venda.',
@@ -110,7 +150,7 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         ]);
         [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment, $service);
 
-        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', $eligibleSales, $excludedItems);
+        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', null, $eligibleSales, $excludedItems);
 
         $this->assertContains(
             'O codigo do municipio IBGE 5300108 nao pertence a UF GO informada na configuracao fiscal. Use um codigo iniciado por 52.',
@@ -131,7 +171,7 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         ]);
         [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment, $service);
 
-        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', $eligibleSales, $excludedItems);
+        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', null, $eligibleSales, $excludedItems);
 
         $this->assertContains(
             'A inscricao estadual da unidade esta invalida para emissao fiscal. Informe apenas digitos ou ISENTO.',
@@ -304,6 +344,7 @@ class FiscalInvoicePreparationServiceTest extends TestCase
             'homologacao',
             '1',
             1,
+            null,
             $eligibleSales,
             $excludedItems,
         );
@@ -314,6 +355,26 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         $this->assertSame('REFRIGERANTE', $payload['itens_excluidos'][0]['descricao']);
         $this->assertSame(15.0, $payload['valor_total_documento']);
         $this->assertSame(25.0, $payload['valor_total_venda']);
+    }
+
+    public function test_resolve_consumer_payload_normalizes_fiscal_coupon_type(): void
+    {
+        $service = $this->makeService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('resolveConsumerPayload');
+        $method->setAccessible(true);
+
+        $consumer = $method->invoke($service, null, [
+            'type' => 'cupom_fiscal',
+            'document' => '123.456.789-01',
+            'name' => 'IGNORAR',
+            'cep' => '72920-076',
+        ]);
+
+        $this->assertSame('cupom_fiscal', $consumer['type']);
+        $this->assertSame('12345678901', $consumer['document']);
+        $this->assertSame('', $consumer['name']);
+        $this->assertNull($consumer['cep']);
     }
 
     private function splitSalesForFiscal(VendaPagamento $payment, FiscalInvoicePreparationService $service): array

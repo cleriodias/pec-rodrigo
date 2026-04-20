@@ -160,6 +160,7 @@ export const buildReceiptHtml = (receipt) => {
 export const buildFiscalReceiptHtml = (receipt) => {
     const title = escapeReceiptHtml(receipt?.title || 'DANFE NFC-e');
     const subtitle = escapeReceiptHtml(receipt?.subtitle || '');
+    const consumerType = String(receipt?.consumer_type ?? 'balcao').trim();
     const emitterName = escapeReceiptHtml(receipt?.emitter_name || 'EMITENTE NAO INFORMADO');
     const emitterLegalName = receipt?.emitter_legal_name
         ? `<p class="muted">${escapeReceiptHtml(receipt.emitter_legal_name)}</p>`
@@ -173,6 +174,15 @@ export const buildFiscalReceiptHtml = (receipt) => {
     const emitterAddress = receipt?.emitter_address
         ? `<p>${escapeReceiptHtml(receipt.emitter_address)}</p>`
         : '';
+    const consumerDocument = receipt?.consumer_document
+        ? `<p>Documento: ${escapeReceiptHtml(receipt.consumer_document)}</p>`
+        : '';
+    const consumerAddress = receipt?.consumer_address
+        ? `<p>${escapeReceiptHtml(receipt.consumer_address)}</p>`
+        : '';
+    const consumerTypeLabel = consumerType === 'cupom_fiscal'
+        ? 'Cupom Fiscal'
+        : (consumerType === 'consumidor' ? 'NF Consumidor' : 'NF Balcao');
     const accessKey = receipt?.access_key ? escapeReceiptHtml(receipt.access_key) : '';
     const consultationUrl = receipt?.consulta_url ? escapeReceiptHtml(receipt.consulta_url) : '';
     const qrCodeData = String(receipt?.qr_code_data ?? '').trim();
@@ -281,7 +291,10 @@ export const buildFiscalReceiptHtml = (receipt) => {
                 <p>Venda: #${escapeReceiptHtml(receipt?.payment_id || '--')}</p>
                 <p>Ambiente: ${escapeReceiptHtml(receipt?.environment || '--')}</p>
                 <p>Data: ${escapeReceiptHtml(formatReceiptDateTime(receipt?.issued_at))}</p>
+                <p>Tipo: ${escapeReceiptHtml(consumerTypeLabel)}</p>
                 <p>Consumidor: ${escapeReceiptHtml(receipt?.consumer_name || 'CONSUMIDOR NAO IDENTIFICADO')}</p>
+                ${consumerDocument}
+                ${consumerAddress}
                 <div class="divider"></div>
                 <div class="section-title">Itens</div>
                 ${itemsHtml || '<p>Nenhum item fiscal disponivel para impressao.</p>'}

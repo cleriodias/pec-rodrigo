@@ -215,6 +215,9 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/products/discard', [ProductDiscardController::class, 'index'])->name('products.discard');
     Route::post('/products/discard', [ProductDiscardController::class, 'store'])->name('products.discard.store');
+    Route::get('/products/fiscal-queue', [ProductController::class, 'fiscalQueue'])->name('products.fiscal-queue');
+    Route::get('/products/fiscal-queue/items', [ProductController::class, 'fiscalQueueItems'])->name('products.fiscal-queue.items');
+    Route::patch('/products/{product}/fiscal-queue', [ProductController::class, 'updateFiscalQueueItem'])->name('products.fiscal-queue.update');
     Route::get('/products/production-stock', [ProductStockController::class, 'index'])->name('products.production-stock');
     Route::post('/products/production-stock', [ProductStockController::class, 'store'])->name('products.production-stock.store');
     Route::get('/products/search', [ProductController::class, 'search'])->name('products.search');
@@ -227,6 +230,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/sales/comandas/{codigo}/items', [SaleController::class, 'comandaItems'])->name('sales.comandas.items');
     Route::post('/sales', [SaleController::class, 'store'])->name('sales.store');
     Route::post('/sales/fiscal/{notaFiscal}/transmit', [SaleController::class, 'transmitFiscalInvoice'])->name('sales.fiscal.transmit');
+    Route::post('/sales/fiscal/{notaFiscal}/consumer', [SaleController::class, 'updateConsumerFiscalInvoice'])->name('sales.fiscal.consumer');
     Route::post('/sales/comandas/{codigo}/items', [SaleController::class, 'addComandaItem'])->name('sales.comandas.add-item');
     Route::put('/sales/comandas/{codigo}/items/{productId}', [SaleController::class, 'updateComandaItem'])->name('sales.comandas.update-item');
     Route::get('/reports', [SalesReportController::class, 'index'])->name('reports.index');

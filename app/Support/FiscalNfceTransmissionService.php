@@ -180,9 +180,15 @@ class FiscalNfceTransmissionService
         $name = trim((string) $xpath->evaluate('string(/nfe:NFe/nfe:infNFe/nfe:dest/nfe:xNome)'));
         $cityCode = trim((string) $xpath->evaluate('string(/nfe:NFe/nfe:infNFe/nfe:dest/nfe:enderDest/nfe:cMun)'));
         $address = trim((string) $xpath->evaluate('string(/nfe:NFe/nfe:infNFe/nfe:dest/nfe:enderDest/nfe:xLgr)'));
+        $hasAddress = $cityCode !== '' || $address !== '';
+        $isFiscalCoupon = $cpf !== '' && $cnpj === '' && $foreignId === '' && $name === '' && ! $hasAddress;
 
         if ($cpf === '' && $cnpj === '' && $foreignId === '') {
             throw new RuntimeException('O XML fiscal abriu o grupo dest, mas nao informou CPF, CNPJ ou idEstrangeiro do destinatario.');
+        }
+
+        if ($isFiscalCoupon) {
+            return;
         }
 
         if ($name === '') {

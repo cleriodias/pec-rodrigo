@@ -50,6 +50,7 @@ class ProductController extends Controller
     {
         $search = trim((string) $request->input('search', ''));
         $vrCreditOnly = in_array(strtolower((string) $request->input('vr_credit', '0')), ['1', 'true'], true);
+        $fiscalStatus = strtolower(trim((string) $request->input('fiscal_status', '')));
         $sort = (string) $request->input('sort', '');
         $direction = strtolower((string) $request->input('direction', 'asc'));
         $query = Produto::query();
@@ -78,6 +79,22 @@ class ProductController extends Controller
 
         if ($vrCreditOnly) {
             $query->where('tb1_vr_credit', true);
+        }
+
+        if (in_array($fiscalStatus, ['complete', 'incomplete'], true)) {
+            $query->where(function ($builder) use ($fiscalStatus) {
+                $requiredFiscalFields = ['tb1_ncm', 'tb1_cfop', 'tb1_csosn', 'tb1_cst'];
+
+                foreach ($requiredFiscalFields as $field) {
+                    if ($fiscalStatus === 'complete') {
+                        $builder->whereNotNull($field)
+                            ->where($field, '!=', '');
+                    } else {
+                        $builder->orWhereNull($field)
+                            ->orWhere($field, '=', '');
+                    }
+                }
+            });
         }
 
         $allowedSorts = [
@@ -118,6 +135,7 @@ class ProductController extends Controller
             'statusLabels' => self::STATUS_LABELS,
             'search' => $search,
             'vrCreditOnly' => $vrCreditOnly,
+            'fiscalStatus' => $fiscalStatus,
             'sort' => $sort,
             'direction' => $direction,
         ]);
@@ -135,6 +153,68 @@ class ProductController extends Controller
     public function create(): Response
     {
         return Inertia::render('Products/ProductCreate', $this->formOptions());
+    }
+
+    public function fiscalQueue(): Response
+    {
+        $typeFilter = $this->resolveFiscalQueueTypeFilter(request());
+        $search = $this->resolveFiscalQueueSearch(request());
+        $pendingQuery = $this->pendingFiscalProductsQuery($typeFilter, $search);
+
+        return Inertia::render('Products/ProductFiscalQueue', [
+            'items' => $pendingQuery->limit(20)->get(),
+            'pendingCount' => $this->pendingFiscalProductsQuery($typeFilter, $search)->count(),
+            'selectedType' => $typeFilter,
+            'search' => $search,
+            'typeOptions' => $this->formOptions()['typeOptions'],
+        ]);
+    }
+
+    public function fiscalQueueItems(Request $request): JsonResponse
+    {
+        $typeFilter = $this->resolveFiscalQueueTypeFilter($request);
+        $search = $this->resolveFiscalQueueSearch($request);
+
+        return response()->json([
+            'items' => $this->pendingFiscalProductsQuery($typeFilter, $search)->limit(20)->get(),
+            'pendingCount' => $this->pendingFiscalProductsQuery($typeFilter, $search)->count(),
+            'selectedType' => $typeFilter,
+            'search' => $search,
+        ]);
+    }
+
+    public function updateFiscalQueueItem(Request $request, Produto $product): JsonResponse
+    {
+        $data = $request->validate(
+            [
+                'tb1_ncm' => ['required', 'string', 'size:8'],
+                'tb1_cfop' => ['required', 'string', 'size:4'],
+                'tb1_csosn' => ['required', 'string', 'max:4'],
+                'tb1_cst' => ['required', 'string', 'max:3'],
+            ],
+            [
+                'tb1_ncm.required' => 'Informe o NCM.',
+                'tb1_ncm.size' => 'O NCM deve ter exatamente 8 digitos.',
+                'tb1_cfop.required' => 'Informe o CFOP.',
+                'tb1_cfop.size' => 'O CFOP deve ter exatamente 4 digitos.',
+                'tb1_csosn.required' => 'Informe o CSOSN.',
+                'tb1_csosn.max' => 'O CSOSN deve ter no maximo :max caracteres.',
+                'tb1_cst.required' => 'Informe o CST.',
+                'tb1_cst.max' => 'O CST deve ter no maximo :max caracteres.',
+            ]
+        );
+
+        $product->update([
+            'tb1_ncm' => $this->normalizeDigitsField($data['tb1_ncm'], 8),
+            'tb1_cfop' => $this->normalizeDigitsField($data['tb1_cfop'], 4),
+            'tb1_csosn' => $this->normalizeDigitsField($data['tb1_csosn'], 4),
+            'tb1_cst' => $this->normalizeDigitsField($data['tb1_cst'], 3),
+        ]);
+
+        return response()->json([
+            'message' => 'Dados fiscais gravados com sucesso.',
+            'product_id' => (int) $product->tb1_id,
+        ]);
     }
 
     public function store(Request $request)
@@ -437,6 +517,75 @@ class ProductController extends Controller
             'statusOptions' => $format(self::STATUS_LABELS),
             'originOptions' => $format(self::ORIGIN_LABELS),
         ];
+    }
+
+    private function pendingFiscalProductsQuery(?int $typeFilter = null, string $search = '')
+    {
+        return Produto::query()
+            ->select([
+                'tb1_id',
+                'tb1_nome',
+                'tb1_codbar',
+                'tb1_tipo',
+                'tb1_ncm',
+                'tb1_cfop',
+                'tb1_csosn',
+                'tb1_cst',
+            ])
+            ->when($typeFilter !== null, function ($query) use ($typeFilter) {
+                $query->where('tb1_tipo', $typeFilter);
+            })
+            ->when($search !== '', function ($query) use ($search) {
+                $isNumeric = ctype_digit($search);
+                $safeTerm = str_replace(['%', '_'], ['\%', '\_'], $search);
+                $likeTerm = '%' . $safeTerm . '%';
+                $numericTerm = $isNumeric ? (int) $search : null;
+                $isLongNumeric = $isNumeric && mb_strlen($search) > 4;
+
+                $query->where(function ($builder) use ($isNumeric, $isLongNumeric, $likeTerm, $numericTerm) {
+                    if ($isNumeric) {
+                        if ($isLongNumeric) {
+                            $builder->where('tb1_codbar', 'like', $likeTerm);
+                        } else {
+                            $builder->where('tb1_id', $numericTerm);
+                        }
+
+                        return;
+                    }
+
+                    $builder->where('tb1_nome', 'like', $likeTerm);
+                });
+            })
+            ->where(function ($query) {
+                $query
+                    ->whereNull('tb1_ncm')
+                    ->orWhere('tb1_ncm', '=', '')
+                    ->orWhereNull('tb1_cfop')
+                    ->orWhere('tb1_cfop', '=', '')
+                    ->orWhereNull('tb1_csosn')
+                    ->orWhere('tb1_csosn', '=', '')
+                    ->orWhereNull('tb1_cst')
+                    ->orWhere('tb1_cst', '=', '');
+            })
+            ->orderBy('tb1_id');
+    }
+
+    private function resolveFiscalQueueTypeFilter(Request $request): ?int
+    {
+        $type = $request->input('type');
+
+        if ($type === null || $type === '') {
+            return null;
+        }
+
+        $type = (int) $type;
+
+        return array_key_exists($type, self::TYPE_LABELS) ? $type : null;
+    }
+
+    private function resolveFiscalQueueSearch(Request $request): string
+    {
+        return trim((string) $request->input('search', ''));
     }
 
     private function prepareProductData(array $data, ?Produto $product = null): array

@@ -27,6 +27,7 @@ class FiscalNfceXmlService
         NotaFiscal $invoice,
         VendaPagamento $payment,
         $sales,
+        ?array $consumer,
         ConfiguracaoFiscal $configuration,
         array $certificateData,
     ): array {
@@ -77,6 +78,7 @@ class FiscalNfceXmlService
 
         $this->appendIde($document, $infNfe, $configuration, $issueDate, $cUf, $cNf, $serie, $number, $verifierDigit);
         $this->appendEmitter($document, $infNfe, $configuration, $unitCnpj);
+        $this->appendDestination($document, $infNfe, $consumer);
         $this->appendItems($document, $infNfe, $sales, (int) $configuration->tb26_crt, $configuration);
         $documentTotal = (float) $sales->sum('valor_total');
 
@@ -178,6 +180,65 @@ class FiscalNfceXmlService
         }
 
         $this->appendTextElement($document, $emit, 'CRT', (string) $configuration->tb26_crt);
+    }
+
+    private function appendDestination(
+        DOMDocument $document,
+        DOMElement $infNfe,
+        ?array $consumer,
+    ): void {
+        if ($consumer === null) {
+            return;
+        }
+
+        $consumerType = trim((string) ($consumer['type'] ?? ''));
+        $documentDigits = $this->onlyDigits($consumer['document'] ?? null);
+        $isFiscalCoupon = $consumerType === 'cupom_fiscal';
+
+        if ($isFiscalCoupon && strlen($documentDigits) !== 11) {
+            throw new RuntimeException('CPF do consumidor invalido para montar o cupom fiscal da NFC-e.');
+        }
+
+        if (! $isFiscalCoupon && ! in_array(strlen($documentDigits), [11, 14], true)) {
+            throw new RuntimeException('Documento do consumidor invalido para montar o destinatario da NFC-e.');
+        }
+
+        $dest = $document->createElement('dest');
+        $infNfe->appendChild($dest);
+
+        $this->appendTextElement($document, $dest, strlen($documentDigits) === 11 ? 'CPF' : 'CNPJ', $documentDigits);
+
+        if (! $isFiscalCoupon) {
+            $cep = $this->requiredDigits($consumer['cep'] ?? null, 8, 'CEP do consumidor');
+            $cityCode = $this->requiredDigits($consumer['city_code'] ?? null, 7, 'Codigo do municipio IBGE do consumidor');
+            $state = strtoupper(trim((string) ($consumer['state'] ?? '')));
+            $name = trim((string) ($consumer['name'] ?? ''));
+
+            if ($name === '') {
+                throw new RuntimeException('Nome do consumidor nao informado para montar o destinatario da NFC-e.');
+            }
+
+            if (strlen($state) !== 2) {
+                throw new RuntimeException('UF do consumidor invalida para montar o destinatario da NFC-e.');
+            }
+
+            $this->appendTextElement($document, $dest, 'xNome', $name);
+
+            $address = $document->createElement('enderDest');
+            $dest->appendChild($address);
+            $this->appendTextElement($document, $address, 'xLgr', trim((string) ($consumer['street'] ?? '')));
+            $this->appendTextElement($document, $address, 'nro', trim((string) ($consumer['number'] ?? '')));
+            $this->appendOptionalTextElement($document, $address, 'xCpl', $consumer['complement'] ?? null);
+            $this->appendTextElement($document, $address, 'xBairro', trim((string) ($consumer['neighborhood'] ?? '')));
+            $this->appendTextElement($document, $address, 'cMun', $cityCode);
+            $this->appendTextElement($document, $address, 'xMun', trim((string) ($consumer['city'] ?? '')));
+            $this->appendTextElement($document, $address, 'UF', $state);
+            $this->appendTextElement($document, $address, 'CEP', $cep);
+            $this->appendTextElement($document, $address, 'cPais', '1058');
+            $this->appendTextElement($document, $address, 'xPais', 'BRASIL');
+        }
+
+        $this->appendTextElement($document, $dest, 'indIEDest', '9');
     }
 
     private function appendItems(

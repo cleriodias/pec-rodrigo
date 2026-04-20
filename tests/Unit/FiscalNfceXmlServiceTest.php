@@ -53,7 +53,7 @@ class FiscalNfceXmlServiceTest extends TestCase
         $this->assertNotFalse($xml);
         $this->assertStringContainsString('<infNFeSupl>', $xml);
         $this->assertStringContainsString(
-            '<qrCode>https://nfewebhomolog.sefaz.go.gov.br/nfeweb/sites/nfce/danfeNFCe?p=52260411222333000144650010000012341000012345|2|2|1|23199B6370AC548E90142E6EBD58007A66FE1FCD</qrCode>',
+            '<qrCode>https://nfewebhomolog.sefaz.go.gov.br/nfeweb/sites/nfce/danfeNFCe?p=52260411222333000144650010000012341000012345|2|2|1|C92BCAC16BD47A307A3922A655F169F2644FF60E</qrCode>',
             $xml
         );
         $this->assertStringContainsString(
@@ -458,7 +458,7 @@ class FiscalNfceXmlServiceTest extends TestCase
 
         $certificateData = $this->createCertificateData();
 
-        $result = $service->buildSignedXml($invoice, $payment, $sales, $config, $certificateData);
+        $result = $service->buildSignedXml($invoice, $payment, $sales, null, $config, $certificateData);
 
         $document = new DOMDocument();
         $loaded = @$document->loadXML($result['xml']);
@@ -469,6 +469,18 @@ class FiscalNfceXmlServiceTest extends TestCase
         $xpath->registerNamespace('ds', 'http://www.w3.org/2000/09/xmldsig#');
 
         $this->assertSame(0.0, $xpath->evaluate('count(/nfe:NFe/nfe:infNFe/nfe:dest)'));
+        $this->assertSame(
+            '4',
+            (string) $xpath->evaluate('string(/nfe:NFe/nfe:infNFe/nfe:ide/nfe:tpImp)')
+        );
+        $this->assertSame(
+            'http://www.w3.org/2000/09/xmldsig#rsa-sha1',
+            (string) $xpath->evaluate('string(/nfe:NFe/ds:Signature/ds:SignedInfo/ds:SignatureMethod/@Algorithm)')
+        );
+        $this->assertSame(
+            'http://www.w3.org/2000/09/xmldsig#sha1',
+            (string) $xpath->evaluate('string(/nfe:NFe/ds:Signature/ds:SignedInfo/ds:Reference/ds:DigestMethod/@Algorithm)')
+        );
 
         $rootChildren = [];
 
@@ -485,6 +497,201 @@ class FiscalNfceXmlServiceTest extends TestCase
         $this->assertSame(1.0, $xpath->evaluate('count(/nfe:NFe/ds:Signature/ds:SignedInfo/ds:Reference)'));
         $this->assertSame(1.0, $xpath->evaluate('count(/nfe:NFe/ds:Signature/ds:SignatureValue)'));
         $this->assertSame(1.0, $xpath->evaluate('count(/nfe:NFe/ds:Signature/ds:KeyInfo/ds:X509Data/ds:X509Certificate)'));
+    }
+
+    public function test_build_signed_xml_adds_destination_when_consumer_is_informed(): void
+    {
+        $service = new FiscalNfceXmlService(new FiscalWebserviceResolverService());
+
+        $config = new ConfiguracaoFiscal([
+            'tb26_ambiente' => 'homologacao',
+            'tb26_uf' => 'GO',
+            'tb26_codigo_municipio' => '5200258',
+            'tb26_serie' => '1',
+            'tb26_crt' => 1,
+            'tb26_razao_social' => 'EMPRESA TESTE LTDA',
+            'tb26_nome_fantasia' => 'EMPRESA TESTE',
+            'tb26_logradouro' => 'RUA 1',
+            'tb26_numero' => '10',
+            'tb26_bairro' => 'CENTRO',
+            'tb26_municipio' => 'AGUAS LINDAS DE GOIAS',
+            'tb26_cep' => '72920076',
+            'tb26_ie' => '123456789',
+            'tb26_csc_id' => '1',
+            'tb26_csc' => 'ABC123',
+        ]);
+
+        $product = new Produto([
+            'tb1_ncm' => '19059090',
+            'tb1_cfop' => '5102',
+            'tb1_unidade_comercial' => 'UN',
+            'tb1_unidade_tributavel' => 'UN',
+            'tb1_origem' => 0,
+            'tb1_csosn' => '102',
+            'tb1_codbar' => null,
+        ]);
+
+        $sale = new Venda([
+            'tb1_id' => 1,
+            'id_unidade' => 3,
+            'produto_nome' => 'PAO DE SAL',
+            'quantidade' => 2,
+            'valor_unitario' => 1.5,
+            'valor_total' => 3.0,
+        ]);
+        $sale->setRelation('produto', $product);
+        $sale->setRelation('unidade', new Unidade([
+            'tb2_id' => 3,
+            'tb2_nome' => 'BARRAGEM 1',
+            'tb2_cnpj' => '62074471000156',
+        ]));
+
+        $sales = collect([$sale]);
+
+        $payment = new VendaPagamento([
+            'tb4_id' => 1002,
+            'tipo_pagamento' => 'dinheiro',
+            'valor_total' => 3.0,
+            'troco' => 0,
+        ]);
+        $payment->setRelation('vendas', $sales);
+
+        $invoice = new NotaFiscal([
+            'tb27_modelo' => 'nfce',
+            'tb27_serie' => '1',
+            'tb27_numero' => 2,
+        ]);
+
+        $certificateData = $this->createCertificateData();
+        $consumer = [
+            'name' => 'RODRIGO TESTE',
+            'document' => '12345678901',
+            'cep' => '72920076',
+            'street' => 'RUA DO CONSUMIDOR',
+            'number' => '123',
+            'complement' => 'CASA',
+            'neighborhood' => 'CENTRO',
+            'city' => 'AGUAS LINDAS DE GOIAS',
+            'city_code' => '5200258',
+            'state' => 'GO',
+        ];
+
+        $result = $service->buildSignedXml($invoice, $payment, $sales, $consumer, $config, $certificateData);
+
+        $document = new DOMDocument();
+        $loaded = @$document->loadXML($result['xml']);
+
+        $this->assertTrue($loaded);
+        $xpath = new DOMXPath($document);
+        $xpath->registerNamespace('nfe', 'http://www.portalfiscal.inf.br/nfe');
+
+        $this->assertSame(1.0, $xpath->evaluate('count(/nfe:NFe/nfe:infNFe/nfe:dest)'));
+        $this->assertSame('12345678901', (string) $xpath->evaluate('string(/nfe:NFe/nfe:infNFe/nfe:dest/nfe:CPF)'));
+        $this->assertSame('RODRIGO TESTE', (string) $xpath->evaluate('string(/nfe:NFe/nfe:infNFe/nfe:dest/nfe:xNome)'));
+        $this->assertSame('5200258', (string) $xpath->evaluate('string(/nfe:NFe/nfe:infNFe/nfe:dest/nfe:enderDest/nfe:cMun)'));
+        $this->assertSame('RUA DO CONSUMIDOR', (string) $xpath->evaluate('string(/nfe:NFe/nfe:infNFe/nfe:dest/nfe:enderDest/nfe:xLgr)'));
+        $this->assertSame('9', (string) $xpath->evaluate('string(/nfe:NFe/nfe:infNFe/nfe:dest/nfe:indIEDest)'));
+
+        $destinationChildren = [];
+
+        foreach ($xpath->query('/nfe:NFe/nfe:infNFe/nfe:dest/*') as $child) {
+            $destinationChildren[] = $child->localName;
+        }
+
+        $this->assertSame(['CPF', 'xNome', 'enderDest', 'indIEDest'], $destinationChildren);
+    }
+
+    public function test_build_signed_xml_adds_fiscal_coupon_destination_with_cpf_only(): void
+    {
+        $service = new FiscalNfceXmlService(new FiscalWebserviceResolverService());
+
+        $config = new ConfiguracaoFiscal([
+            'tb26_ambiente' => 'homologacao',
+            'tb26_uf' => 'GO',
+            'tb26_codigo_municipio' => '5200258',
+            'tb26_serie' => '1',
+            'tb26_crt' => 1,
+            'tb26_razao_social' => 'EMPRESA TESTE LTDA',
+            'tb26_nome_fantasia' => 'EMPRESA TESTE',
+            'tb26_logradouro' => 'RUA 1',
+            'tb26_numero' => '10',
+            'tb26_bairro' => 'CENTRO',
+            'tb26_municipio' => 'AGUAS LINDAS DE GOIAS',
+            'tb26_cep' => '72920076',
+            'tb26_ie' => '123456789',
+            'tb26_csc_id' => '1',
+            'tb26_csc' => 'ABC123',
+        ]);
+
+        $product = new Produto([
+            'tb1_ncm' => '19059090',
+            'tb1_cfop' => '5102',
+            'tb1_unidade_comercial' => 'UN',
+            'tb1_unidade_tributavel' => 'UN',
+            'tb1_origem' => 0,
+            'tb1_csosn' => '102',
+            'tb1_codbar' => null,
+        ]);
+
+        $sale = new Venda([
+            'tb1_id' => 1,
+            'id_unidade' => 3,
+            'produto_nome' => 'PAO DE SAL',
+            'quantidade' => 2,
+            'valor_unitario' => 1.5,
+            'valor_total' => 3.0,
+        ]);
+        $sale->setRelation('produto', $product);
+        $sale->setRelation('unidade', new Unidade([
+            'tb2_id' => 3,
+            'tb2_nome' => 'BARRAGEM 1',
+            'tb2_cnpj' => '62074471000156',
+        ]));
+
+        $sales = collect([$sale]);
+
+        $payment = new VendaPagamento([
+            'tb4_id' => 1003,
+            'tipo_pagamento' => 'dinheiro',
+            'valor_total' => 3.0,
+            'troco' => 0,
+        ]);
+        $payment->setRelation('vendas', $sales);
+
+        $invoice = new NotaFiscal([
+            'tb27_modelo' => 'nfce',
+            'tb27_serie' => '1',
+            'tb27_numero' => 3,
+        ]);
+
+        $certificateData = $this->createCertificateData();
+        $consumer = [
+            'type' => 'cupom_fiscal',
+            'document' => '12345678901',
+        ];
+
+        $result = $service->buildSignedXml($invoice, $payment, $sales, $consumer, $config, $certificateData);
+
+        $document = new DOMDocument();
+        $loaded = @$document->loadXML($result['xml']);
+
+        $this->assertTrue($loaded);
+        $xpath = new DOMXPath($document);
+        $xpath->registerNamespace('nfe', 'http://www.portalfiscal.inf.br/nfe');
+
+        $this->assertSame(1.0, $xpath->evaluate('count(/nfe:NFe/nfe:infNFe/nfe:dest)'));
+        $this->assertSame('12345678901', (string) $xpath->evaluate('string(/nfe:NFe/nfe:infNFe/nfe:dest/nfe:CPF)'));
+        $this->assertSame(0.0, $xpath->evaluate('count(/nfe:NFe/nfe:infNFe/nfe:dest/nfe:xNome)'));
+        $this->assertSame(0.0, $xpath->evaluate('count(/nfe:NFe/nfe:infNFe/nfe:dest/nfe:enderDest)'));
+        $this->assertSame('9', (string) $xpath->evaluate('string(/nfe:NFe/nfe:infNFe/nfe:dest/nfe:indIEDest)'));
+
+        $destinationChildren = [];
+
+        foreach ($xpath->query('/nfe:NFe/nfe:infNFe/nfe:dest/*') as $child) {
+            $destinationChildren[] = $child->localName;
+        }
+
+        $this->assertSame(['CPF', 'indIEDest'], $destinationChildren);
     }
 
     public function test_assert_signed_xml_is_locally_valid_reports_reference_mismatch_for_tampered_xml(): void
@@ -551,7 +758,7 @@ class FiscalNfceXmlServiceTest extends TestCase
         ]);
 
         $certificateData = $this->createCertificateData();
-        $result = $service->buildSignedXml($invoice, $payment, $sales, $config, $certificateData);
+        $result = $service->buildSignedXml($invoice, $payment, $sales, null, $config, $certificateData);
         $tamperedXml = str_replace('PAO DE SAL', 'PAO DOCE', $result['xml']);
 
         $reflection = new ReflectionClass($service);

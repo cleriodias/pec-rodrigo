@@ -606,6 +606,78 @@ class SaleController extends Controller
         ]);
     }
 
+    public function updateConsumerFiscalInvoice(
+        Request $request,
+        NotaFiscal $notaFiscal,
+        FiscalInvoicePreparationService $fiscalInvoicePreparationService,
+    ): JsonResponse {
+        $user = $request->user();
+        $activeUnitId = $this->resolveActiveUnitId($request);
+
+        if (! $user) {
+            abort(403, 'Acesso negado.');
+        }
+
+        if ($activeUnitId === null || (int) $notaFiscal->tb2_id !== $activeUnitId) {
+            abort(403, 'A nota fiscal nao pertence a loja ativa do caixa.');
+        }
+
+        if (! in_array((int) $user->funcao, [0, 1, 3], true)) {
+            abort(403, 'Acesso negado.');
+        }
+
+        $validated = $request->validate([
+            'consumer.type' => ['required', 'string', Rule::in(['cupom_fiscal', 'consumidor'])],
+            'consumer.name' => ['nullable', 'string', 'max:60'],
+            'consumer.document' => ['required', 'string', 'max:18'],
+            'consumer.cep' => ['nullable', 'string', 'max:9'],
+            'consumer.street' => ['nullable', 'string', 'max:60'],
+            'consumer.number' => ['nullable', 'string', 'max:20'],
+            'consumer.complement' => ['nullable', 'string', 'max:60'],
+            'consumer.neighborhood' => ['nullable', 'string', 'max:60'],
+            'consumer.city' => ['nullable', 'string', 'max:60'],
+            'consumer.city_code' => ['nullable', 'string', 'max:7'],
+            'consumer.state' => ['nullable', 'string', 'size:2'],
+        ]);
+
+        try {
+            $notaFiscal->loadMissing('pagamento.vendas.produto', 'pagamento.vendas.unidade');
+
+            if (! $notaFiscal->pagamento) {
+                return response()->json([
+                    'message' => 'Nao foi encontrado o pagamento vinculado a esta nota fiscal.',
+                    'fiscal' => $this->buildFiscalSummary($notaFiscal),
+                ], 422);
+            }
+
+            if (in_array((string) $notaFiscal->tb27_status, ['emitida', 'cancelada'], true)) {
+                return response()->json([
+                    'message' => 'A nota fiscal ja foi finalizada e nao pode mais trocar o tipo de identificacao do consumidor.',
+                    'fiscal' => $this->buildFiscalSummary($notaFiscal),
+                ], 422);
+            }
+
+            $consumer = $this->normalizeFiscalConsumerInput($validated['consumer']);
+            $notaFiscal = $fiscalInvoicePreparationService->prepareForPayment($notaFiscal->pagamento, $consumer);
+        } catch (\RuntimeException $exception) {
+            $notaFiscal->refresh();
+
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'fiscal' => $this->buildFiscalSummary($notaFiscal),
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => sprintf(
+                '%s preparado para a venda %d.',
+                $consumer['type'] === 'cupom_fiscal' ? 'Cupom fiscal' : 'NF Consumidor',
+                (int) $notaFiscal->tb4_id
+            ),
+            'fiscal' => $this->buildFiscalSummary($notaFiscal),
+        ]);
+    }
+
     public function addComandaItem(Request $request, int $codigo): JsonResponse
     {
         $unitId = $this->resolveActiveUnitId($request);
@@ -1029,6 +1101,72 @@ class SaleController extends Controller
         return 'R$ ' . number_format($value, 2, ',', '.');
     }
 
+    private function normalizeFiscalConsumerInput(array $consumer): array
+    {
+        $type = trim((string) ($consumer['type'] ?? ''));
+        $document = preg_replace('/\D+/', '', (string) ($consumer['document'] ?? ''));
+        $cep = preg_replace('/\D+/', '', (string) ($consumer['cep'] ?? ''));
+        $cityCode = preg_replace('/\D+/', '', (string) ($consumer['city_code'] ?? ''));
+
+        if (! in_array($type, ['cupom_fiscal', 'consumidor'], true)) {
+            throw ValidationException::withMessages([
+                'consumer.type' => 'Selecione um tipo fiscal valido para o consumidor.',
+            ]);
+        }
+
+        if ($type === 'cupom_fiscal' && strlen($document) !== 11) {
+            throw ValidationException::withMessages([
+                'consumer.document' => 'Informe apenas um CPF com 11 digitos para o cupom fiscal.',
+            ]);
+        }
+
+        if ($type === 'consumidor' && ! in_array(strlen($document), [11, 14], true)) {
+            throw ValidationException::withMessages([
+                'consumer.document' => 'Informe um CPF com 11 digitos ou um CNPJ com 14 digitos.',
+            ]);
+        }
+
+        if ($type === 'consumidor' && strlen($cep) !== 8) {
+            throw ValidationException::withMessages([
+                'consumer.cep' => 'Informe o CEP com 8 digitos.',
+            ]);
+        }
+
+        if ($type === 'consumidor' && strlen($cityCode) !== 7) {
+            throw ValidationException::withMessages([
+                'consumer.city_code' => 'Informe o codigo do municipio IBGE com 7 digitos.',
+            ]);
+        }
+
+        $normalized = [
+            'type' => $type,
+            'name' => trim((string) ($consumer['name'] ?? '')),
+            'document' => $document,
+            'cep' => $cep,
+            'street' => trim((string) ($consumer['street'] ?? '')),
+            'number' => trim((string) ($consumer['number'] ?? '')),
+            'complement' => trim((string) ($consumer['complement'] ?? '')),
+            'neighborhood' => trim((string) ($consumer['neighborhood'] ?? '')),
+            'city' => trim((string) ($consumer['city'] ?? '')),
+            'city_code' => $cityCode,
+            'state' => strtoupper(trim((string) ($consumer['state'] ?? ''))),
+        ];
+
+        if ($type === 'cupom_fiscal') {
+            $normalized['name'] = '';
+            $normalized['cep'] = '';
+            $normalized['street'] = '';
+            $normalized['number'] = '';
+            $normalized['complement'] = '';
+            $normalized['neighborhood'] = '';
+            $normalized['city'] = '';
+            $normalized['city_code'] = '';
+            $normalized['state'] = '';
+        }
+
+        return $normalized;
+    }
+
     private function buildFiscalSummary(?NotaFiscal $invoice): ?array
     {
         if (! $invoice) {
@@ -1037,6 +1175,7 @@ class SaleController extends Controller
 
         $xmlDebug = $this->extractFiscalXmlDebugData($invoice->tb27_xml_envio);
         $statusMessage = $this->augmentFiscalStatusMessage($invoice->tb27_mensagem, $xmlDebug);
+        $consumer = $this->extractFiscalConsumer($invoice, $xmlDebug);
 
         return [
             'id' => $invoice->tb27_id,
@@ -1050,7 +1189,41 @@ class SaleController extends Controller
             'recibo' => $invoice->tb27_recibo,
             'chave_acesso' => $invoice->tb27_chave_acesso,
             'emitida_em' => optional($invoice->tb27_emitida_em)?->toIso8601String(),
+            'consumer_type' => $consumer['type'] ?? 'balcao',
+            'consumer' => $consumer,
             'xml_debug' => $xmlDebug,
+        ];
+    }
+
+    private function extractFiscalConsumer(NotaFiscal $invoice, ?array $xmlDebug = null): ?array
+    {
+        $payload = is_array($invoice->tb27_payload) ? $invoice->tb27_payload : [];
+        $consumer = is_array($payload['consumer'] ?? null) ? $payload['consumer'] : [];
+
+        $type = trim((string) ($consumer['type'] ?? ''));
+        $name = trim((string) ($consumer['name'] ?? $xmlDebug['dest_name'] ?? ''));
+        $document = trim((string) ($consumer['document'] ?? $xmlDebug['dest_document'] ?? ''));
+
+        if ($type === '' && $document !== '') {
+            $type = $name === '' ? 'cupom_fiscal' : 'consumidor';
+        }
+
+        if ($name === '' && $document === '') {
+            return null;
+        }
+
+        return [
+            'type' => $type !== '' ? $type : 'balcao',
+            'name' => $name !== '' ? $name : ($document !== '' ? 'CPF INFORMADO' : 'CONSUMIDOR NAO IDENTIFICADO'),
+            'document' => $document !== '' ? $document : null,
+            'cep' => $this->nullableXmlValue($consumer['cep'] ?? null),
+            'street' => $this->nullableXmlValue($consumer['street'] ?? null),
+            'number' => $this->nullableXmlValue($consumer['number'] ?? null),
+            'complement' => $this->nullableXmlValue($consumer['complement'] ?? null),
+            'neighborhood' => $this->nullableXmlValue($consumer['neighborhood'] ?? null),
+            'city' => $this->nullableXmlValue($consumer['city'] ?? null),
+            'city_code' => $this->nullableXmlValue($consumer['city_code'] ?? $xmlDebug['dest_city_code'] ?? null),
+            'state' => $this->nullableXmlValue($consumer['state'] ?? null),
         ];
     }
 

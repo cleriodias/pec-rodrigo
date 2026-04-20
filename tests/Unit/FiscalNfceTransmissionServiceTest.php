@@ -127,4 +127,49 @@ XML;
 
         $method->invoke($service, $signedXml);
     }
+
+    public function test_assert_signed_xml_structure_or_fail_accepts_fiscal_coupon_with_cpf_only(): void
+    {
+        $service = new FiscalNfceTransmissionService(
+            new FiscalCertificateService(),
+            new FiscalWebserviceResolverService(),
+            new FiscalNfceXmlService(new FiscalWebserviceResolverService()),
+        );
+
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('assertSignedXmlStructureOrFail');
+        $method->setAccessible(true);
+
+        $signedXml = <<<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<NFe xmlns="http://www.portalfiscal.inf.br/nfe"><infNFe Id="NFe1" versao="4.00"><ide><cUF>52</cUF><mod>65</mod><tpImp>4</tpImp></ide><dest><CPF>12345678901</CPF><indIEDest>9</indIEDest></dest></infNFe><infNFeSupl><qrCode>https://exemplo.invalid?p=123|2|2|1|HASH</qrCode><urlChave>https://exemplo.invalid/consulta</urlChave></infNFeSupl><Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/></SignedInfo><SignatureValue>abc</SignatureValue></Signature></NFe>
+XML;
+
+        $method->invoke($service, $signedXml);
+
+        $this->assertTrue(true);
+    }
+
+    public function test_assert_signed_xml_structure_or_fail_still_requires_name_when_destination_has_address(): void
+    {
+        $service = new FiscalNfceTransmissionService(
+            new FiscalCertificateService(),
+            new FiscalWebserviceResolverService(),
+            new FiscalNfceXmlService(new FiscalWebserviceResolverService()),
+        );
+
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('assertSignedXmlStructureOrFail');
+        $method->setAccessible(true);
+
+        $signedXml = <<<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<NFe xmlns="http://www.portalfiscal.inf.br/nfe"><infNFe Id="NFe1" versao="4.00"><ide><cUF>52</cUF><mod>65</mod><tpImp>4</tpImp></ide><dest><CPF>12345678901</CPF><enderDest><xLgr>RUA TESTE</xLgr><cMun>5200258</cMun></enderDest><indIEDest>9</indIEDest></dest></infNFe><infNFeSupl><qrCode>https://exemplo.invalid?p=123|2|2|1|HASH</qrCode><urlChave>https://exemplo.invalid/consulta</urlChave></infNFeSupl><Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/></SignedInfo><SignatureValue>abc</SignatureValue></Signature></NFe>
+XML;
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('nao informou o nome do destinatario');
+
+        $method->invoke($service, $signedXml);
+    }
 }
