@@ -124,6 +124,16 @@ const resolveFiscalConsumerLabel = (consumer) => {
     return 'NF Balcao';
 };
 
+const resolveFiscalReceiptItems = (receiptData) => {
+    const fiscalItems = Array.isArray(receiptData?.fiscal?.items) ? receiptData.fiscal.items : [];
+
+    if (fiscalItems.length > 0) {
+        return fiscalItems;
+    }
+
+    return Array.isArray(receiptData?.items) ? receiptData.items : [];
+};
+
 const buildConsumerFiscalForm = (consumer = null) => ({
     type: resolveFiscalConsumerType(consumer) === 'balcao'
         ? 'cupom_fiscal'
@@ -1397,6 +1407,7 @@ export default function Dashboard() {
         }
 
         const fiscalConsumer = receiptData.fiscal.consumer ?? null;
+        const fiscalItems = resolveFiscalReceiptItems(receiptData);
         const fiscalConsumerType = resolveFiscalConsumerType(fiscalConsumer);
         const fiscalConsumerAddress = isFullConsumerFiscalType(fiscalConsumer)
             ? [
@@ -1441,7 +1452,7 @@ export default function Dashboard() {
             consulta_url: null,
             qr_code_data: receiptData.fiscal.xml_debug?.qr_code_data || null,
             is_preview: receiptData.fiscal.status !== 'emitida',
-            items: (receiptData.items || []).map((item) => ({
+            items: fiscalItems.map((item) => ({
                 id: item.product_id ?? item.id ?? null,
                 product_name: item.product_name,
                 quantity: Number(item.quantity ?? 0),

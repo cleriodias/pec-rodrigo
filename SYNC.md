@@ -3939,6 +3939,43 @@ MODIFY tipo_pagamento VARCHAR(40) NOT NULL;
   - nao depende de migration;
   - sem essa etapa, o outro projeto vai continuar rejeitando `cupom fiscal` mesmo com o XML correto.
 
+## 20/04/26 - DANFE fiscal passou a imprimir os itens reais do payload da nota
+
+- causa do problema:
+  - o DANFE 80mm estava montando a secao `ITENS` a partir de `receiptData.items`, que representa o estado da venda no frontend;
+  - porem os itens fiscais efetivos da NFC-e ficam salvos no payload da nota em `tb27_payload['itens']`;
+  - com isso, em cenarios onde o estado do frontend nao refletia corretamente o conteudo fiscal, o DANFE podia sair com:
+    - `Nenhum item fiscal disponivel para impressao`
+  - isso acontecia mesmo quando a nota ja tinha itens fiscais validos salvos no payload.
+
+- o que foi ajustado:
+  - `SaleController` passou a expor no resumo fiscal um array `fiscal.items`, montado diretamente de `tb27_payload['itens']`;
+  - a impressao fiscal em `Dashboard.jsx` passou a priorizar `receiptData.fiscal.items`;
+  - `receiptData.items` ficou apenas como fallback.
+
+- efeito esperado:
+  - o DANFE passa a listar exatamente os itens fiscais que entraram na NFC-e;
+  - itens excluidos do payload fiscal nao aparecem mais por engano na impressao;
+  - a impressao fica coerente com a nota realmente gerada.
+
+- arquivos alterados:
+  - `app/Http/Controllers/SaleController.php`
+  - `resources/js/Pages/Dashboard.jsx`
+  - `SYNC.md`
+
+- testes/validacao executados:
+  - `php -l app/Http/Controllers/SaleController.php`
+  - `php -l resources/js/Pages/Dashboard.jsx`
+  - `npm run build`
+  - validacao direta do resumo fiscal da nota `23925`, confirmando `1` item em `fiscal.items`
+
+- observacoes importantes para sincronizar em `pec1`:
+  - sincronizar exatamente:
+    - `app/Http/Controllers/SaleController.php`
+    - `resources/js/Pages/Dashboard.jsx`
+  - nao depende de migration;
+  - esta etapa e importante para o outro projeto imprimir os itens corretos da NFC-e, mesmo quando houver diferenca entre o estado da venda no frontend e o payload fiscal salvo.
+
 ## 20/04/26 - Busca automatica na fila fiscal
 
 - Arquivos alterados:
@@ -3973,3 +4010,61 @@ MODIFY tipo_pagamento VARCHAR(40) NOT NULL;
     - `app/Http/Controllers/ProductController.php`
     - `resources/js/Pages/Products/ProductFiscalQueue.jsx`
   - nao depende de migration.
+
+## 20/04/26 - Correcao de carregamento antigo do frontend fiscal
+
+- Arquivos alterados:
+  - `public/hot` (removido)
+  - `SYNC.md`
+
+- Causa identificada:
+  - o Laravel estava priorizando o modo Vite dev por causa da existencia do arquivo `public/hot`;
+  - esse arquivo apontava para `http://[::1]:4000`, entao o projeto ignorava o build novo em `public/build`;
+  - com isso, a tela `settings/fiscal` podia continuar carregando um bundle JS antigo em memoria, mesmo apos o backend e o build ja estarem corretos;
+  - esse estado explica o caso em que o botao `Cupom` ainda mostrava "Nenhum item fiscal disponivel para impressao", embora o endpoint ja estivesse retornando `receipt.items`.
+
+- O que foi feito:
+  - foi removido o arquivo `public/hot`;
+  - com isso, o Laravel volta a servir os assets compilados de `public/build`;
+  - o build atual ja continha os arquivos novos de `FiscalConfig` e `receipt`, entao a correcao necessaria aqui era impedir o uso do servidor Vite antigo.
+
+- Efeito esperado:
+  - a tela `settings/fiscal` passa a usar o bundle atualizado salvo em `public/build`;
+  - o clique em `Cupom` deixa de depender de uma versao antiga do frontend em memoria;
+  - o comportamento da impressao fiscal fica alinhado com o payload atual retornado pelo backend.
+
+- Observacoes para sincronizar em `pec1`:
+  - verificar se tambem existe `public/hot` no projeto `C:\xampp\htdocs\pec1`;
+  - se existir e o ambiente nao depender intencionalmente de Vite em modo dev, remover esse arquivo la tambem;
+  - nao copiar o arquivo `public/hot` entre ambientes;
+  - nao depende de migration;
+  - esta correcao e de entrega/carregamento de frontend, nao de regra de negocio fiscal.
+
+## 20/04/26 - Cupom fiscal sem itens em settings/fiscal
+
+- Arquivos alterados:
+  - `app/Http/Controllers/FiscalConfigurationController.php`
+  - `SYNC.md`
+
+- Causa identificada:
+  - a grade `Ultimas notas preparadas` carregava as notas fiscais com uma selecao parcial de colunas;
+  - nessa consulta, o campo `tb27_payload` nao era trazido do banco;
+  - o botao `Cupom` depende de `buildInvoiceListPayload()`, que monta `invoice.fiscal_receipt.items` a partir de `tb27_payload['itens']`;
+  - como o payload fiscal nao vinha nessa query da tela, o cupom era montado com `items` vazio;
+  - por isso a venda `23925` mostrava "Nenhum item fiscal disponivel para impressao" mesmo com a nota `tb27_id = 20` contendo `1` item fiscal salvo.
+
+- O que foi feito:
+  - a query da listagem em `settings/fiscal` passou a incluir `tb27_payload`;
+  - tambem foram incluidos `tb2_id` e `tb26_id` para manter o model da nota coerente com os relacionamentos usados na montagem do payload fiscal;
+  - com isso, `buildInvoiceListPayload()` volta a receber os dados completos necessarios para popular `invoice.fiscal_receipt.items`.
+
+- Efeito esperado:
+  - o botao `Cupom` da tabela `Ultimas notas preparadas` passa a abrir o DANFE NFC-e com os itens fiscais corretos;
+  - a venda `23925` deve voltar a exibir o item `PAO DE SAL`, quantidade `1`, valor unitario `R$ 2,62`.
+
+- Observacoes para sincronizar em `pec1`:
+  - sincronizar exatamente:
+    - `app/Http/Controllers/FiscalConfigurationController.php`
+  - manter tambem o registro desta etapa em `SYNC.md`;
+  - nao depende de migration;
+  - esta correcao afeta especificamente a listagem de notas em `settings/fiscal`, nao a geracao do payload fiscal no banco.

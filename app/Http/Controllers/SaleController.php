@@ -1191,6 +1191,7 @@ class SaleController extends Controller
             'emitida_em' => optional($invoice->tb27_emitida_em)?->toIso8601String(),
             'consumer_type' => $consumer['type'] ?? 'balcao',
             'consumer' => $consumer,
+            'items' => $this->extractFiscalItems($invoice),
             'xml_debug' => $xmlDebug,
         ];
     }
@@ -1225,6 +1226,31 @@ class SaleController extends Controller
             'city_code' => $this->nullableXmlValue($consumer['city_code'] ?? $xmlDebug['dest_city_code'] ?? null),
             'state' => $this->nullableXmlValue($consumer['state'] ?? null),
         ];
+    }
+
+    private function extractFiscalItems(NotaFiscal $invoice): array
+    {
+        $payload = is_array($invoice->tb27_payload) ? $invoice->tb27_payload : [];
+        $items = $payload['itens'] ?? [];
+
+        if (! is_array($items)) {
+            return [];
+        }
+
+        return array_values(array_map(function ($item) {
+            $item = is_array($item) ? $item : [];
+            $quantity = (float) ($item['quantidade'] ?? 0);
+            $unitPrice = round((float) ($item['valor_unitario'] ?? 0), 2);
+            $total = round((float) ($item['valor_total'] ?? ($quantity * $unitPrice)), 2);
+
+            return [
+                'product_id' => (int) ($item['produto_id'] ?? 0),
+                'product_name' => (string) ($item['descricao'] ?? ''),
+                'quantity' => $quantity,
+                'unit_price' => $unitPrice,
+                'subtotal' => $total,
+            ];
+        }, $items));
     }
 
     private function extractFiscalXmlDebugData(?string $xml): ?array
