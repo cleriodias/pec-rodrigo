@@ -3099,41 +3099,16 @@ class SalesReportController extends Controller
                 $totalsByUnit[$unitId] = round((float) $row->total, 2);
             }
         } else {
-            $payments = VendaPagamento::query()
-                ->whereBetween('created_at', [$start, $end])
-                ->whereHas('vendas', function ($query) use ($unitIds) {
-                    $query->whereIn('id_unidade', $unitIds);
-                })
-                ->with(['vendas' => function ($query) use ($unitIds) {
-                    $query->select('tb3_id', 'tb4_id', 'id_unidade')
-                        ->whereIn('id_unidade', $unitIds)
-                        ->orderBy('tb3_id');
-                }])
-                ->get([
-                    'tb4_id',
-                    'valor_total',
-                    'tipo_pagamento',
-                    'valor_pago',
-                    'troco',
-                    'dois_pgto',
-                    'created_at',
-                ]);
+            $rows = $this->buildControlStorePaymentTotals($start, $end, $unitIds, $paymentType);
 
-            foreach ($payments as $payment) {
-                $unitId = (int) optional($payment->vendas->first())->id_unidade;
+            foreach ($rows as $row) {
+                $unitId = (int) $row->id_unidade;
 
                 if ($unitId <= 0 || !array_key_exists($unitId, $totalsByUnit)) {
                     continue;
                 }
 
-                $breakdown = $this->breakdownPayment($payment);
-                $amount = match ($paymentType) {
-                    'dinheiro' => (float) ($breakdown['dinheiro'] ?? 0),
-                    'cartao' => (float) ($breakdown['maquina'] ?? 0),
-                    default => (float) ($breakdown['dinheiro'] ?? 0) + (float) ($breakdown['maquina'] ?? 0),
-                };
-
-                $totalsByUnit[$unitId] += $amount;
+                $totalsByUnit[$unitId] = round((float) $row->total, 2);
             }
         }
 
@@ -3163,6 +3138,53 @@ class SalesReportController extends Controller
                 return $row;
             })
             ->values();
+    }
+
+    private function buildControlStorePaymentTotals(
+        Carbon $start,
+        Carbon $end,
+        Collection $unitIds,
+        string $paymentType,
+    ): Collection {
+        $firstSaleIds = DB::table('tb3_vendas')
+            ->selectRaw('tb4_id, MIN(tb3_id) as first_tb3_id')
+            ->whereNotNull('tb4_id')
+            ->whereIn('id_unidade', $unitIds)
+            ->groupBy('tb4_id');
+
+        $cashExpression = "
+            CASE
+                WHEN pagamentos.tipo_pagamento IN ('dinheiro', 'dinheiro_cartao_credito', 'dinheiro_cartao_debito')
+                    THEN GREATEST(pagamentos.valor_total - COALESCE(pagamentos.dois_pgto, 0), 0)
+                ELSE 0
+            END
+        ";
+
+        $cardExpression = "
+            CASE
+                WHEN pagamentos.tipo_pagamento IN ('cartao_credito', 'cartao_debito', 'maquina')
+                    THEN GREATEST(pagamentos.valor_total, 0)
+                WHEN pagamentos.tipo_pagamento IN ('dinheiro', 'dinheiro_cartao_credito', 'dinheiro_cartao_debito')
+                    THEN GREATEST(COALESCE(pagamentos.dois_pgto, 0), 0)
+                ELSE 0
+            END
+        ";
+
+        $totalExpression = match ($paymentType) {
+            'dinheiro' => $cashExpression,
+            'cartao' => $cardExpression,
+            default => "({$cashExpression}) + ({$cardExpression})",
+        };
+
+        return DB::table('tb4_vendas_pg as pagamentos')
+            ->joinSub($firstSaleIds, 'first_sales', function ($join) {
+                $join->on('first_sales.tb4_id', '=', 'pagamentos.tb4_id');
+            })
+            ->join('tb3_vendas as venda_referencia', 'venda_referencia.tb3_id', '=', 'first_sales.first_tb3_id')
+            ->whereBetween('pagamentos.created_at', [$start, $end])
+            ->selectRaw('venda_referencia.id_unidade, SUM(' . $totalExpression . ') as total')
+            ->groupBy('venda_referencia.id_unidade')
+            ->get();
     }
 
     private function resolveDateRange(Request $request): array

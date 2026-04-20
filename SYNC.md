@@ -4011,6 +4011,77 @@ MODIFY tipo_pagamento VARCHAR(40) NOT NULL;
     - `resources/js/Pages/Products/ProductFiscalQueue.jsx`
   - nao depende de migration.
 
+## 20/04/26 - Filtro de usuario em folha/contra-cheque e impressao unificada
+
+- Arquivos alterados:
+  - `app/Http/Controllers/PayrollController.php`
+  - `resources/js/Pages/Settings/FolhaPagamento.jsx`
+  - `resources/js/Pages/Settings/ContraCheque.jsx`
+  - `SYNC.md`
+
+- Causa identificada:
+  - as telas `settings/folha-pagamento` e `settings/contra-cheque` so permitiam filtrar por periodo, unidade e funcao;
+  - o backend em `PayrollController` nao aceitava `user_id`, entao nao havia como restringir a listagem para um colaborador especifico;
+  - alem disso, o botao `Imprimir 80mm` em `settings/contra-cheque` usava `printContraCheque(..., { showDetails: false })`, enquanto o botao `Contra-Cheque` da folha usava `showDetails: true`;
+  - por isso os dois botoes imprimiam conteudos diferentes mesmo usando o mesmo utilitario de impressao.
+
+- O que foi feito:
+  - `PayrollController` passou a:
+    - aceitar o parametro `user_id`;
+    - resolver o usuario selecionado;
+    - aplicar o filtro na consulta principal das duas telas;
+    - expor `filterUsers` e `selectedUserId` no payload enviado ao frontend;
+  - `settings/folha-pagamento` recebeu um novo seletor `Usuario` no formulario de filtros;
+  - `settings/contra-cheque` recebeu o mesmo seletor `Usuario`;
+  - `settings/contra-cheque` passou a usar `showDetails: true`, deixando a impressao `80mm` identica ao conteudo aberto pelo botao `Contra-Cheque` da folha.
+
+- Efeito esperado:
+  - agora e possivel filtrar um colaborador especifico nas telas:
+    - `settings/folha-pagamento`
+    - `settings/contra-cheque`
+  - o botao `Imprimir 80mm` de `settings/contra-cheque` passa a imprimir o mesmo detalhamento de adiantamentos e vales do botao `Contra-Cheque` da folha.
+
+- Observacoes para sincronizar em `pec1`:
+  - sincronizar exatamente:
+    - `app/Http/Controllers/PayrollController.php`
+    - `resources/js/Pages/Settings/FolhaPagamento.jsx`
+    - `resources/js/Pages/Settings/ContraCheque.jsx`
+  - manter tambem este registro no `SYNC.md`;
+  - nao depende de migration;
+  - a alteracao e funcional e de interface, sem mudar estrutura de banco.
+
+## 20/04/26 - Otimizacao do relatorio Controle para evitar erro 500 em producao
+
+- Arquivos alterados:
+  - `app/Http/Controllers/SalesReportController.php`
+  - `SYNC.md`
+
+- Causa identificada:
+  - a tela `Controle` (`GET /reports/control`) montava os totais por loja carregando todos os registros de `tb4_vendas_pg` do periodo com `with('vendas')`;
+  - depois disso, o backend percorria todos os pagamentos em PHP para descobrir a unidade e separar os valores entre `dinheiro` e `cartao`;
+  - em producao, esse volume cresce bastante e aumenta muito consumo de memoria e tempo de execucao, o que pode resultar em erro `500` ao abrir o menu `Controle` no dashboard;
+  - o problema ficava concentrado no metodo `buildControlStoreTotals()` de `SalesReportController`.
+
+- O que foi feito:
+  - a apuracao de `dinheiro`, `cartao` e `all` no relatorio `Controle` foi reescrita para consolidar os totais diretamente no banco;
+  - foi criado um fluxo com subquery para localizar a primeira venda de cada pagamento dentro das unidades permitidas e, a partir dela, agrupar os totais por `id_unidade`;
+  - a separacao entre parte em dinheiro e parte em cartao continua respeitando a mesma regra anterior:
+    - `cartao_credito`, `cartao_debito` e `maquina` contam como cartao;
+    - `dinheiro`, `dinheiro_cartao_credito` e `dinheiro_cartao_debito` usam `dois_pgto` para separar cartao de dinheiro;
+  - os filtros `vale` e `refeicao` continuaram com a agregacao ja existente em `tb3_vendas`.
+
+- Efeito esperado:
+  - o menu `Controle` passa a abrir com bem menos carga de memoria no backend;
+  - a chance de erro `500` por volume de dados no dashboard cai significativamente;
+  - o resultado visual do relatorio permanece o mesmo, inclusive nos filtros por forma de pagamento.
+
+- Observacoes para sincronizar em `pec1`:
+  - sincronizar exatamente:
+    - `app/Http/Controllers/SalesReportController.php`
+  - manter tambem este registro no `SYNC.md`;
+  - nao depende de migration;
+  - a alteracao foi feita para performance e estabilidade da rota `reports.control`, sem mudar layout da tela.
+
 ## 20/04/26 - Correcao de carregamento antigo do frontend fiscal
 
 - Arquivos alterados:

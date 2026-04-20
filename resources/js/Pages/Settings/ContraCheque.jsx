@@ -30,9 +30,11 @@ export default function ContraCheque({
     startDate,
     endDate,
     filterUnits = [],
+    filterUsers = [],
     roleOptions = [],
     selectedUnitId = null,
     selectedRole = null,
+    selectedUserId = null,
     unit = null,
 }) {
     const { data, setData, get, processing } = useForm({
@@ -45,6 +47,10 @@ export default function ContraCheque({
         role:
             selectedRole !== null && selectedRole !== undefined
                 ? String(selectedRole)
+                : 'all',
+        user_id:
+            selectedUserId !== null && selectedUserId !== undefined
+                ? String(selectedUserId)
                 : 'all',
     });
     const [printError, setPrintError] = useState('');
@@ -83,7 +89,7 @@ export default function ContraCheque({
     const handlePrint = (detail) => {
         setPrintError(
             printContraCheque(detail, 'Permita pop-ups para imprimir o contra-cheque.', {
-                showDetails: false,
+                showDetails: true,
             }),
         );
     };
@@ -100,6 +106,7 @@ export default function ContraCheque({
                 end_date: shortBrazilDateInputToIso(data.end_date) || undefined,
                 unit_id: data.unit_id,
                 role: data.role,
+                user_id: data.user_id,
             },
         });
     };
@@ -188,6 +195,23 @@ export default function ContraCheque({
                                     {roleOptions.map((roleOption) => (
                                         <option key={roleOption.id} value={roleOption.id}>
                                             {roleOption.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                    Usuario
+                                </label>
+                                <select
+                                    value={data.user_id}
+                                    onChange={(event) => setData('user_id', event.target.value)}
+                                    className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                                >
+                                    <option value="all">Todos</option>
+                                    {filterUsers.map((filterUser) => (
+                                        <option key={filterUser.id} value={filterUser.id}>
+                                            {filterUser.name}
                                         </option>
                                     ))}
                                 </select>
