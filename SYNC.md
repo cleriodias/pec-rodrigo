@@ -4011,6 +4011,35 @@ MODIFY tipo_pagamento VARCHAR(40) NOT NULL;
     - `resources/js/Pages/Products/ProductFiscalQueue.jsx`
   - nao depende de migration.
 
+## 20/04/26 - Atalhos cruzados entre folha e contra-cheque
+
+- Arquivos alterados:
+  - `resources/js/Pages/Settings/FolhaPagamento.jsx`
+  - `resources/js/Pages/Settings/ContraCheque.jsx`
+  - `SYNC.md`
+
+- Causa identificada:
+  - as telas `settings/folha-pagamento` e `settings/contra-cheque` nao tinham navegacao direta entre si;
+  - para alternar entre elas, o usuario precisava voltar para o menu de configuracoes, o que deixava o fluxo mais lento.
+
+- O que foi feito:
+  - em `settings/folha-pagamento` foi adicionado um botao de atalho `Ir para Contra-Cheque` no cabecalho da tela;
+  - em `settings/contra-cheque` foi adicionado um botao de atalho `Ir para Folha de Pagamento` no cabecalho da tela;
+  - os atalhos usam as rotas ja existentes:
+    - `settings.contra-cheque`
+    - `settings.payroll`
+
+- Efeito esperado:
+  - agora o usuario pode alternar diretamente entre as duas telas sem voltar ao menu principal de configuracoes.
+
+- Observacoes para sincronizar em `pec1`:
+  - sincronizar exatamente:
+    - `resources/js/Pages/Settings/FolhaPagamento.jsx`
+    - `resources/js/Pages/Settings/ContraCheque.jsx`
+  - manter tambem este registro no `SYNC.md`;
+  - nao depende de migration;
+  - a alteracao e apenas de navegacao/interface.
+
 ## 20/04/26 - Filtro de usuario em folha/contra-cheque e impressao unificada
 
 - Arquivos alterados:
