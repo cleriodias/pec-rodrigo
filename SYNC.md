@@ -1,3 +1,162 @@
+## 22/04/26 - Filtros Inicio e Fim de boletos com calendario nativo
+
+Causa:
+- os campos `Inicio` e `Fim` em `resources/js/Pages/Finance/BoletoIndex.jsx` estavam como `type="text"` com digitacao manual;
+- por isso a tela de boletos nao mostrava o seletor nativo de calendario para escolher as datas.
+
+O que foi alterado:
+- os filtros `Inicio` e `Fim` da listagem de boletos passaram a usar `input type="date"`;
+- o estado inicial desses filtros agora trabalha em ISO (`YYYY-MM-DD`) para ser compativel com o calendario do navegador;
+- o envio do filtro continua convertendo corretamente para o backend usando a mesma rotina de resolucao de data.
+
+Como sincronizar no projeto espelho:
+- em `resources/js/Pages/Finance/BoletoIndex.jsx`, trocar os campos de filtro `Inicio` e `Fim` de `text` para `date`;
+- ajustar o estado inicial dos filtros para usar valor ISO em vez de `DD/MM/AA`;
+- manter o envio do formulario passando `start_date` e `end_date` em formato ISO.
+
+Arquivos alterados:
+- `resources/js/Pages/Finance/BoletoIndex.jsx`
+- `SYNC.md`
+
+## 22/04/26 - Modal ampliada do codigo de barras sem rolagem horizontal
+
+Causa:
+- a modal ampliada ainda usava largura minima fixa no modo grande da barra;
+- isso forcava overflow horizontal e exibia barra de rolagem.
+
+O que foi alterado:
+- o modo amplo de `BoletoBarcode` em `resources/js/Pages/Finance/BoletoIndex.jsx` deixou de usar largura minima fixa;
+- a barra ampliada agora ocupa `100%` da largura disponivel da modal;
+- a rolagem horizontal foi removida no modo ampliado com `overflow-hidden`;
+- o modo `compact` do detalhe foi mantido sem mudancas.
+
+Como sincronizar no projeto espelho:
+- em `resources/js/Pages/Finance/BoletoIndex.jsx`, remover `min-w` fixa e `overflow-x-auto` do modo amplo de `BoletoBarcode`;
+- manter o modo amplo com `w-full` para preencher a largura da modal sem barra de rolagem;
+- nao alterar a miniatura clicavel do card de detalhes.
+
+Arquivos alterados:
+- `resources/js/Pages/Finance/BoletoIndex.jsx`
+- `SYNC.md`
+
+## 22/04/26 - Miniatura clicavel e modal ampliada para codigo de barras do boleto
+
+Causa:
+- a primeira versao da barra foi renderizada com largura minima fixa e rolagem horizontal;
+- no card `Codigo de barras` do modal de detalhes isso fazia a barra aparecer cortada, sem mostrar tudo de uma vez.
+
+O que foi alterado:
+- `resources/js/Pages/Finance/BoletoIndex.jsx` agora usa dois modos no componente `BoletoBarcode`:
+- `compact`, para encaixar a barra na largura do campo como miniatura;
+- padrao/amplo, para exibir a barra com mais espaco dentro de uma modal dedicada;
+- o card `Codigo de barras` do modal de detalhes virou uma area clicavel com texto orientando a ampliar;
+- ao clicar, abre uma nova modal maior mostrando o codigo de barras completo com mais espaco horizontal;
+- ao fechar o modal principal `Detalhes`, a modal ampliada tambem e encerrada para nao deixar estado pendente.
+
+Como sincronizar no projeto espelho:
+- atualizar `BoletoBarcode` em `resources/js/Pages/Finance/BoletoIndex.jsx` para aceitar a prop `compact`;
+- no detalhe do boleto, trocar a renderizacao direta da barra por um botao clicavel contendo `<BoletoBarcode value={selectedBoleto.barcode} compact />`;
+- adicionar o estado `showBarcodeModal` e a nova `Modal` ampliada que reaproveita o mesmo componente em modo padrao;
+- manter o numero do codigo de barras em texto abaixo da miniatura e tambem na modal ampliada.
+
+Arquivos alterados:
+- `resources/js/Pages/Finance/BoletoIndex.jsx`
+- `SYNC.md`
+
+## 22/04/26 - Representacao em barra no detalhe do boleto
+
+Causa:
+- o modal `Detalhes` de boletos exibia apenas o numero bruto de `barcode`;
+- nao havia nenhuma rotina no frontend para converter os 44 digitos do boleto em barras visuais.
+
+O que foi alterado:
+- criada em `resources/js/Pages/Finance/BoletoIndex.jsx` uma rotina local de renderizacao visual do codigo de barras do boleto;
+- a conversao usa os 44 digitos sanitizados de `barcode` e monta a barra em frontend, sem dependencia externa;
+- o bloco `Codigo de barras` do modal de detalhes agora mostra primeiro a representacao visual em barras e abaixo continua exibindo o numero para copia;
+- quando o valor nao tiver exatamente `44` digitos, o modal mostra uma mensagem de fallback informando que nao foi possivel gerar a barra.
+
+Como sincronizar no projeto espelho:
+- replicar as constantes/helpers de barcode e o componente `BoletoBarcode` em `resources/js/Pages/Finance/BoletoIndex.jsx`;
+- inserir `<BoletoBarcode value={selectedBoleto.barcode} />` dentro do card `Codigo de barras` do modal `Detalhes`, acima do texto com o numero;
+- nao adicionar biblioteca npm: a implementacao foi feita 100% no arquivo da pagina.
+
+Arquivos alterados:
+- `resources/js/Pages/Finance/BoletoIndex.jsx`
+- `SYNC.md`
+
+## 22/04/26 - Endpoint de boletos com edicao, filtro por loja, total e validacoes
+
+- causa do problema:
+  - o modulo de boletos tinha apenas cadastro, listagem e baixa;
+  - nao existia rota nem fluxo de edicao;
+  - a validacao aceitava qualquer quantidade de caracteres em `barcode` e `digitable_line`;
+  - a listagem ficava presa a unidade ativa da sessao, sem filtro por loja;
+  - a tela abria sem filtro inicial de data/status;
+  - nao havia totalizador da consulta;
+  - as linhas da tabela nao diferenciavam visualmente pago, nao pago, vencendo hoje e atrasado;
+  - as datas desta tela nao estavam padronizadas em `DD/MM/AA`.
+
+- o que foi ajustado no backend:
+  - `BoletoController@index` agora inicia com:
+    - `start_date = hoje`
+    - `end_date = hoje`
+    - `paid = unpaid`
+  - a listagem de boletos agora aceita filtro por loja para usuarios administrativos;
+  - o filtro de loja respeita o escopo de unidades permitido por `ManagementScope`;
+  - o backend agora calcula `listTotalAmount` com base em toda a consulta filtrada, nao apenas na pagina atual;
+  - foi criado o endpoint de edicao `PUT /boletos/{boleto}`;
+  - a baixa e a edicao deixaram de depender da unidade ativa da sessao e passaram a validar a loja do boleto pelo escopo permitido do usuario;
+  - `due_date` passou a aceitar e normalizar `DD/MM/AA`;
+  - `barcode` passou a ser sanitizado para apenas digitos e validado com exatamente `44` digitos;
+  - `digitable_line` passou a ser sanitizada para apenas digitos e validada com `47` ou `48` digitos;
+  - usuario `Master` agora pode selecionar a loja do boleto no cadastro/edicao;
+  - usuarios nao-master continuam cadastrando na loja/unidade corrente.
+
+- o que foi ajustado no frontend:
+  - a tela `Finance/BoletoIndex` foi reorganizada para deixar `Descricao`, `Vencimento` e `Valor` na mesma linha;
+  - o formulario passou a usar datas em `DD/MM/AA`;
+  - a listagem ganhou filtro de:
+    - loja
+    - inicio
+    - fim
+    - status
+  - foi adicionado o card `Total da consulta`;
+  - foi implementado o fluxo de `Editar boleto` reaproveitando o formulario superior;
+  - o `Master` passou a ver o combo de loja no formulario;
+  - a tabela passou a mostrar o codigo de barras abaixo da descricao;
+  - o WhatsApp passou a enviar tambem o codigo de barras;
+  - as linhas da tabela agora usam legenda e cores:
+    - verde: pago
+    - laranja: nao pago
+    - vermelho: vence hoje
+    - pink: atrasado
+  - o modal de detalhes foi ajustado para exibir o status com a mesma regra visual da lista.
+
+- arquivos alterados:
+  - `app/Http/Controllers/BoletoController.php`
+  - `resources/js/Pages/Finance/BoletoIndex.jsx`
+  - `routes/web.php`
+  - `SYNC.md`
+
+- testes/validacao executados:
+  - `php -l app/Http/Controllers/BoletoController.php`
+  - `php -l routes/web.php`
+  - `npm run build`
+
+- observacoes importantes para sincronizar em `pec1`:
+  - sincronizar exatamente:
+    - `app/Http/Controllers/BoletoController.php`
+    - `resources/js/Pages/Finance/BoletoIndex.jsx`
+    - `routes/web.php`
+  - nao depende de migration;
+  - nao cria tabela nova;
+  - o endpoint novo de edicao precisa ir junto com a tela, senao o botao `Editar` quebra no outro projeto;
+  - o filtro padrao do modulo agora sempre entra com o dia atual em inicio/fim e `Nao pagos`;
+  - o `Master` pode escolher loja no cadastro/edicao, mas os demais perfis continuam gravando na loja corrente;
+  - a validacao numerica de boletos passa a rejeitar:
+    - `barcode` diferente de `44` digitos
+    - `digitable_line` diferente de `47` ou `48` digitos
+
 ## 20/04/26 - NF Consumidor com destinatario identificado no caixa
 
 - causa do problema:
