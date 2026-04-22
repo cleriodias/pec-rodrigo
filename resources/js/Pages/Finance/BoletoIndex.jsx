@@ -772,10 +772,7 @@ export default function BoletoIndex({
                                                                 <p className="font-semibold text-gray-900 dark:text-gray-100">
                                                                     {boleto.description}
                                                                 </p>
-                                                                <p className="mt-1 break-all text-xs text-gray-600 dark:text-gray-300">
-                                                                    Cod. barras: {boleto.barcode}
-                                                                </p>
-                                                            </td>
+                                                             </td>
                                                             <td className="px-3 py-3 align-top font-medium text-gray-700 dark:text-gray-200">
                                                                 {formatDate(boleto.due_date)}
                                                             </td>
