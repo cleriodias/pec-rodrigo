@@ -1,3 +1,120 @@
+## 22/04/26 - Alinhamento corrigido no campo "Arquivo do certificado"
+
+Causa:
+- o campo `input type="file"` estava reutilizando a mesma classe visual dos inputs comuns, incluindo altura fixa;
+- o botao nativo interno do navegador nao respeita essa altura do mesmo jeito e acabava parecendo deslocado para cima.
+
+O que foi alterado:
+- em `resources/js/Pages/Settings/FiscalConfig.jsx`, o campo `Arquivo do certificado` passou a usar uma classe propria;
+- a altura fixa foi removida apenas do `input type="file"`, mantendo padding e borda alinhados com o restante do formulario;
+- isso centraliza melhor o botao nativo e o texto do arquivo selecionado.
+
+Como sincronizar no projeto espelho:
+- separar o estilo do campo de arquivo do estilo padrao dos inputs em `resources/js/Pages/Settings/FiscalConfig.jsx`;
+- nao aplicar `h-12` no `input type="file"`;
+- manter as classes `file:*` para preservar a aparencia do botao.
+
+Arquivos alterados:
+- `resources/js/Pages/Settings/FiscalConfig.jsx`
+- `SYNC.md`
+
+## 22/04/26 - Selecao de unidade da tela fiscal trocada de select para botoes
+
+Causa:
+- a tela fiscal ainda usava `select` com botao `Carregar unidade`, exigindo duas interacoes para trocar de loja;
+- isso deixava a navegacao mais lenta e diferente do comportamento solicitado.
+
+O que foi alterado:
+- em `resources/js/Pages/Settings/FiscalConfig.jsx`, o bloco de selecao da unidade agora usa um botao para cada loja gerenciada;
+- ao clicar em uma unidade, a tela recarrega diretamente `settings.fiscal` com a loja selecionada;
+- a unidade ativa recebe destaque visual;
+- o filtro atual de notas fiscais (`invoiceStatusFilter`) continua preservado ao trocar de unidade.
+
+Como sincronizar no projeto espelho:
+- remover o `select` e o submit manual da unidade em `resources/js/Pages/Settings/FiscalConfig.jsx`;
+- criar um conjunto de botoes com destaque para a unidade ativa;
+- ao clicar, chamar `router.get(route('settings.fiscal'), { unit_id, invoice_status })` preservando scroll/estado.
+
+Arquivos alterados:
+- `resources/js/Pages/Settings/FiscalConfig.jsx`
+- `SYNC.md`
+
+## 22/04/26 - Filtro inicial de notas fiscais definido como Erro
+
+Causa:
+- depois da inclusao dos filtros em `Ultimas notas preparadas`, o valor inicial ainda estava configurado como `all`;
+- com isso a tela abria mostrando todas as notas, em vez de priorizar os registros com problema.
+
+O que foi alterado:
+- `app/Http/Controllers/FiscalConfigurationController.php` agora usa `error` como filtro padrao de `invoice_status`;
+- `resources/js/Pages/Settings/FiscalConfig.jsx` passou a considerar `error` como valor inicial do filtro no frontend;
+- ao abrir a tela fiscal sem query string explicita, o botao `Erro` ja fica selecionado.
+
+Como sincronizar no projeto espelho:
+- em `FiscalConfigurationController@index`, trocar o valor padrao de `invoice_status` para `error`;
+- em `resources/js/Pages/Settings/FiscalConfig.jsx`, ajustar o fallback de `invoiceStatusFilter` para `error`;
+- manter o restante da logica dos filtros como esta.
+
+Arquivos alterados:
+- `app/Http/Controllers/FiscalConfigurationController.php`
+- `resources/js/Pages/Settings/FiscalConfig.jsx`
+- `SYNC.md`
+
+## 22/04/26 - Filtros e limite de 20 notas em "Ultimas notas preparadas"
+
+Causa:
+- a tela fiscal carregava apenas as ultimas `15` notas sem qualquer filtro por status;
+- isso dificultava localizar rapidamente registros de erro, notas assinadas e notas emitidas.
+
+O que foi alterado:
+- `app/Http/Controllers/FiscalConfigurationController.php` agora aceita o filtro `invoice_status` pela query string;
+- os filtros implementados foram:
+- `all` para todas;
+- `error` para `erro_validacao` e `erro_transmissao`;
+- `signed` para `xml_assinado`;
+- `issued` para `emitida`;
+- a consulta passou a retornar as ultimas `20` notas do filtro selecionado;
+- `resources/js/Pages/Settings/FiscalConfig.jsx` ganhou botoes `Todas`, `Erro`, `Assinada` e `Emitida` na secao `Ultimas notas preparadas`;
+- a tela tambem informa explicitamente que esta exibindo as ultimas `20` notas do filtro atual.
+
+Como sincronizar no projeto espelho:
+- atualizar `FiscalConfigurationController@index` para ler `invoice_status`, filtrar por status e limitar a `20` registros;
+- enviar `invoiceStatusFilter` para o Inertia junto com `invoices`;
+- em `resources/js/Pages/Settings/FiscalConfig.jsx`, adicionar os botoes de filtro e recarregar `route('settings.fiscal')` preservando `unit_id`;
+- manter a tabela atual e alterar apenas o cabecalho/filtros e a origem da lista.
+
+Arquivos alterados:
+- `app/Http/Controllers/FiscalConfigurationController.php`
+- `resources/js/Pages/Settings/FiscalConfig.jsx`
+- `SYNC.md`
+
+## 22/04/26 - Reorganizacao visual da tela fiscal
+
+Causa:
+- a tela `resources/js/Pages/Settings/FiscalConfig.jsx` estava com cards empilhados e grids diferentes entre si;
+- `Unidade`, dados da unidade, `Associacao loja e certificado` e `Diagnostico do ambiente` nao ficavam alinhados lado a lado;
+- os blocos `Emissao e numeracao` e `Dados do emitente` usavam campos com espacamentos e aparencia inconsistentes em relacao ao layout desejado.
+
+O que foi alterado:
+- o topo da tela fiscal foi reorganizado para colocar `Unidade` e o card com dados/endereco da unidade na mesma linha;
+- os cards `Associacao loja e certificado` e `Diagnostico do ambiente` passaram a dividir a mesma linha;
+- o formulario `Emissao e numeracao` foi refeito com:
+- bloco lateral para `Emitir NF-e` e `Emitir NFC-e`;
+- linha principal com `CRT`, `Ambiente`, `Serie` e `Proximo numero`;
+- secao `Credenciais fiscais` com campos e cards auxiliares na mesma linguagem visual;
+- os cards `Reprocessamento fiscal` e `Geracao automatica de notas fiscais` agora aparecem lado a lado com o card do arquivo atual do certificado;
+- o bloco `Dados do emitente` foi padronizado com a mesma aparencia visual dos campos acima, mantendo o grid responsivo.
+
+Como sincronizar no projeto espelho:
+- replicar em `resources/js/Pages/Settings/FiscalConfig.jsx` as novas classes visuais (`fiscalSectionClassName`, `fiscalPanelClassName`, `fiscalFieldClassName`, `fiscalFileInputClassName`) e o helper `FiscalSectionHeader`;
+- reorganizar os grids do topo para manter os pares de cards na mesma linha;
+- atualizar o layout do formulario fiscal sem alterar a logica de submit, estados ou rotas;
+- preservar todos os nomes de campos e comportamento funcional, mudando apenas estrutura e aparencia.
+
+Arquivos alterados:
+- `resources/js/Pages/Settings/FiscalConfig.jsx`
+- `SYNC.md`
+
 ## 22/04/26 - Impressao em lote dos boletos com barras visiveis no preview
 
 Causa:
