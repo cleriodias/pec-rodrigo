@@ -247,7 +247,7 @@ const escapeHtml = (value) =>
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
 
-const renderBarcodeBarsHtml = (value) => {
+const renderBarcodeBarsSvg = (value) => {
     const digits = onlyDigits(value);
     const segments = buildInterleavedBarcodeSegments(digits);
 
@@ -256,21 +256,33 @@ const renderBarcodeBarsHtml = (value) => {
     }
 
     const totalUnits = segments.reduce((sum, segment) => sum + segment.width, 0);
+    let cursor = 0;
+
+    const rects = segments
+        .map((segment) => {
+            const currentX = cursor;
+            cursor += segment.width;
+
+            if (segment.type !== 'bar') {
+                return '';
+            }
+
+            return `<rect x="${currentX}" y="0" width="${segment.width}" height="100" fill="#000000"></rect>`;
+        })
+        .join('');
 
     return `
         <div class="barcode-print-box">
-            <div class="barcode-print-bars" aria-label="Codigo de barras ${escapeHtml(digits)}">
-                ${segments
-                    .map(
-                        (segment) => `
-                            <span
-                                class="barcode-print-segment ${segment.type === 'bar' ? 'is-bar' : 'is-space'}"
-                                style="width:${(segment.width / totalUnits) * 100}%"
-                            ></span>
-                        `,
-                    )
-                    .join('')}
-            </div>
+            <svg
+                class="barcode-print-svg"
+                viewBox="0 0 ${totalUnits} 100"
+                preserveAspectRatio="none"
+                role="img"
+                aria-label="Codigo de barras ${escapeHtml(digits)}"
+                xmlns="http://www.w3.org/2000/svg"
+            >
+                ${rects}
+            </svg>
             <div class="barcode-print-digits">${escapeHtml(digits)}</div>
         </div>
     `;
@@ -333,26 +345,13 @@ const buildBoletoBatchPrintHtml = (boletos) => `
                 .barcode-print-box {
                     width: 100%;
                 }
-                .barcode-print-bars {
-                    display: flex;
-                    align-items: stretch;
+                .barcode-print-svg {
+                    display: block;
                     width: 100%;
                     height: 96px;
-                    overflow: hidden;
                     background: #ffffff;
                     border: 1px solid #e5e7eb;
                     border-radius: 10px;
-                    padding: 8px;
-                }
-                .barcode-print-segment {
-                    display: block;
-                    height: 100%;
-                }
-                .barcode-print-segment.is-bar {
-                    background: #000000;
-                }
-                .barcode-print-segment.is-space {
-                    background: transparent;
                 }
                 .barcode-print-digits {
                     margin-top: 10px;
@@ -389,7 +388,7 @@ const buildBoletoBatchPrintHtml = (boletos) => `
                                         <span><strong>Valor:</strong> ${escapeHtml(formatCurrency(boleto.amount))}</span>
                                     </div>
                                 </div>
-                                ${renderBarcodeBarsHtml(boleto.barcode)}
+                                ${renderBarcodeBarsSvg(boleto.barcode)}
                             </section>
                         `,
                     )

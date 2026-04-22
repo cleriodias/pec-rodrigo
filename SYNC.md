@@ -1,3 +1,23 @@
+## 22/04/26 - Impressao em lote dos boletos com barras visiveis no preview
+
+Causa:
+- a primeira versao da impressao em lote desenhava as barras com elementos HTML usando `background`;
+- no preview ou na impressao do navegador esses fundos podiam ser ignorados, deixando a area da barra em branco.
+
+O que foi alterado:
+- em `resources/js/Pages/Finance/BoletoIndex.jsx`, a impressao em lote passou a gerar o codigo de barras como `SVG` inline;
+- cada barra preta agora e renderizada como `<rect>` dentro do `SVG`, o que melhora a confiabilidade no preview e na impressao;
+- a modal em tela foi mantida como estava, porque o problema ocorria apenas no layout da janela de impressao.
+
+Como sincronizar no projeto espelho:
+- trocar a helper de impressao `renderBarcodeBarsHtml` por uma helper que gere `SVG` inline em `resources/js/Pages/Finance/BoletoIndex.jsx`;
+- manter a modal em lote atual e alterar apenas o HTML/CSS da janela de impressao;
+- preservar descricao, vencimento, valor e os digitos do codigo abaixo da barra.
+
+Arquivos alterados:
+- `resources/js/Pages/Finance/BoletoIndex.jsx`
+- `SYNC.md`
+
 ## 22/04/26 - Modal para ver e imprimir codigos de barras em lote nos boletos
 
 Causa:
