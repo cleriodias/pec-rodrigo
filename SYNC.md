@@ -1,3 +1,26 @@
+## 22/04/26 - Modal para ver e imprimir codigos de barras em lote nos boletos
+
+Causa:
+- a tela de boletos so permitia visualizar o codigo de barras individualmente em cada boleto;
+- nao existia acao para reunir os codigos do resultado atual da pesquisa em uma unica modal com impressao.
+
+O que foi alterado:
+- em `resources/js/Pages/Finance/BoletoIndex.jsx` foi adicionado o botao `Ver codigos em lote` no topo da listagem;
+- o botao abre uma modal com os boletos carregados na pesquisa atual da pagina;
+- cada item da modal mostra `Descricao`, representacao em barras do `barcode`, `Vencimento` e `Valor`;
+- a modal inclui botao `Imprimir`, que abre uma janela de impressao com todos os boletos atualmente carregados;
+- a impressao reutiliza a mesma logica de segmentos do codigo de barras, mas gera HTML proprio para impressao em lote.
+
+Como sincronizar no projeto espelho:
+- em `resources/js/Pages/Finance/BoletoIndex.jsx`, adicionar o estado `showBatchBarcodeModal` e o botao `Ver codigos em lote`;
+- criar a modal em lote usando `boletos.data` atual da tela, sem nova requisicao ao backend;
+- adicionar as helpers `escapeHtml`, `renderBarcodeBarsHtml` e `buildBoletoBatchPrintHtml` para suportar a impressao;
+- manter o layout da modal com descricao, vencimento, valor e barra de cada boleto.
+
+Arquivos alterados:
+- `resources/js/Pages/Finance/BoletoIndex.jsx`
+- `SYNC.md`
+
 ## 22/04/26 - Filtros Inicio e Fim de boletos com calendario nativo
 
 Causa:

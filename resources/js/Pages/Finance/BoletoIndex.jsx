@@ -239,6 +239,166 @@ const buildWhatsAppMessage = (boleto) => {
 const buildWhatsAppLink = (boleto) =>
     `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(buildWhatsAppMessage(boleto))}`;
 
+const escapeHtml = (value) =>
+    String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+const renderBarcodeBarsHtml = (value) => {
+    const digits = onlyDigits(value);
+    const segments = buildInterleavedBarcodeSegments(digits);
+
+    if (!segments.length) {
+        return '<div class="barcode-fallback">Codigo de barras invalido.</div>';
+    }
+
+    const totalUnits = segments.reduce((sum, segment) => sum + segment.width, 0);
+
+    return `
+        <div class="barcode-print-box">
+            <div class="barcode-print-bars" aria-label="Codigo de barras ${escapeHtml(digits)}">
+                ${segments
+                    .map(
+                        (segment) => `
+                            <span
+                                class="barcode-print-segment ${segment.type === 'bar' ? 'is-bar' : 'is-space'}"
+                                style="width:${(segment.width / totalUnits) * 100}%"
+                            ></span>
+                        `,
+                    )
+                    .join('')}
+            </div>
+            <div class="barcode-print-digits">${escapeHtml(digits)}</div>
+        </div>
+    `;
+};
+
+const buildBoletoBatchPrintHtml = (boletos) => `
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+        <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Codigos de barras dos boletos</title>
+            <style>
+                * {
+                    box-sizing: border-box;
+                }
+                body {
+                    margin: 0;
+                    padding: 24px;
+                    font-family: Arial, sans-serif;
+                    color: #111827;
+                    background: #ffffff;
+                }
+                h1 {
+                    margin: 0 0 8px;
+                    font-size: 22px;
+                }
+                .subtitle {
+                    margin: 0 0 24px;
+                    font-size: 13px;
+                    color: #4b5563;
+                }
+                .list {
+                    display: grid;
+                    gap: 16px;
+                }
+                .item {
+                    border: 1px solid #d1d5db;
+                    border-radius: 12px;
+                    padding: 16px;
+                    page-break-inside: avoid;
+                }
+                .item-header {
+                    display: flex;
+                    justify-content: space-between;
+                    gap: 16px;
+                    margin-bottom: 12px;
+                }
+                .description {
+                    font-size: 18px;
+                    font-weight: 700;
+                }
+                .meta {
+                    display: flex;
+                    gap: 16px;
+                    font-size: 13px;
+                    color: #374151;
+                    flex-wrap: wrap;
+                }
+                .barcode-print-box {
+                    width: 100%;
+                }
+                .barcode-print-bars {
+                    display: flex;
+                    align-items: stretch;
+                    width: 100%;
+                    height: 96px;
+                    overflow: hidden;
+                    background: #ffffff;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 10px;
+                    padding: 8px;
+                }
+                .barcode-print-segment {
+                    display: block;
+                    height: 100%;
+                }
+                .barcode-print-segment.is-bar {
+                    background: #000000;
+                }
+                .barcode-print-segment.is-space {
+                    background: transparent;
+                }
+                .barcode-print-digits {
+                    margin-top: 10px;
+                    font-size: 14px;
+                    word-break: break-all;
+                }
+                .barcode-fallback {
+                    border: 1px solid #fca5a5;
+                    background: #fef2f2;
+                    color: #b91c1c;
+                    border-radius: 10px;
+                    padding: 12px;
+                    font-size: 12px;
+                }
+                @media print {
+                    body {
+                        padding: 12px;
+                    }
+                }
+            </style>
+        </head>
+        <body>
+            <h1>Codigos de barras dos boletos</h1>
+            <p class="subtitle">Resultado atual da pesquisa: ${boletos.length} boleto(s).</p>
+            <div class="list">
+                ${boletos
+                    .map(
+                        (boleto) => `
+                            <section class="item">
+                                <div class="item-header">
+                                    <div class="description">${escapeHtml(boleto.description)}</div>
+                                    <div class="meta">
+                                        <span><strong>Vencimento:</strong> ${escapeHtml(formatDate(boleto.due_date))}</span>
+                                        <span><strong>Valor:</strong> ${escapeHtml(formatCurrency(boleto.amount))}</span>
+                                    </div>
+                                </div>
+                                ${renderBarcodeBarsHtml(boleto.barcode)}
+                            </section>
+                        `,
+                    )
+                    .join('')}
+            </div>
+        </body>
+    </html>
+`;
+
 export default function BoletoIndex({
     activeUnit = null,
     filters = {},
@@ -296,6 +456,7 @@ export default function BoletoIndex({
     const [selectedBoleto, setSelectedBoleto] = useState(null);
     const [showDetails, setShowDetails] = useState(false);
     const [showBarcodeModal, setShowBarcodeModal] = useState(false);
+    const [showBatchBarcodeModal, setShowBatchBarcodeModal] = useState(false);
     const [editingBoleto, setEditingBoleto] = useState(null);
 
     const buildFilterParams = () => ({
@@ -408,6 +569,35 @@ export default function BoletoIndex({
 
     const closeBarcodeModal = () => {
         setShowBarcodeModal(false);
+    };
+
+    const openBatchBarcodeModal = () => {
+        setShowBatchBarcodeModal(true);
+    };
+
+    const closeBatchBarcodeModal = () => {
+        setShowBatchBarcodeModal(false);
+    };
+
+    const visibleBoletos = Array.isArray(boletos?.data) ? boletos.data : [];
+
+    const handlePrintBatchBarcodes = () => {
+        if (!visibleBoletos.length) {
+            return;
+        }
+
+        const printWindow = window.open('', '_blank', 'width=1100,height=800');
+
+        if (!printWindow) {
+            window.alert('Nao foi possivel abrir a janela de impressao.');
+            return;
+        }
+
+        printWindow.document.open();
+        printWindow.document.write(buildBoletoBatchPrintHtml(visibleBoletos));
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
     };
 
     const canSubmitForm = canChooseCreateUnit ? Boolean(data.unit_id) : hasActiveUnit;
@@ -711,6 +901,14 @@ export default function BoletoIndex({
                                         </p>
                                     </div>
                                     <div className="flex flex-wrap items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={openBatchBarcodeModal}
+                                            disabled={!visibleBoletos.length}
+                                            className="rounded-xl border border-indigo-300 px-4 py-2 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-50 dark:border-indigo-500/60 dark:text-indigo-200 dark:hover:bg-indigo-900/30"
+                                        >
+                                            Ver codigos em lote
+                                        </button>
                                         {STATUS_LEGEND.map((legend) => (
                                             <span
                                                 key={legend.key}
@@ -1029,6 +1227,73 @@ export default function BoletoIndex({
                     </div>
                 </Modal>
             )}
+
+            <Modal show={showBatchBarcodeModal} onClose={closeBatchBarcodeModal} maxWidth="4xl" tone="light">
+                <div className="bg-white p-6 text-gray-900 dark:bg-gray-900 dark:text-gray-50">
+                    <div className="flex items-start justify-between gap-4">
+                        <div>
+                            <p className="text-xs uppercase tracking-wide text-indigo-600 dark:text-indigo-300">
+                                Codigos de barras
+                            </p>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-50">
+                                Resultado atual da pesquisa
+                            </h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-300">
+                                {visibleBoletos.length} boleto(s) carregado(s) nesta pagina.
+                            </p>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={handlePrintBatchBarcodes}
+                                disabled={!visibleBoletos.length}
+                                className="rounded-xl border border-emerald-300 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-200 disabled:cursor-not-allowed disabled:opacity-50 dark:border-emerald-500/60 dark:text-emerald-200 dark:hover:bg-emerald-900/30"
+                            >
+                                Imprimir
+                            </button>
+                            <button
+                                type="button"
+                                onClick={closeBatchBarcodeModal}
+                                className="rounded-full border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                            >
+                                Fechar
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="mt-6 max-h-[75vh] space-y-4 overflow-y-auto pr-1">
+                        {visibleBoletos.length ? (
+                            visibleBoletos.map((boleto) => (
+                                <div
+                                    key={`batch-barcode-${boleto.id}`}
+                                    className="rounded-2xl border border-dashed border-gray-200 bg-white/70 p-4 dark:border-gray-800 dark:bg-gray-800/40"
+                                >
+                                    <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                                        <div>
+                                            <p className="text-base font-semibold text-gray-900 dark:text-gray-50">
+                                                {boleto.description}
+                                            </p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                #{boleto.id}
+                                            </p>
+                                        </div>
+                                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600 dark:text-gray-300">
+                                            <span>Vencimento: {formatDate(boleto.due_date)}</span>
+                                            <span>Valor: {formatCurrency(boleto.amount)}</span>
+                                        </div>
+                                    </div>
+
+                                    <BoletoBarcode value={boleto.barcode} />
+                                </div>
+                            ))
+                        ) : (
+                            <p className="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-300">
+                                Nenhum boleto carregado para exibir.
+                            </p>
+                        )}
+                    </div>
+                </div>
+            </Modal>
         </AuthenticatedLayout>
     );
 }
