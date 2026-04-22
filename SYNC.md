@@ -1,3 +1,31 @@
+## 22/04/26 - Cadastro de boletos volta a usar a unidade ativa para perfis sem select
+
+Causa:
+- ao adicionar o select de loja para o perfil `Master`, a rotina de gravacao do boleto em `app/Http/Controllers/BoletoController.php` passou a validar a unidade ativa com `ManagementScope::canManageUnit(...)`;
+- essa validacao atende perfis administrativos, mas nao atende `CAIXA`, mesmo quando ele esta com uma unidade valida na sessao;
+- com isso, usuarios sem o select de loja viam a unidade ativa na tela, mas o `POST /boletos` retornava `Unidade ativa nao definida para registrar o boleto.`
+
+O que foi alterado:
+- em `app/Http/Controllers/BoletoController.php`, o fallback da unidade ativa no metodo `resolveTargetUnitForWrite()` deixou de depender apenas da regra de gestao;
+- foi criada a validacao `canWriteBoletoToUnit()`, que:
+- continua usando `ManagementScope::canManageUnit(...)` para perfis administrativos;
+- passa a aceitar a unidade ativa para perfis criadores sem select, desde que essa unidade esteja vinculada ao proprio usuario via unidade principal ou relacionamento `units`;
+- o fluxo do `Master` com select de loja nao foi alterado.
+
+Como sincronizar no projeto espelho:
+- em `app/Http/Controllers/BoletoController.php`, localizar o metodo `resolveTargetUnitForWrite()`;
+- trocar a validacao final da `activeUnit` para usar uma helper propria de escrita do boleto;
+- adicionar a helper `canWriteBoletoToUnit()` usando:
+- `ManagementScope::canManageUnit(...)` para admin;
+- `ManagementScope::targetUserUnitIds($user)->contains($unitId)` para validar a unidade ativa dos perfis sem select;
+- nao alterar a logica do select do `Master` no frontend, porque a correcao e toda no backend;
+- nao depende de migration;
+- nao ha criacao ou alteracao de tabela.
+
+Arquivos alterados:
+- `app/Http/Controllers/BoletoController.php`
+- `SYNC.md`
+
 ## 22/04/26 - Alinhamento corrigido no campo "Arquivo do certificado"
 
 Causa:
