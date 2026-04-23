@@ -4515,3 +4515,46 @@ MODIFY tipo_pagamento VARCHAR(40) NOT NULL;
   - manter tambem o registro desta etapa em `SYNC.md`;
   - nao depende de migration;
   - esta correcao afeta especificamente a listagem de notas em `settings/fiscal`, nao a geracao do payload fiscal no banco.
+## 23/04/26 - Preparacao de migracao do MySQL KingHost para Azure
+
+- Arquivos criados/alterados:
+  - `scripts/export-mysql-dump.php`
+  - `storage/certs/DigiCertGlobalRootG2.crt.pem`
+  - `bkp/paoecafe83_23-04-26_azure.sql`
+  - `SYNC.md`
+
+- Causa identificada:
+  - a aplicacao esta hospedada na Azure, mas o banco MySQL ainda estava na KingHost;
+  - essa separacao aumenta dependencia de rede entre provedores e pode gerar instabilidade/latencia;
+  - o `Azure Database for MySQL Flexible Server` exige transporte seguro/TLS, entao o Laravel precisa usar `MYSQL_ATTR_SSL_CA` apontando para o certificado publico;
+  - o MySQL 8 da Azure tambem estava gerando chave primaria invisivel automatica em tabelas sem PK durante importacao de dump antigo, causando erro `Multiple primary key defined` quando o dump aplicava `ALTER TABLE ... ADD PRIMARY KEY`.
+
+- O que foi feito:
+  - foi criado o servidor MySQL na Azure com endpoint `pdv.mysql.database.azure.com`;
+  - foi criada/recriada a base `paoecafe83` na Azure para testes de migracao;
+  - foi baixado o certificado publico `DigiCertGlobalRootG2.crt.pem` para permitir conexao TLS via PDO/Laravel;
+  - como `mysqldump.exe` do XAMPP/MariaDB falhou no handshake com a KingHost, foi criado o script `scripts/export-mysql-dump.php` para gerar dump via PDO;
+  - o dump gerado inclui `SET SESSION sql_generate_invisible_primary_key=OFF;` para evitar chaves primarias invisiveis automáticas no MySQL da Azure;
+  - o dump atualizado foi importado na Azure e validado contra a KingHost.
+
+- Validacoes realizadas:
+  - Azure e KingHost ficaram com as mesmas contagens principais apos a importacao:
+    - `tb1_produto`: `1921`
+    - `tb3_vendas`: `56736`
+    - `tb4_vendas_pg`: `26680`
+    - `users`: `42`
+    - total de tabelas: `35`
+  - `php artisan migrate:status` funcionou apontando temporariamente para a Azure com TLS;
+  - permanece pendente a migration `2026_04_19_120000_expand_tipo_pagamento_length_on_tb4_vendas_pg`, que ja aparecia como `Pending` no teste.
+
+- Observacoes para sincronizar em `pec1`:
+  - nao trocar automaticamente a conexao de `pec1`, porque dominio, banco e telas especificas sao diferentes;
+  - copiar o script `scripts/export-mysql-dump.php` apenas se tambem for necessario exportar/importar banco no outro projeto;
+  - copiar `storage/certs/DigiCertGlobalRootG2.crt.pem` caso `pec1` tambem passe a conectar em MySQL da Azure com TLS obrigatorio;
+  - quando a virada definitiva for feita, configurar no ambiente da Azure:
+    - `DB_HOST=pdv.mysql.database.azure.com`
+    - `DB_PORT=3306`
+    - `DB_DATABASE=paoecafe83`
+    - `DB_USERNAME=pdv`
+    - `MYSQL_ATTR_SSL_CA` apontando para o certificado publico no servidor;
+  - a senha nao foi registrada neste arquivo por seguranca.
