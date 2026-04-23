@@ -4558,3 +4558,37 @@ MODIFY tipo_pagamento VARCHAR(40) NOT NULL;
     - `DB_USERNAME=pdv`
     - `MYSQL_ATTR_SSL_CA` apontando para o certificado publico no servidor;
   - a senha nao foi registrada neste arquivo por seguranca.
+
+## 23/04/26 - Relatorio Notas Fiscais Emitidas
+
+- Arquivos criados/alterados em `C:\xampp\htdocs\pec-rodrigo`:
+  - `routes/web.php`
+  - `app/Http/Controllers/SalesReportController.php`
+  - `resources/js/Pages/Reports/Index.jsx`
+  - `resources/js/Pages/Reports/FiscalInvoices.jsx`
+  - `resources/js/Layouts/AuthenticatedLayout.jsx`
+  - `resources/js/Pages/Settings/ProfileAccess.jsx`
+  - `resources/js/Pages/Settings/MenuOrder.jsx`
+  - `SYNC.md`
+
+- Causa identificada:
+  - a area `reports` ainda nao tinha um item/tela para listar as notas da tabela `tb27_notas_fiscais`;
+  - os status fiscais ja existem no sistema, entao nao foi necessario criar tabela nova nem alterar dados no banco.
+
+- O que foi feito:
+  - criada a rota `reports.notas-fiscais-emitidas` em `/reports/notas-fiscais-emitidas`;
+  - criado o metodo `notasFiscaisEmitidas` em `SalesReportController`;
+  - o relatorio respeita o mesmo escopo de lojas dos outros relatorios via `resolveReportUnit` e `reportUnitIds`;
+  - filtros adicionados: Loja, Situacao e Data inicial/final;
+  - as datas da tela usam entrada/visualizacao no padrao `DD/MM/AA`;
+  - a Situacao usa o mapeamento:
+    - `Assinada`: status interno `xml_assinado`;
+    - `Erro`: status internos `erro_validacao` e `erro_transmissao`;
+    - `Emitida`: status interno `emitida`;
+  - adicionada a tela `resources/js/Pages/Reports/FiscalInvoices.jsx` com listagem de venda, loja, situacao, modelo, serie/numero, datas, valor, pagamento, caixa, chave, protocolo e mensagem;
+  - adicionado o item "Notas Fiscais Emitidas" no indice de relatorios, menu lateral/dropdown, permissoes de menu e ordenacao.
+
+- Observacoes para sincronizar em `C:\xampp\htdocs\pec1`:
+  - replicar os mesmos arquivos, exceto se houver divergencias locais nos arquivos de login/pagina inicial que nao se aplicam aqui;
+  - nao executar migration nova, pois o relatorio usa a tabela existente `tb27_notas_fiscais`;
+  - apos sincronizar, executar `php artisan route:clear` se a rota nao aparecer e `cmd /c npm run build` para regenerar os assets.

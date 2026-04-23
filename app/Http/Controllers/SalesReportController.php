@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CashierClosure;
 use App\Models\Expense;
+use App\Models\NotaFiscal;
 use App\Models\ProductDiscard;
 use App\Models\SalaryAdvance;
 use App\Models\Supplier;
@@ -24,6 +25,22 @@ use Inertia\Response;
 
 class SalesReportController extends Controller
 {
+    private const FISCAL_INVOICE_STATUS_FILTERS = [
+        'assinada' => ['xml_assinado'],
+        'erro' => ['erro_validacao', 'erro_transmissao'],
+        'emitida' => ['emitida'],
+    ];
+
+    private const FISCAL_INVOICE_STATUS_LABELS = [
+        'pendente_configuracao' => 'Pendente configuracao',
+        'erro_validacao' => 'Erro',
+        'erro_transmissao' => 'Erro',
+        'pendente_emissao' => 'Pendente emissao',
+        'xml_assinado' => 'Assinada',
+        'emitida' => 'Emitida',
+        'cancelada' => 'Cancelada',
+    ];
+
     private const TYPE_META = [
         'dinheiro' => ['label' => 'Dinheiro', 'color' => '#16a34a'],
         'maquina' => ['label' => 'Maquina', 'color' => '#2563eb'],
@@ -128,6 +145,13 @@ class SalesReportController extends Controller
                 'description' => 'Cupons com pagamento faturado, agrupados por caixa e loja.',
                 'icon' => 'bi-journal-text',
                 'route' => 'reports.faturar',
+            ],
+            [
+                'key' => 'notas-fiscais-emitidas',
+                'label' => 'Notas Fiscais Emitidas',
+                'description' => 'Notas fiscais por loja, situacao e periodo.',
+                'icon' => 'bi-receipt-cutoff',
+                'route' => 'reports.notas-fiscais-emitidas',
             ],
             [
                 'key' => 'adiantamentos',
@@ -1005,6 +1029,124 @@ class SalesReportController extends Controller
             'unit' => $selectedUnit,
             'filterUnits' => $filterUnits,
             'selectedUnitId' => $filterUnitId,
+        ]);
+    }
+
+    public function notasFiscaisEmitidas(Request $request): Response
+    {
+        $this->ensureManager($request);
+        [$filterUnitId, $filterUnits, $selectedUnit] = $this->resolveReportUnit($request);
+        $allowedUnitIds = $this->reportUnitIds($filterUnits);
+        [$start, $end, $startDate, $endDate] = $this->resolveDateRange($request);
+        $selectedStatus = $this->resolveFiscalInvoiceStatusFilter($request->query('status'));
+
+        $rows = NotaFiscal::query()
+            ->with([
+                'unidade:tb2_id,tb2_nome',
+                'pagamento' => function ($query) {
+                    $query->select([
+                        'tb4_id',
+                        'valor_total',
+                        'tipo_pagamento',
+                        'valor_pago',
+                        'troco',
+                        'dois_pgto',
+                        'created_at',
+                    ]);
+                },
+                'pagamento.vendas' => function ($query) {
+                    $query
+                        ->with(['caixa:id,name'])
+                        ->orderBy('tb3_id')
+                        ->select([
+                            'tb3_id',
+                            'tb4_id',
+                            'id_comanda',
+                            'id_user_caixa',
+                            'produto_nome',
+                            'quantidade',
+                        ]);
+                },
+            ])
+            ->when($filterUnitId, function ($query) use ($filterUnitId) {
+                $query->where('tb2_id', $filterUnitId);
+            }, function ($query) use ($allowedUnitIds) {
+                if ($allowedUnitIds->isNotEmpty()) {
+                    $query->whereIn('tb2_id', $allowedUnitIds);
+                } else {
+                    $query->whereRaw('1 = 0');
+                }
+            })
+            ->when($selectedStatus !== 'all', function ($query) use ($selectedStatus) {
+                $query->whereIn('tb27_status', self::FISCAL_INVOICE_STATUS_FILTERS[$selectedStatus]);
+            })
+            ->whereBetween('created_at', [$start, $end])
+            ->orderByDesc('created_at')
+            ->get([
+                'tb27_id',
+                'tb4_id',
+                'tb2_id',
+                'tb27_modelo',
+                'tb27_ambiente',
+                'tb27_serie',
+                'tb27_numero',
+                'tb27_status',
+                'tb27_chave_acesso',
+                'tb27_protocolo',
+                'tb27_mensagem',
+                'tb27_emitida_em',
+                'tb27_ultima_tentativa_em',
+                'created_at',
+            ])
+            ->map(function (NotaFiscal $invoice) {
+                $sales = $invoice->pagamento?->vendas?->values() ?? collect();
+                $firstSale = $sales->first();
+
+                return [
+                    'id' => (int) $invoice->tb27_id,
+                    'payment_id' => (int) $invoice->tb4_id,
+                    'unit_name' => $invoice->unidade?->tb2_nome ?? '---',
+                    'status' => $invoice->tb27_status,
+                    'status_label' => self::FISCAL_INVOICE_STATUS_LABELS[$invoice->tb27_status] ?? $invoice->tb27_status,
+                    'modelo' => $invoice->tb27_modelo,
+                    'ambiente' => $invoice->tb27_ambiente,
+                    'serie' => $invoice->tb27_serie,
+                    'numero' => $invoice->tb27_numero,
+                    'access_key' => $invoice->tb27_chave_acesso,
+                    'protocol' => $invoice->tb27_protocolo,
+                    'message' => $invoice->tb27_mensagem,
+                    'created_at' => $invoice->created_at?->toIso8601String(),
+                    'issued_at' => $invoice->tb27_emitida_em?->toIso8601String(),
+                    'last_attempt_at' => $invoice->tb27_ultima_tentativa_em?->toIso8601String(),
+                    'total' => round((float) ($invoice->pagamento?->valor_total ?? 0), 2),
+                    'payment_type' => $this->normalizePaymentTypeForDisplay($invoice->pagamento?->tipo_pagamento),
+                    'comanda' => $this->resolveReceiptComanda($sales),
+                    'cashier' => $firstSale?->caixa?->name ?? null,
+                    'items_count' => (int) $sales->sum('quantidade'),
+                    'items_label' => $sales
+                        ->map(function (Venda $sale) {
+                            return trim(sprintf('%sx %s', (int) $sale->quantidade, $sale->produto_nome));
+                        })
+                        ->filter()
+                        ->implode(', '),
+                ];
+            })
+            ->values();
+
+        return Inertia::render('Reports/FiscalInvoices', [
+            'rows' => $rows,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'unit' => $selectedUnit,
+            'filterUnits' => $filterUnits,
+            'selectedUnitId' => $filterUnitId,
+            'selectedStatus' => $selectedStatus,
+            'statusOptions' => [
+                ['value' => 'all', 'label' => 'Todas'],
+                ['value' => 'assinada', 'label' => 'Assinada'],
+                ['value' => 'erro', 'label' => 'Erro'],
+                ['value' => 'emitida', 'label' => 'Emitida'],
+            ],
         ]);
     }
 
@@ -3260,6 +3402,15 @@ class SalesReportController extends Controller
         $userId = (int) $requestedUserId;
 
         return $userId > 0 ? $userId : null;
+    }
+
+    private function resolveFiscalInvoiceStatusFilter(mixed $status): string
+    {
+        $status = (string) ($status ?? 'all');
+
+        return $status === 'all' || array_key_exists($status, self::FISCAL_INVOICE_STATUS_FILTERS)
+            ? $status
+            : 'all';
     }
 
     private function reportUnitIds(iterable $units): Collection
