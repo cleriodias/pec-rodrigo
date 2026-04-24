@@ -4592,3 +4592,137 @@ MODIFY tipo_pagamento VARCHAR(40) NOT NULL;
   - replicar os mesmos arquivos, exceto se houver divergencias locais nos arquivos de login/pagina inicial que nao se aplicam aqui;
   - nao executar migration nova, pois o relatorio usa a tabela existente `tb27_notas_fiscais`;
   - apos sincronizar, executar `php artisan route:clear` se a rota nao aparecer e `cmd /c npm run build` para regenerar os assets.
+
+## 23/04/26 - Performance da tela de venda
+
+- Arquivos criados/alterados em `C:\xampp\htdocs\pec-rodrigo`:
+  - `database/migrations/2026_04_23_090000_add_dashboard_sale_performance_indexes.php`
+  - `app/Http/Controllers/ProductController.php`
+  - `app/Http/Controllers/SaleController.php`
+  - `SYNC.md`
+
+- Causa identificada:
+  - a busca de produtos na tela de venda usava `LIKE '%termo%'` em `tb1_produto.tb1_nome`, mas a tabela so tinha indice na chave primaria e no codigo de barras;
+  - a busca por codigo de barras numerico longo tambem usava `LIKE`, mesmo existindo indice unico em `tb1_codbar`;
+  - a insercao de vendas sem comanda carregava produtos item a item, gerando uma consulta por produto agrupado;
+  - as consultas de comandas abertas, restricao de caixa e limites de vale/refeicao usavam filtros combinados em `tb3_vendas`, mas o banco tinha apenas indices simples separados.
+
+- O que foi feito:
+  - criada migration de indices de performance:
+    - `tb1_produto_nome_fulltext` em `tb1_produto(tb1_nome)`;
+    - `tb1_produto_fav_status_nome_idx` em `tb1_produto(tb1_favorito, tb1_status, tb1_nome)`;
+    - `tb1_produto_status_nome_idx` em `tb1_produto(tb1_status, tb1_nome)`;
+    - `tb3_vendas_unit_status_comanda_idx` em `tb3_vendas(id_unidade, status, id_comanda)`;
+    - `tb3_vendas_unit_status_data_idx` em `tb3_vendas(id_unidade, status, data_hora)`;
+    - `tb3_vendas_caixa_unit_status_data_idx` em `tb3_vendas(id_user_caixa, id_unidade, status, data_hora)`;
+    - `tb3_vendas_tipo_vale_data_idx` em `tb3_vendas(tipo_pago, id_user_vale, data_hora)`;
+    - `tb4_vendas_pg_created_idx` em `tb4_vendas_pg(created_at)`;
+  - `ProductController::search` passou a buscar codigo de barras por igualdade em vez de `LIKE`;
+  - `ProductController::search` passou a usar `FULLTEXT ... IN BOOLEAN MODE` para busca por nome com prefixo;
+  - `SaleController::store` passou a carregar todos os produtos da venda sem comanda em uma consulta unica.
+
+- Observacoes para sincronizar em `C:\xampp\htdocs\pec1`:
+  - replicar os arquivos acima;
+  - executar `php artisan migrate --force` para criar os indices no banco do outro sistema;
+  - se a busca por nome nao retornar termos muito curtos, lembrar que o front ja evita busca automatica com menos de 3 caracteres e o FULLTEXT segue as regras do MySQL para tokens.
+
+## 23/04/26 - Total diario de notas fiscais em Unidades
+
+- Arquivos criados/alterados em `C:\xampp\htdocs\pec-rodrigo`:
+  - `app/Http/Controllers/UnitController.php`
+  - `SYNC.md`
+
+- Causa identificada:
+  - na tela `units`, o campo `tb2_nf_total` somava todas as notas fiscais com status `emitida`, sem filtro de data;
+  - com isso, o valor exibido era acumulado historico da loja, e nao o total do dia corrente.
+
+- O que foi feito:
+  - o `selectSub` de `UnitController@index` agora filtra `tb27_notas_fiscais.tb27_emitida_em` entre o inicio e o fim do dia atual;
+  - a soma continua usando `tb4_vendas_pg.valor_total`, mas somente para notas com `tb27_status = emitida` emitidas hoje.
+
+- Observacoes para sincronizar em `C:\xampp\htdocs\pec1`:
+  - replicar `app/Http/Controllers/UnitController.php`;
+  - nao ha migration nova nesta alteracao.
+
+## 23/04/26 - Calendario no Controle Financeiro
+
+- Arquivos criados/alterados em `C:\xampp\htdocs\pec-rodrigo`:
+  - `resources/js/Pages/Reports/ControlPanel.jsx`
+  - `SYNC.md`
+
+- Causa identificada:
+  - em `reports/control`, os campos `Inicio` e `Fim` estavam como `type="text"` com mascara manual `DD/MM/AA`;
+  - por serem campos de texto, o navegador nao abria o seletor/calendario nativo.
+
+- O que foi feito:
+  - os inputs de `start_date` e `end_date` foram alterados para `type="date"`;
+  - a mascara manual local `normalizeDateInput` foi removida desta tela;
+  - o backend ja aceita datas no formato `Y-m-d`, que e o formato enviado por inputs `date`.
+
+- Observacoes para sincronizar em `C:\xampp\htdocs\pec1`:
+  - replicar `resources/js/Pages/Reports/ControlPanel.jsx`;
+  - executar `cmd /c npm run build` apos sincronizar os assets.
+
+## 23/04/26 - Ajuste visual do relatorio Notas Fiscais Emitidas
+
+- Arquivos criados/alterados em `C:\xampp\htdocs\pec-rodrigo`:
+  - `resources/js/Pages/Reports/FiscalInvoices.jsx`
+  - `SYNC.md`
+
+- Causa identificada:
+  - o relatorio `reports/notas-fiscais-emitidas` exibia muitos dados fiscais em colunas separadas, deixando a tabela larga;
+  - as datas exibiam o ano, mas foi solicitado remover o ano da visualizacao;
+  - a coluna Pagamento exibia texto e foi solicitado usar icones.
+
+- O que foi feito:
+  - as colunas `Chave`, `Protocolo` e `Mensagem` foram consolidadas em uma unica coluna `SEFAZ`;
+  - as colunas `Modelo` e `Serie/Numero` foram consolidadas em uma unica coluna `M.S.N`;
+  - as colunas `Venda` e `Loja` foram consolidadas em uma unica coluna `I.D`;
+  - os filtros de data `Inicio` e `Fim` foram alterados para `type="date"` para abrir calendario nativo;
+  - as datas de `Criada em` e `Emitida em` passaram a exibir `DD/MM HH:mm`, sem ano;
+  - a coluna `Pagamento` passou a exibir icone com `title` e `aria-label` contendo o texto do pagamento.
+
+- Observacoes para sincronizar em `C:\xampp\htdocs\pec1`:
+  - replicar `resources/js/Pages/Reports/FiscalInvoices.jsx`;
+  - executar `cmd /c npm run build` apos sincronizar os assets.
+
+## 23/04/26 - Botao de impressao no valor do relatorio Notas Fiscais Emitidas
+
+- Arquivos criados/alterados em `C:\xampp\htdocs\pec-rodrigo`:
+  - `app/Http/Controllers/SalesReportController.php`
+  - `resources/js/Pages/Reports/FiscalInvoices.jsx`
+  - `SYNC.md`
+
+- Causa identificada:
+  - o campo `Valor` no relatorio `reports/notas-fiscais-emitidas` era apenas texto;
+  - para imprimir o cupom fiscal era necessario abrir outro fluxo, mesmo a linha ja representando uma nota fiscal.
+
+- O que foi feito:
+  - `SalesReportController@notasFiscaisEmitidas` passou a enviar `fiscal_receipt` em cada linha, com dados da nota, venda, loja, pagamento, consumidor, itens fiscais, QR Code e URL de consulta quando houver XML fiscal;
+  - a tela `FiscalInvoices.jsx` passou a importar `buildFiscalReceiptHtml`;
+  - o valor da linha foi transformado em botao com icone de impressora;
+  - ao clicar no valor, o sistema abre uma janela de impressao do cupom fiscal daquela nota;
+  - se o navegador bloquear pop-up ou faltar payload fiscal, a tela mostra uma mensagem de erro controlada.
+
+- Observacoes para sincronizar em `C:\xampp\htdocs\pec1`:
+  - replicar `app/Http/Controllers/SalesReportController.php`;
+  - replicar `resources/js/Pages/Reports/FiscalInvoices.jsx`;
+  - executar `cmd /c npm run build` apos sincronizar os assets.
+
+## 23/04/26 - Correcao do banco local do projeto `pec-rodrigo`
+
+- Arquivos criados/alterados em `C:\xampp\htdocs\pec-rodrigo`:
+  - `.env`
+  - `SYNC.md`
+
+- Causa identificada:
+  - o servidor local iniciado por `php artisan serve` estava rodando a partir de `C:\xampp\htdocs\pec-rodrigo`, mas o `.env` apontava `DB_DATABASE=paoecafe8302`;
+  - o banco correto para este projeto local e `paoecafe83`.
+
+- O que foi feito:
+  - alterado `DB_DATABASE` de `paoecafe8302` para `paoecafe83` no `.env`;
+  - nao houve criacao de tabela, migration, update ou delete em dados do banco.
+
+- Observacoes para sincronizar em `C:\xampp\htdocs\pec1`:
+  - nao copiar automaticamente esta alteracao de `.env`, pois `pec1` possui conexao de banco propria;
+  - se for necessario validar o ambiente apos sincronizar, conferir com `php artisan config:show database.connections.mysql.database`.

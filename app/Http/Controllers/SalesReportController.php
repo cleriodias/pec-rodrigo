@@ -1042,7 +1042,7 @@ class SalesReportController extends Controller
 
         $rows = NotaFiscal::query()
             ->with([
-                'unidade:tb2_id,tb2_nome',
+                'unidade:tb2_id,tb2_nome,tb2_endereco,tb2_cnpj',
                 'pagamento' => function ($query) {
                     $query->select([
                         'tb4_id',
@@ -1056,15 +1056,21 @@ class SalesReportController extends Controller
                 },
                 'pagamento.vendas' => function ($query) {
                     $query
-                        ->with(['caixa:id,name'])
+                        ->with(['caixa:id,name', 'unidade:tb2_id,tb2_nome,tb2_endereco,tb2_cnpj', 'valeUser:id,name'])
                         ->orderBy('tb3_id')
                         ->select([
                             'tb3_id',
                             'tb4_id',
+                            'tb1_id',
                             'id_comanda',
                             'id_user_caixa',
+                            'id_user_vale',
+                            'id_unidade',
                             'produto_nome',
+                            'valor_unitario',
                             'quantidade',
+                            'valor_total',
+                            'data_hora',
                         ]);
                 },
             ])
@@ -1091,8 +1097,11 @@ class SalesReportController extends Controller
                 'tb27_serie',
                 'tb27_numero',
                 'tb27_status',
+                'tb27_payload',
                 'tb27_chave_acesso',
                 'tb27_protocolo',
+                'tb27_recibo',
+                'tb27_xml_envio',
                 'tb27_mensagem',
                 'tb27_emitida_em',
                 'tb27_ultima_tentativa_em',
@@ -1129,6 +1138,7 @@ class SalesReportController extends Controller
                         })
                         ->filter()
                         ->implode(', '),
+                    'fiscal_receipt' => $this->buildReportFiscalReceiptPayload($invoice),
                 ];
             })
             ->values();
@@ -1148,6 +1158,159 @@ class SalesReportController extends Controller
                 ['value' => 'emitida', 'label' => 'Emitida'],
             ],
         ]);
+    }
+
+    private function buildReportFiscalReceiptPayload(NotaFiscal $invoice): ?array
+    {
+        $payment = $invoice->pagamento;
+
+        if (! $payment) {
+            return null;
+        }
+
+        $payload = is_array($invoice->tb27_payload) ? $invoice->tb27_payload : [];
+        $sales = $payment->vendas?->values() ?? collect();
+        $firstSale = $sales->first();
+        $consumer = is_array($payload['consumer'] ?? null) ? $payload['consumer'] : [];
+        $consumerType = trim((string) ($consumer['type'] ?? ''));
+        $consumerName = trim((string) ($consumer['name'] ?? ''));
+        $consumerDocument = trim((string) ($consumer['document'] ?? ''));
+        $fiscalItems = collect($payload['itens'] ?? []);
+        $unit = $invoice->unidade ?? $firstSale?->unidade;
+        $xmlData = $this->extractReportFiscalReceiptXmlData($invoice->tb27_xml_envio);
+
+        if ($consumerType === '') {
+            $consumerType = $consumerDocument !== ''
+                ? ($consumerName === '' ? 'cupom_fiscal' : 'consumidor')
+                : 'balcao';
+        }
+
+        return [
+            'title' => strtolower((string) $invoice->tb27_modelo) === 'nfce' ? 'DANFE NFC-e' : 'Documento fiscal',
+            'subtitle' => 'Documento auxiliar da nota fiscal eletronica para impressao em 80mm',
+            'payment_id' => (int) $invoice->tb4_id,
+            'invoice_id' => (int) $invoice->tb27_id,
+            'model_label' => strtoupper((string) $invoice->tb27_modelo) === 'NFCE' ? 'NFC-e' : strtoupper((string) $invoice->tb27_modelo),
+            'environment' => $invoice->tb27_ambiente === 'producao' ? 'Producao' : 'Homologacao',
+            'serie' => $invoice->tb27_serie,
+            'number' => $invoice->tb27_numero,
+            'status' => $invoice->tb27_status,
+            'status_message' => $invoice->tb27_mensagem,
+            'issued_at' => ($invoice->tb27_emitida_em ?? $firstSale?->data_hora ?? $invoice->created_at)?->toIso8601String(),
+            'emitter_name' => $unit?->tb2_nome ?? 'EMITENTE NAO INFORMADO',
+            'emitter_document' => $unit?->tb2_cnpj,
+            'emitter_address' => $unit?->tb2_endereco,
+            'consumer_type' => $consumerType,
+            'consumer_name' => $consumerType === 'cupom_fiscal'
+                ? 'CONSUMIDOR IDENTIFICADO POR CPF'
+                : ($consumerName !== '' ? $consumerName : 'CONSUMIDOR NAO IDENTIFICADO'),
+            'consumer_document' => $consumerDocument !== '' ? $consumerDocument : null,
+            'consumer_address' => $this->buildReportFiscalConsumerAddress($consumerType, $consumer),
+            'payment_label' => $this->resolveReportPaymentLabel($payment->tipo_pagamento),
+            'total' => round((float) ($payload['valor_total_documento'] ?? $payment->valor_total), 2),
+            'amount_paid' => $payment->valor_pago !== null ? round((float) $payment->valor_pago, 2) : null,
+            'change' => $payment->troco !== null ? round((float) $payment->troco, 2) : null,
+            'additional_payment' => $payment->dois_pgto !== null ? round((float) $payment->dois_pgto, 2) : null,
+            'access_key' => $invoice->tb27_chave_acesso ?: ($xmlData['access_key'] ?? null),
+            'protocol' => $invoice->tb27_protocolo,
+            'receipt' => $invoice->tb27_recibo,
+            'consulta_url' => $xmlData['consulta_url'] ?? null,
+            'qr_code_data' => $xmlData['qr_code_data'] ?? null,
+            'is_preview' => $invoice->tb27_status !== 'emitida',
+            'items' => $fiscalItems->isNotEmpty()
+                ? $fiscalItems
+                    ->map(fn (array $item) => [
+                        'id' => $item['produto_id'] ?? null,
+                        'product_name' => $item['descricao'] ?? 'ITEM FISCAL',
+                        'quantity' => (float) ($item['quantidade'] ?? 0),
+                        'unit_price' => round((float) ($item['valor_unitario'] ?? 0), 2),
+                        'subtotal' => round((float) ($item['valor_total'] ?? 0), 2),
+                    ])
+                    ->values()
+                    ->all()
+                : $sales
+                    ->map(fn (Venda $sale) => [
+                        'id' => $sale->tb1_id,
+                        'product_name' => $sale->produto_nome,
+                        'quantity' => (float) $sale->quantidade,
+                        'unit_price' => round((float) $sale->valor_unitario, 2),
+                        'subtotal' => round((float) $sale->valor_total, 2),
+                    ])
+                    ->values()
+                    ->all(),
+        ];
+    }
+
+    private function buildReportFiscalConsumerAddress(string $consumerType, array $consumer): ?string
+    {
+        if ($consumerType !== 'consumidor') {
+            return null;
+        }
+
+        $lineOne = trim(implode(', ', array_filter([
+            trim((string) ($consumer['street'] ?? '')),
+            trim((string) ($consumer['number'] ?? '')),
+            trim((string) ($consumer['complement'] ?? '')),
+        ])));
+        $lineTwo = trim(implode(' - ', array_filter([
+            trim((string) ($consumer['neighborhood'] ?? '')),
+            trim((string) ($consumer['city'] ?? '')),
+            trim((string) ($consumer['state'] ?? '')),
+        ])));
+        $cep = trim((string) ($consumer['cep'] ?? ''));
+
+        return trim(implode(' | ', array_filter([
+            $lineOne,
+            $lineTwo,
+            $cep !== '' ? 'CEP ' . $cep : null,
+        ]))) ?: null;
+    }
+
+    private function resolveReportPaymentLabel(?string $paymentType): string
+    {
+        return match ((string) $paymentType) {
+            'dinheiro' => 'Dinheiro',
+            'cartao_credito' => 'Cartao credito',
+            'cartao_debito' => 'Cartao debito',
+            'dinheiro_cartao_credito' => 'Dinheiro + Cartao credito',
+            'dinheiro_cartao_debito' => 'Dinheiro + Cartao debito',
+            'maquina' => 'Cartao',
+            'vale' => 'Vale',
+            'refeicao' => 'Refeicao',
+            'faturar' => 'Faturar',
+            default => strtoupper(str_replace('_', ' ', trim((string) $paymentType))) ?: 'Nao informado',
+        };
+    }
+
+    private function extractReportFiscalReceiptXmlData(?string $xml): array
+    {
+        if (! $xml || ! class_exists(\DOMDocument::class) || ! class_exists(\DOMXPath::class)) {
+            return [];
+        }
+
+        $document = new \DOMDocument();
+
+        if (! @$document->loadXML($xml)) {
+            return [];
+        }
+
+        $xpath = new \DOMXPath($document);
+        $xpath->registerNamespace('nfe', 'http://www.portalfiscal.inf.br/nfe');
+
+        $accessKey = trim((string) $xpath->evaluate('string(//nfe:infNFe/@Id)'));
+
+        return [
+            'access_key' => $accessKey !== '' ? preg_replace('/^NFe/', '', $accessKey) : null,
+            'qr_code_data' => $this->reportStringOrNull($xpath->evaluate('string(//nfe:infNFeSupl/nfe:qrCode)')),
+            'consulta_url' => $this->reportStringOrNull($xpath->evaluate('string(//nfe:infNFeSupl/nfe:urlChave)')),
+        ];
+    }
+
+    private function reportStringOrNull(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value !== '' ? $value : null;
     }
 
     public function descarte(Request $request): Response

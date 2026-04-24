@@ -1,12 +1,10 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import {
-    formatBrazilShortDate,
     formatBrazilTime,
-    isoToBrazilShortDateInput,
-    normalizeBrazilShortDateInput,
-    shortBrazilDateInputToIso,
 } from '@/Utils/date';
+import { buildFiscalReceiptHtml } from '@/Utils/receipt';
 import { Head, useForm } from '@inertiajs/react';
+import { useState } from 'react';
 
 const STATUS_CLASS = {
     Assinada: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200',
@@ -20,12 +18,59 @@ const formatCurrency = (value) =>
         currency: 'BRL',
     });
 
-const formatDateTime = (value) => (value ? `${formatBrazilShortDate(value)} ${formatBrazilTime(value)}` : '--');
+const parseDateParts = (value) => {
+    if (!value) {
+        return null;
+    }
+
+    const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+    if (!match) {
+        return null;
+    }
+
+    return {
+        day: match[3],
+        month: match[2],
+    };
+};
+
+const formatDateTime = (value) => {
+    const parts = parseDateParts(value);
+
+    return parts ? `${parts.day}/${parts.month} ${formatBrazilTime(value)}` : '--';
+};
 
 const statusClassName = (label) =>
     `inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
         STATUS_CLASS[label] ?? 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100'
     }`;
+
+const PAYMENT_META = {
+    dinheiro: { label: 'Dinheiro', icon: 'bi-cash-coin', className: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200' },
+    dinheiro_cartao_credito: { label: 'Dinheiro + Cartao credito', icon: 'bi-cash-stack', className: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200' },
+    dinheiro_cartao_debito: { label: 'Dinheiro + Cartao debito', icon: 'bi-cash-stack', className: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200' },
+    maquina: { label: 'Cartao', icon: 'bi-credit-card', className: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200' },
+    cartao_credito: { label: 'Cartao credito', icon: 'bi-credit-card', className: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200' },
+    cartao_debito: { label: 'Cartao debito', icon: 'bi-credit-card-2-front', className: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200' },
+    vale: { label: 'Vale', icon: 'bi-ticket-perforated', className: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200' },
+    refeicao: { label: 'Refeicao', icon: 'bi-cup-straw', className: 'border-yellow-200 bg-yellow-50 text-yellow-800 dark:border-yellow-500/30 dark:bg-yellow-500/10 dark:text-yellow-100' },
+    faturar: { label: 'Faturar', icon: 'bi-journal-text', className: 'border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100' },
+};
+
+const PaymentIcon = ({ type }) => {
+    const meta = PAYMENT_META[type] ?? { label: type || 'Pagamento nao informado', icon: 'bi-question-circle', className: 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100' };
+
+    return (
+        <span
+            className={`inline-flex h-9 w-9 items-center justify-center rounded-full border text-base ${meta.className}`}
+            title={meta.label}
+            aria-label={meta.label}
+        >
+            <i className={`bi ${meta.icon}`} aria-hidden="true"></i>
+        </span>
+    );
+};
 
 export default function FiscalInvoicesReport({
     rows = [],
@@ -37,9 +82,10 @@ export default function FiscalInvoicesReport({
     selectedStatus = 'all',
     statusOptions = [],
 }) {
+    const [printError, setPrintError] = useState('');
     const { data, setData, get, processing } = useForm({
-        start_date: isoToBrazilShortDateInput(startDate ?? ''),
-        end_date: isoToBrazilShortDateInput(endDate ?? ''),
+        start_date: startDate ?? '',
+        end_date: endDate ?? '',
         unit_id:
             selectedUnitId !== null && selectedUnitId !== undefined
                 ? String(selectedUnitId)
@@ -57,12 +103,31 @@ export default function FiscalInvoicesReport({
             preserveScroll: true,
             replace: true,
             data: {
-                start_date: shortBrazilDateInputToIso(data.start_date) || undefined,
-                end_date: shortBrazilDateInputToIso(data.end_date) || undefined,
+                start_date: data.start_date || undefined,
+                end_date: data.end_date || undefined,
                 unit_id: data.unit_id,
                 status: data.status,
             },
         });
+    };
+
+    const handlePrintFiscalReceipt = (row) => {
+        setPrintError('');
+
+        if (!row?.fiscal_receipt) {
+            setPrintError('Nao foi possivel montar os dados do cupom fiscal desta nota.');
+            return;
+        }
+
+        const printWindow = window.open('', '_blank', 'width=400,height=600');
+
+        if (!printWindow) {
+            setPrintError('Permita pop-ups para imprimir o cupom fiscal.');
+            return;
+        }
+
+        printWindow.document.write(buildFiscalReceiptHtml(row.fiscal_receipt));
+        printWindow.document.close();
     };
 
     return (
@@ -92,11 +157,9 @@ export default function FiscalInvoicesReport({
                                     Inicio
                                 </label>
                                 <input
-                                    type="text"
-                                    inputMode="numeric"
+                                    type="date"
                                     value={data.start_date}
-                                    onChange={(event) => setData('start_date', normalizeBrazilShortDateInput(event.target.value))}
-                                    placeholder="DD/MM/AA"
+                                    onChange={(event) => setData('start_date', event.target.value)}
                                     className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
                                 />
                             </div>
@@ -105,11 +168,9 @@ export default function FiscalInvoicesReport({
                                     Fim
                                 </label>
                                 <input
-                                    type="text"
-                                    inputMode="numeric"
+                                    type="date"
                                     value={data.end_date}
-                                    onChange={(event) => setData('end_date', normalizeBrazilShortDateInput(event.target.value))}
-                                    placeholder="DD/MM/AA"
+                                    onChange={(event) => setData('end_date', event.target.value)}
                                     className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
                                 />
                             </div>
@@ -181,6 +242,12 @@ export default function FiscalInvoicesReport({
                             </div>
                         </div>
 
+                        {printError && (
+                            <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
+                                {printError}
+                            </p>
+                        )}
+
                         {rows.length === 0 ? (
                             <p className="mt-4 rounded-xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-300">
                                 Nenhuma nota fiscal para os filtros selecionados.
@@ -190,29 +257,29 @@ export default function FiscalInvoicesReport({
                                 <table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-700">
                                     <thead className="bg-gray-100 dark:bg-gray-900/60">
                                         <tr>
-                                            <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Venda</th>
-                                            <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Loja</th>
+                                            <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">I.D</th>
                                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Situacao</th>
-                                            <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Modelo</th>
-                                            <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Serie/Numero</th>
+                                            <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">M.S.N</th>
                                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Criada em</th>
                                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Emitida em</th>
                                             <th className="px-3 py-2 text-right font-medium text-gray-600 dark:text-gray-300">Valor</th>
                                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Pagamento</th>
                                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Caixa</th>
-                                            <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Chave</th>
-                                            <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Protocolo</th>
-                                            <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Mensagem</th>
+                                            <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">SEFAZ</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                                         {rows.map((row) => (
                                             <tr key={row.id}>
-                                                <td className="px-3 py-3 font-semibold text-gray-900 dark:text-gray-100">
-                                                    #{row.payment_id}
-                                                </td>
                                                 <td className="px-3 py-3 text-gray-700 dark:text-gray-200">
-                                                    {row.unit_name ?? '--'}
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <span className="font-semibold text-gray-900 dark:text-gray-100">
+                                                            #{row.payment_id}
+                                                        </span>
+                                                        <span className="text-xs text-gray-500 dark:text-gray-300">
+                                                            {row.unit_name ?? '--'}
+                                                        </span>
+                                                    </div>
                                                 </td>
                                                 <td className="px-3 py-3">
                                                     <span className={statusClassName(row.status_label)}>
@@ -220,10 +287,14 @@ export default function FiscalInvoicesReport({
                                                     </span>
                                                 </td>
                                                 <td className="px-3 py-3 text-gray-700 dark:text-gray-200">
-                                                    {String(row.modelo ?? '').toUpperCase() || '--'}
-                                                </td>
-                                                <td className="px-3 py-3 text-gray-700 dark:text-gray-200">
-                                                    {row.serie || row.numero ? `${row.serie ?? '--'}/${row.numero ?? '--'}` : '--'}
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <span className="font-semibold uppercase text-gray-900 dark:text-gray-100">
+                                                            {String(row.modelo ?? '').toUpperCase() || '--'}
+                                                        </span>
+                                                        <span className="text-xs text-gray-500 dark:text-gray-300">
+                                                            {row.serie || row.numero ? `${row.serie ?? '--'}/${row.numero ?? '--'}` : '--'}
+                                                        </span>
+                                                    </div>
                                                 </td>
                                                 <td className="px-3 py-3 text-gray-700 dark:text-gray-200">
                                                     {formatDateTime(row.created_at)}
@@ -231,23 +302,38 @@ export default function FiscalInvoicesReport({
                                                 <td className="px-3 py-3 text-gray-700 dark:text-gray-200">
                                                     {formatDateTime(row.issued_at)}
                                                 </td>
-                                                <td className="px-3 py-3 text-right font-semibold text-gray-900 dark:text-gray-100">
-                                                    {formatCurrency(row.total)}
+                                                <td className="px-3 py-3 text-right">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handlePrintFiscalReceipt(row)}
+                                                        className="inline-flex items-center justify-end gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 shadow-sm transition hover:border-indigo-300 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200 dark:hover:bg-indigo-500/20"
+                                                        title="Imprimir cupom fiscal"
+                                                    >
+                                                        <i className="bi bi-printer" aria-hidden="true"></i>
+                                                        {formatCurrency(row.total)}
+                                                    </button>
                                                 </td>
                                                 <td className="px-3 py-3 text-gray-700 dark:text-gray-200">
-                                                    {row.payment_type ?? '--'}
+                                                    <PaymentIcon type={row.payment_type} />
                                                 </td>
                                                 <td className="px-3 py-3 text-gray-700 dark:text-gray-200">
                                                     {row.cashier ?? '--'}
                                                 </td>
-                                                <td className="max-w-[18rem] break-all px-3 py-3 font-mono text-xs text-gray-700 dark:text-gray-200">
-                                                    {row.access_key ?? '--'}
-                                                </td>
-                                                <td className="px-3 py-3 text-gray-700 dark:text-gray-200">
-                                                    {row.protocol ?? '--'}
-                                                </td>
-                                                <td className="min-w-[18rem] px-3 py-3 text-gray-700 dark:text-gray-200">
-                                                    {row.message ?? row.items_label ?? '--'}
+                                                <td className="min-w-[22rem] px-3 py-3 text-gray-700 dark:text-gray-200">
+                                                    <div className="space-y-1">
+                                                        <p className="break-all font-mono text-[11px]">
+                                                            <span className="font-semibold text-gray-500 dark:text-gray-400">Chave: </span>
+                                                            {row.access_key ?? '--'}
+                                                        </p>
+                                                        <p className="text-xs">
+                                                            <span className="font-semibold text-gray-500 dark:text-gray-400">Protocolo: </span>
+                                                            {row.protocol ?? '--'}
+                                                        </p>
+                                                        <p className="text-xs">
+                                                            <span className="font-semibold text-gray-500 dark:text-gray-400">Mensagem: </span>
+                                                            {row.message ?? row.items_label ?? '--'}
+                                                        </p>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
