@@ -1,3 +1,22 @@
+## 24/04/26 - Logs do Laravel ignorados pelo Git
+
+Causa:
+- o arquivo `storage/logs/laravel.log` estava sem uma regra especifica no `.gitignore`;
+- logs do Laravel podem crescer bastante e nao devem ser versionados junto com o codigo da aplicacao.
+
+O que foi alterado:
+- adicionada a regra `/storage/logs/*.log` no `.gitignore`;
+- a pasta `storage/logs` continua existindo, mas arquivos `.log` dentro dela passam a ser ignorados pelo Git.
+
+Como sincronizar no projeto espelho:
+- adicionar a mesma regra `/storage/logs/*.log` no `.gitignore` do projeto `C:\xampp\htdocs\pec1`;
+- nao e necessario alterar banco de dados, migrations ou codigo da aplicacao;
+- nao apagar a pasta `storage/logs`, apenas ignorar os arquivos `.log`.
+
+Arquivos alterados:
+- `.gitignore`
+- `SYNC.md`
+
 ## 22/04/26 - Cadastro de boletos volta a usar a unidade ativa para perfis sem select
 
 Causa:
