@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Produto;
 use App\Models\User;
+use App\Support\ProductQuickLookupCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redirect;
@@ -353,6 +354,52 @@ class ProductController extends Controller
         return response()->json($products);
     }
 
+    public function quickLookup(Request $request, ProductQuickLookupCache $quickLookupCache): JsonResponse
+    {
+        $term = trim((string) $request->input('q', ''));
+
+        if ($term === '' || ! ctype_digit($term)) {
+            return response()->json([
+                'message' => 'Informe um codigo de barras ou ID numerico.',
+            ], 422);
+        }
+
+        $weightedBarcode = $this->parseWeightedBarcode($term);
+        $isLongNumeric = mb_strlen($term) > 4;
+
+        $product = Produto::query()
+            ->when($weightedBarcode !== null, function ($query) use ($weightedBarcode) {
+                $query->where('tb1_id', $weightedBarcode['product_id']);
+            })
+            ->when($weightedBarcode === null && $isLongNumeric, function ($query) use ($term) {
+                $query->where('tb1_codbar', $term);
+            })
+            ->when($weightedBarcode === null && ! $isLongNumeric, function ($query) use ($term) {
+                $query->where('tb1_id', (int) $term);
+            })
+            ->first([
+                'tb1_id',
+                'tb1_nome',
+                'tb1_codbar',
+                'tb1_vlr_custo',
+                'tb1_vlr_venda',
+                'tb1_tipo',
+                'tb1_qtd',
+                'tb1_status',
+                'tb1_vr_credit',
+            ]);
+
+        if (! $product) {
+            return response()->json([
+                'message' => 'Produto nao encontrado.',
+            ], 404);
+        }
+
+        $quickLookupCache->rememberProductForRequest($product, $request);
+
+        return response()->json($quickLookupCache->productPayload($product));
+    }
+
     private function buildBooleanFullTextSearchTerm(string $term): string
     {
         $words = preg_split('/\s+/', trim($term)) ?: [];
@@ -367,6 +414,30 @@ class ProductController extends Controller
         }, $words)));
 
         return $words !== [] ? implode(' ', $words) : trim($term);
+    }
+
+    private function parseWeightedBarcode(?string $barcode): ?array
+    {
+        $barcode = trim((string) $barcode);
+
+        if (
+            $barcode === '' ||
+            ! preg_match('/^\d{13}$/', $barcode) ||
+            substr($barcode, 0, 1) !== '2'
+        ) {
+            return null;
+        }
+
+        $productId = (int) substr($barcode, 1, 4);
+
+        if ($productId <= 0) {
+            return null;
+        }
+
+        return [
+            'barcode' => $barcode,
+            'product_id' => $productId,
+        ];
     }
 
     private function validateProduct(Request $request, ?Produto $product = null): array

@@ -1,3 +1,76 @@
+## 24/04/26 - Relatorio PDR CACHE no dropdown
+
+Causa:
+- a lista de produtos carregada no cache rapido do Dashboard nao tinha uma tela de conferencia;
+- sem relatorio, ficava dificil validar quais itens estavam entre os 300 produtos usados para leitura rapida por codigo de barras.
+
+O que foi alterado:
+- adicionada a rota `reports.pdr-cache` em `routes/web.php`;
+- criado o metodo `pdrCache()` em `app/Http/Controllers/SalesReportController.php`;
+- o relatorio reutiliza `ProductQuickLookupCache::forRequest()` para exibir a mesma lista usada pelo Dashboard;
+- `ProductQuickLookupCache` passou a expor `limit()` e `ttlHours()` para a tela mostrar limite e validade do cache;
+- criada a pagina `resources/js/Pages/Reports/PdrCache.jsx`;
+- a tela exibe posicao, nome, codigo de barras, ID e valor de venda dos itens do cache;
+- adicionado o item `PDR CACHE` no dropdown do layout principal;
+- adicionado o item nas telas de menu, organizacao de menu e permissao por perfil;
+- adicionado tambem na lista geral de relatorios.
+
+Como sincronizar no projeto espelho:
+- copiar `resources/js/Pages/Reports/PdrCache.jsx`;
+- adicionar `reports.pdr-cache` em `routes/web.php`;
+- adicionar `pdrCache()` em `SalesReportController.php` e o import de `ProductQuickLookupCache`;
+- adicionar `limit()` e `ttlHours()` em `app/Support/ProductQuickLookupCache.php`;
+- incluir `reports_pdr_cache` em `AuthenticatedLayout.jsx`, `Settings/Menu.jsx`, `Settings/MenuOrder.jsx` e `Settings/ProfileAccess.jsx`;
+- incluir o card do relatorio em `Reports/Index.jsx` e na lista retornada por `SalesReportController::index()`;
+- nao envolve banco de dados, migrations, updates ou deletes.
+
+Arquivos alterados:
+- `app/Support/ProductQuickLookupCache.php`
+- `app/Http/Controllers/SalesReportController.php`
+- `routes/web.php`
+- `resources/js/Pages/Reports/PdrCache.jsx`
+- `resources/js/Layouts/AuthenticatedLayout.jsx`
+- `resources/js/Pages/Reports/Index.jsx`
+- `resources/js/Pages/Settings/Menu.jsx`
+- `resources/js/Pages/Settings/MenuOrder.jsx`
+- `resources/js/Pages/Settings/ProfileAccess.jsx`
+- `SYNC.md`
+
+## 24/04/26 - Cache de produtos mais vendidos para leitura rapida
+
+Causa:
+- a venda por codigo de barras dependia de consulta ao servidor mesmo para produtos recorrentes;
+- os produtos mais vendidos normalmente sao repetidos muitas vezes na mesma unidade, entao vale carregar esses itens ao abrir o Dashboard;
+- sem esse cache inicial, cada leitura de produto ainda nao conhecido precisava aguardar a busca antes de entrar no carrinho.
+
+O que foi alterado:
+- criada a classe `app/Support/ProductQuickLookupCache.php`;
+- o cache monta os 300 produtos mais vendidos dos ultimos 30 dias por unidade ativa, considerando vendas finalizadas (`status = 1`);
+- o cache usa TTL de 8 horas e chave por unidade;
+- a rota `/dashboard` agora envia `quickLookupProducts` para o frontend;
+- criada a rota `products.quick-lookup` antes de `products.search`;
+- `ProductController::quickLookup()` faz busca direta por ID, codigo de barras ou ID extraido de etiqueta de balanca;
+- quando o lookup encontra produto fora do cache inicial, ele inclui esse produto no cache da unidade;
+- o `Dashboard.jsx` monta um cache local por `id:{tb1_id}` e `barcode:{tb1_codbar}`;
+- ao ler codigo numerico, o frontend prioriza o cache local; se nao encontrar, chama `products.quick-lookup` e adiciona o retorno ao cache;
+- a busca de sugestoes por nome continua usando `products.search`; entradas numericas deixam de disparar sugestoes.
+
+Como sincronizar no projeto espelho:
+- copiar `app/Support/ProductQuickLookupCache.php`;
+- adicionar `use App\Support\ProductQuickLookupCache;` em `routes/web.php`;
+- alterar a rota `/dashboard` para enviar `quickLookupProducts`;
+- adicionar a rota `/products/quick-lookup` antes de `/products/search`;
+- adicionar `use App\Support\ProductQuickLookupCache;`, `quickLookup()` e `parseWeightedBarcode()` em `ProductController.php`;
+- atualizar `resources/js/Pages/Dashboard.jsx` com `quickLookupProducts`, cache local por ID/codigo de barras e chamada a `products.quick-lookup`;
+- nao envolve banco de dados, migrations, updates ou deletes.
+
+Arquivos alterados:
+- `app/Support/ProductQuickLookupCache.php`
+- `routes/web.php`
+- `app/Http/Controllers/ProductController.php`
+- `resources/js/Pages/Dashboard.jsx`
+- `SYNC.md`
+
 ## 24/04/26 - Logs do Laravel ignorados pelo Git
 
 Causa:
