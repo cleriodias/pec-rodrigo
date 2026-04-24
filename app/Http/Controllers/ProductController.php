@@ -312,44 +312,58 @@ class ProductController extends Controller
         $isLongNumeric = $isNumeric && mb_strlen($term) > 4;
         $booleanSearchTerm = $isNumeric ? null : $this->buildBooleanFullTextSearchTerm($term);
 
-        $productsQuery = Produto::query()
-            ->where(function ($query) use ($isNumeric, $isLongNumeric, $numericTerm, $term, $booleanSearchTerm) {
-                if ($isNumeric) {
+        $selectedColumns = [
+            'tb1_id',
+            'tb1_nome',
+            'tb1_codbar',
+            'tb1_vlr_custo',
+            'tb1_vlr_venda',
+            'tb1_tipo',
+            'tb1_qtd',
+            'tb1_status',
+            'tb1_vr_credit',
+        ];
+
+        $baseQuery = Produto::query();
+
+        if ($typeFilter !== null && $typeFilter !== '') {
+            $baseQuery->where('tb1_tipo', (int) $typeFilter);
+        }
+
+        if ($isNumeric) {
+            $products = (clone $baseQuery)
+                ->where(function ($query) use ($isLongNumeric, $numericTerm, $term) {
                     if ($isLongNumeric) {
                         $query->where('tb1_codbar', $term);
                     } else {
                         $query->where('tb1_id', $numericTerm);
                     }
+                })
+                ->orderByDesc('tb1_status')
+                ->orderBy('tb1_nome')
+                ->limit(10)
+                ->get($selectedColumns);
 
-                    return;
-                }
-
-                $query->whereRaw('MATCH(tb1_nome) AGAINST (? IN BOOLEAN MODE)', [$booleanSearchTerm]);
-            });
-
-        if ($typeFilter !== null && $typeFilter !== '') {
-            $typeValue = (int) $typeFilter;
-            $productsQuery->where('tb1_tipo', $typeValue);
+            return response()->json($products);
         }
 
-        $products = $productsQuery
+        $products = (clone $baseQuery)
+            ->whereRaw('MATCH(tb1_nome) AGAINST (? IN BOOLEAN MODE)', [$booleanSearchTerm])
             ->orderByDesc('tb1_status')
-            ->when(! $isNumeric, function ($query) use ($booleanSearchTerm) {
-                $query->orderByRaw('MATCH(tb1_nome) AGAINST (? IN BOOLEAN MODE) DESC', [$booleanSearchTerm]);
-            })
+            ->orderByRaw('MATCH(tb1_nome) AGAINST (? IN BOOLEAN MODE) DESC', [$booleanSearchTerm])
             ->orderBy('tb1_nome')
             ->limit(10)
-            ->get([
-                'tb1_id',
-                'tb1_nome',
-                'tb1_codbar',
-                'tb1_vlr_custo',
-                'tb1_vlr_venda',
-                'tb1_tipo',
-                'tb1_qtd',
-                'tb1_status',
-                'tb1_vr_credit',
-            ]);
+            ->get($selectedColumns);
+
+        if ($products->isEmpty()) {
+            $safeLikeTerm = str_replace(['%', '_'], ['\%', '\_'], $term);
+            $products = (clone $baseQuery)
+                ->where('tb1_nome', 'like', '%' . $safeLikeTerm . '%')
+                ->orderByDesc('tb1_status')
+                ->orderBy('tb1_nome')
+                ->limit(10)
+                ->get($selectedColumns);
+        }
 
         return response()->json($products);
     }

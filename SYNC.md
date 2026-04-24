@@ -1,3 +1,27 @@
+## 24/04/26 - Fallback com LIKE na busca de produtos do Dashboard
+
+Causa:
+- a busca de sugestoes do Dashboard em `app/Http/Controllers/ProductController.php` usava `FULLTEXT ... AGAINST` como unico criterio para nomes;
+- esse tipo de indice pode deixar de retornar produtos existentes quando o termo sofre com tokenizacao do MySQL, acentos, caracteres especiais, palavras curtas ou combinacoes que nao formam tokens validos;
+- nesses cenarios o frontend recebia lista vazia e exibia `Nenhum produto encontrado`, mesmo com o item cadastrado.
+
+O que foi alterado:
+- `ProductController::search()` continua priorizando a busca numerica exata por `tb1_id` e `tb1_codbar`, sem mudar esse comportamento;
+- para busca textual, a rotina continua tentando primeiro o `FULLTEXT` em `tb1_nome`;
+- quando o `FULLTEXT` nao retorna nenhum produto, a rotina agora faz fallback com `LIKE '%termo%'` em `tb1_nome`;
+- o filtro por tipo continua sendo aplicado tanto na busca principal quanto no fallback;
+- a ordenacao por status e nome foi mantida, e o ranking por relevancia do `MATCH` continua valendo quando o `FULLTEXT` encontra resultados.
+
+Como sincronizar no projeto espelho:
+- copiar `app/Http/Controllers/ProductController.php`;
+- nao alterar rotas, frontend ou banco de dados para esta etapa;
+- essa sincronizacao e importante especialmente no `C:\xampp\htdocs\pec1`, porque la o sintoma relatado foi o `Nenhum produto encontrado` com produto existente;
+- nao envolve migration, update ou delete em banco.
+
+Arquivos alterados:
+- `app/Http/Controllers/ProductController.php`
+- `SYNC.md`
+
 ## 24/04/26 - Relatorio PDR CACHE no dropdown
 
 Causa:
