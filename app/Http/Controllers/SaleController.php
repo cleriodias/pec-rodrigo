@@ -53,6 +53,12 @@ class SaleController extends Controller
         $user = $request->user();
         $unit = $request->session()->get('active_unit');
 
+        if (! $user || (int) $user->funcao !== 3) {
+            throw ValidationException::withMessages([
+                'items' => 'Apenas o perfil Caixa pode fazer lancamentos. Troque o perfil atual para Caixa para continuar.',
+            ]);
+        }
+
         if (!$unit) {
             throw ValidationException::withMessages([
                 'unit' => 'Selecione uma unidade para registrar as vendas.',
@@ -1163,9 +1169,9 @@ class SaleController extends Controller
         $systemUser = $this->ensureSystemUser($unitId);
         $recipientIds = User::query()
             ->where(function ($query) use ($unitId) {
-                $query->where('funcao', 0)
+                $query->where('funcao_original', 0)
                     ->orWhere(function ($managerQuery) use ($unitId) {
-                        $managerQuery->where('funcao', 1)
+                        $managerQuery->where('funcao_original', 1)
                             ->where(function ($unitQuery) use ($unitId) {
                                 $unitQuery->where('tb2_id', $unitId)
                                     ->orWhereHas('units', function ($relationQuery) use ($unitId) {

@@ -1,3 +1,192 @@
+## 25/04/26 - Correção de BOM no SalesReportController
+
+Causa:
+- o arquivo `app/Http/Controllers/SalesReportController.php` ficou salvo com BOM UTF-8 no início;
+- esse caractere invisível entrava antes do `<?php` e fazia o PHP acusar erro de `namespace declaration statement has to be the very first statement`.
+
+O que foi alterado:
+- removido o BOM UTF-8 do arquivo `SalesReportController.php`;
+- conferidos também outros arquivos PHP alterados recentemente para garantir que o problema nao se repetiu neles.
+
+Script de solicitacao:
+- `Namespace declaration statement has to be the very first statement or after any declare call in the script`
+- `namespace App\\Http\\Controllers;`
+
+Como sincronizar no projeto espelho:
+- copiar novamente `app/Http/Controllers/SalesReportController.php` sem BOM;
+- copiar este registro para `SYNC.md` do projeto espelho;
+- nao ha alteracao de logica, banco, migration, update ou delete nesta etapa.
+
+Arquivos alterados:
+- `app/Http/Controllers/SalesReportController.php`
+- `SYNC.md`
+
+## 25/04/26 - Total de comandas abertas em tempo real na conferencia do caixa
+
+Causa:
+- em `reports/cash-closure`, a coluna `Conferencia caixa` considerava apenas dinheiro, cartao e gastos;
+- o total das comandas abertas nao aparecia na listagem;
+- por isso o relatorio nao mostrava, em tempo real, a soma das comandas ainda abertas antes do fechamento.
+
+O que foi alterado:
+- `SalesReportController` passou a calcular o total de comandas abertas por caixa e unidade na data filtrada;
+- esse valor e enviado no payload como `open_comandas_total` e `open_comandas_count`;
+- a coluna `Conferencia caixa` em `CashClosure.jsx` agora exibe uma linha adicional com o total das comandas abertas quando houver valor;
+- o calculo principal de conferencia e diferenca foi preservado, e o total das comandas abertas entra como informacao operacional em tempo real.
+
+Script de solicitacao:
+- Em `reports/cash-closure`
+- Na listagem de fechamento, na coluna `Conferencia caixa`, incluir se houver o valor total em comandas abertas, mesmo antes do fechamento do caixa, mostrando em tempo real a soma das comandas.
+
+Como sincronizar no projeto espelho:
+- copiar `app/Http/Controllers/SalesReportController.php`;
+- copiar `resources/js/Pages/Reports/CashClosure.jsx`;
+- copiar este registro para `SYNC.md` do projeto espelho;
+- nao ha migration, alteracao estrutural de banco, update ou delete nesta etapa.
+
+Arquivos alterados:
+- `app/Http/Controllers/SalesReportController.php`
+- `resources/js/Pages/Reports/CashClosure.jsx`
+- `SYNC.md`
+
+## 25/04/26 - Destinatarios de mensagens automaticas usando funcao_original
+
+Causa:
+- os envios automaticos de mensagem ainda filtravam destinatarios por `funcao` atual em alguns fluxos;
+- como o sistema permite trocar de perfil, usuarios `MASTER` e `GERENTE` podiam deixar de receber mensagens quando estavam temporariamente atuando com outra funcao;
+- para regras hierarquicas de destinatario, o campo correto e `funcao_original`.
+
+O que foi alterado:
+- o envio de mensagem no fechamento de caixa com comandas em aberto passou a selecionar `MASTER` e `GERENTE` por `funcao_original`;
+- o envio automatico da remocao de item da lanchonete tambem passou a usar `funcao_original`;
+- com isso, a troca temporaria de perfil deixa de interferir em quem deve receber mensagens administrativas por hierarquia.
+
+Script de solicitacao:
+- Sempre olhar para a `funcao_original` na hora de enviar a mensagem.
+
+Como sincronizar no projeto espelho:
+- copiar `app/Http/Controllers/CashierClosureController.php`;
+- copiar `app/Http/Controllers/SaleController.php`;
+- copiar este registro para `SYNC.md` do projeto espelho;
+- nao ha migration, alteracao estrutural de banco, update ou delete nesta etapa.
+
+Arquivos alterados:
+- `app/Http/Controllers/CashierClosureController.php`
+- `app/Http/Controllers/SaleController.php`
+- `SYNC.md`
+
+## 25/04/26 - Lancamentos permitidos apenas para perfil CAIXA
+
+Causa:
+- a correcao anterior bloqueava no `Dashboard` e no backend apenas o perfil `MASTER`;
+- com isso, `GERENTE` e `SUB-GERENTE` ainda conseguiam visualizar a area de lancamento e enviar vendas;
+- a regra correta e permitir lancamentos somente para o perfil atual `CAIXA`.
+
+O que foi alterado:
+- `SaleController::store()` agora aceita lancamentos apenas quando `user->funcao === 3`;
+- `Dashboard.jsx` passou a ocultar o formulario de vendas para qualquer perfil diferente de `CAIXA`;
+- no lugar do formulario, a tela mostra um aviso informando que apenas `CAIXA` pode realizar lancamentos.
+
+Script de solicitacao:
+- Aplicar a regra para `GERENTE` e `SUBGERENTE`.
+- Apenas o `CAIXA` pode fazer lancamentos.
+
+Como sincronizar no projeto espelho:
+- copiar `app/Http/Controllers/SaleController.php`;
+- copiar `resources/js/Pages/Dashboard.jsx`;
+- copiar este registro para `SYNC.md` do projeto espelho;
+- nao ha migration, alteracao estrutural de banco, update ou delete nesta etapa.
+
+Arquivos alterados:
+- `app/Http/Controllers/SaleController.php`
+- `resources/js/Pages/Dashboard.jsx`
+- `SYNC.md`
+
+## 25/04/26 - Bloqueio de lancamentos para perfil MASTER no Dashboard
+
+Causa:
+- o `Dashboard` ainda renderizava o formulario de vendas para o perfil `MASTER`;
+- alem disso, o backend em `app/Http/Controllers/SaleController.php` nao barrava explicitamente o envio de lancamentos por esse perfil;
+- com isso, o `MASTER` conseguia acessar a area de venda sem trocar para `CAIXA`.
+
+O que foi alterado:
+- `Dashboard.jsx` agora nao renderiza o formulario de vendas para usuarios com perfil atual `MASTER`;
+- no lugar, a tela mostra um aviso claro informando que e obrigatorio trocar o perfil para `CAIXA` para lancar vendas;
+- `SaleController::store()` passou a recusar lancamentos quando o perfil atual for `MASTER`, protegendo tambem o backend.
+
+Script de solicitacao:
+- O perfil master nao pode fazer lancamentos.
+- Ele deve obrigatoriamente mudar o perfil para caixa.
+- Na tela dashboard nao mostrar o formulario de vendas para master.
+
+Como sincronizar no projeto espelho:
+- copiar `app/Http/Controllers/SaleController.php`;
+- copiar `resources/js/Pages/Dashboard.jsx`;
+- copiar este registro para `SYNC.md` do projeto espelho;
+- nao ha migration, alteracao estrutural de banco, update ou delete nesta etapa.
+
+Arquivos alterados:
+- `app/Http/Controllers/SaleController.php`
+- `resources/js/Pages/Dashboard.jsx`
+- `SYNC.md`
+
+## 25/04/26 - Mensagem no chat ao fechar caixa com comandas em aberto
+
+Causa:
+- o fechamento de caixa com comandas em aberto em `app/Http/Controllers/CashierClosureController.php` apenas gravava a observacao no fechamento;
+- nao existia nenhuma rotina de envio de mensagem para `MASTER` e `GERENTE` da unidade;
+- por isso, mesmo com a observacao preenchida, nenhuma notificacao aparecia no bate-papo.
+
+O que foi alterado:
+- adicionado envio automatico de mensagem pelo usuario `Sistema` ao fechar o caixa com comandas em aberto;
+- os destinatarios sao todos os usuarios `MASTER` e `GERENTE` vinculados a unidade do fechamento;
+- a mensagem agora inclui:
+  - usuario executor;
+  - unidade;
+  - data e hora do fechamento;
+  - quantidade de comandas em aberto;
+  - observacao informada pelo usuario;
+  - dados das comandas em aberto;
+  - lista dos itens de cada comanda com quantidade e total;
+- o envio reutiliza o mesmo padrao de usuario `Sistema` e mensagem do chat ja usado em outros fluxos.
+
+Script de solicitacao:
+- Ao fechar o caixa com comanda em aberto, enviar mensagem aos `MASTER` e `GERENTE` da loja.
+- Acrescentar na mensagem os dados das comandas em aberto e a observacao que o usuario informa.
+
+Como sincronizar no projeto espelho:
+- copiar `app/Http/Controllers/CashierClosureController.php`;
+- copiar este registro para `SYNC.md` do projeto espelho;
+- nao ha migration, alteracao estrutural de banco, update ou delete nesta etapa.
+
+Arquivos alterados:
+- `app/Http/Controllers/CashierClosureController.php`
+- `SYNC.md`
+
+## 25/04/26 - Preservacao da funcao_original na edicao de usuario
+
+Causa:
+- a tela `reports/switch-unit` ja usa `funcao_original` para definir a hierarquia de opcoes de troca;
+- porem a edicao de usuario em `app/Http/Controllers/UserController.php` sobrescrevia `funcao_original` com a funcao escolhida no formulario;
+- com isso, a hierarquia original do usuario era perdida no banco e a tela de troca passava a oferecer opcoes baseadas nesse valor corrompido.
+
+O que foi alterado:
+- a edicao de usuario continua atualizando `funcao`, mas deixou de sobrescrever `funcao_original`;
+- `funcao_original` agora so e preenchida na edicao se ainda estiver nula, preservando a hierarquia original dos usuarios ja cadastrados;
+- a tela de troca de funcao volta a respeitar corretamente a funcao de origem salva no banco.
+
+Script de solicitacao:
+- Na troca de funcao, o acesso a hierarquia para mostrar as opcoes de troca deve levar em consideracao o campo `funcao_original`.
+
+Como sincronizar no projeto espelho:
+- copiar `app/Http/Controllers/UserController.php`;
+- copiar este registro para `SYNC.md` do projeto espelho;
+- nao ha migration, alteracao estrutural de banco, update em massa ou delete nesta etapa.
+
+Arquivos alterados:
+- `app/Http/Controllers/UserController.php`
+- `SYNC.md`
+
 ## 25/04/26 - Filtro de funcao em user usando funcao_original
 
 Causa:
@@ -5011,3 +5200,17 @@ MODIFY tipo_pagamento VARCHAR(40) NOT NULL;
   - `app/Models/CashierClosure.php`
   - `resources/js/Pages/Cashier/Close.jsx`
   - `database/migrations/2026_04_25_120000_add_open_comandas_observation_to_cashier_closures_table.php`
+
+- Corrigido o calculo de comandas abertas em tempo real no relatorio eports/cash-closure. O problema estava no filtro por data de lancamento da venda em pp/Http/Controllers/SalesReportController.php, que ignorava comandas ainda abertas criadas em dias anteriores.
+- A soma de comandas abertas por caixa/unidade agora considera todas as comandas que continuam com status = 0, independentemente da data em que foram lancadas, respeitando apenas os filtros de unidade do relatorio.
+- Script de solicitacao: em eports/cash-closure, na listagem de fechamento, na coluna Conferencia caixa incluir, se houver, o valor total em comandas abertas em tempo real; corrigir o caso em que existem duas comandas em aberto para este caixa/loja e nao esta mostrando na lista.
+- Arquivos sincronizados nesta alteracao:
+  - pp/Http/Controllers/SalesReportController.php
+
+- Corrigido novamente o comportamento de eports/cash-closure para comandas em aberto. A primeira implementacao ainda agrupava a soma por id_user_caixa + id_unidade, mas as comandas da lanchonete sao gravadas com id_user_caixa = null, por isso o valor nunca casava com a linha do fechamento.
+- O calculo agora considera a mesma regra usada no fechamento do caixa: comandas em aberto por unidade, independentemente do id_user_caixa, exibindo o total em tempo real na coluna Conferencia caixa para a loja correspondente.
+- Corrigidos tambem os textos corrompidos Diferença na tela esources/js/Pages/Reports/CashClosure.jsx; o problema era literal salvo incorretamente no arquivo, nao um erro global de encoding.
+- Script de solicitacao: existem duas comandas em aberto para este caixa/loja e nao esta mostrando na lista; corrigir tambem o erro de charset na tela eports/cash-closure.
+- Arquivos sincronizados nesta alteracao:
+  - pp/Http/Controllers/SalesReportController.php
+  - esources/js/Pages/Reports/CashClosure.jsx

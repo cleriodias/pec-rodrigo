@@ -482,6 +482,7 @@ export default function Dashboard({ quickLookupProducts = [] }) {
         [items],
     );
     const isCashier = effectiveRole === 3;
+    const canLaunchSales = isCashier;
     const pendingComandas = useMemo(() => {
         const list = cashierRestrictions?.pending_comandas;
         if (!Array.isArray(list)) {
@@ -1803,6 +1804,17 @@ export default function Dashboard({ quickLookupProducts = [] }) {
         addItemFromProduct(product, { preserveInput: true });
     };
 
+    const restrictedHeaderContent = (
+        <div className="space-y-1">
+            <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100">
+                Dashboard
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-300">
+                Apenas o perfil CAIXA pode realizar lancamentos.
+            </p>
+        </div>
+    );
+
     const headerContent = (
         <div className="space-y-2">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:gap-4">
@@ -1878,6 +1890,32 @@ export default function Dashboard({ quickLookupProducts = [] }) {
             </div>
         </div>
     );
+
+    if (!canLaunchSales) {
+        return (
+            <AuthenticatedLayout header={restrictedHeaderContent} headerClassName="py-1">
+                <Head title="Dashboard" />
+
+                <div className="pt-3 pb-8">
+                    <div className="mx-auto max-w-7xl sm:px-6 lg:px-8">
+                        <div className="overflow-hidden bg-white shadow-sm sm:rounded-lg dark:bg-gray-800">
+                            <div className="p-6 text-gray-900 dark:text-gray-100">
+                                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900 dark:border-amber-400/40 dark:bg-amber-900/20 dark:text-amber-100">
+                                    <p className="font-semibold">
+                                        Apenas o perfil CAIXA pode fazer lancamentos no Dashboard.
+                                    </p>
+                                    <p className="mt-1">
+                                        Para registrar vendas, troque o perfil atual para CAIXA na tela de troca de funcao.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </AuthenticatedLayout>
+        );
+    }
+
     return (
         <AuthenticatedLayout header={headerContent} headerClassName="py-1">
             <Head title="Dashboard" />

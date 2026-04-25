@@ -1,4 +1,4 @@
-import Modal from '@/Components/Modal';
+﻿import Modal from '@/Components/Modal';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { buildReceiptHtml } from '@/Utils/receipt';
 import axios from 'axios';
@@ -569,6 +569,8 @@ export default function CashClosure({
         const closureTotal = closure?.total_amount ?? 0;
         const diffTotal = closure?.differences?.total ?? systemTotal;
         const diffClass = differenceTone(diffTotal);
+        const openComandasTotal = Number(record?.open_comandas_total ?? 0);
+        const openComandasCount = Number(record?.open_comandas_count ?? 0);
 
         return (
             <div className="space-y-1 text-right">
@@ -590,6 +592,16 @@ export default function CashClosure({
                         {formatCurrency(diffTotal)}
                     </p>
                 </div>
+                {openComandasTotal > 0 && (
+                    <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Comandas abertas{openComandasCount > 0 ? ` (${openComandasCount})` : ''}
+                        </p>
+                        <p className="text-sm font-semibold text-amber-600 dark:text-amber-300">
+                            {formatCurrency(openComandasTotal)}
+                        </p>
+                    </div>
+                )}
             </div>
         );
     };
@@ -758,7 +770,7 @@ export default function CashClosure({
                                                 <span className="mt-0.5 block text-[10px] font-normal text-gray-500 dark:text-gray-400">
                                                     Qtd: {formatQuantity(record.discard_quantity ?? 0, 3)}
                                                     {record.discard_alert?.exceeded && record.discard_alert?.percentage !== null
-                                                        ? ` • ${Number(record.discard_alert.percentage).toLocaleString('pt-BR', {
+                                                        ? ` â€¢ ${Number(record.discard_alert.percentage).toLocaleString('pt-BR', {
                                                             minimumFractionDigits: 2,
                                                             maximumFractionDigits: 2,
                                                         })}%`
@@ -880,7 +892,7 @@ export default function CashClosure({
                             </p>
                             <p>
                                 <span className="font-semibold">Fechamento original:</span>{' '}
-                                Dinheiro {formatCurrency(masterReviewModal.record.closure?.original_cash_amount ?? 0)} ·
+                                Dinheiro {formatCurrency(masterReviewModal.record.closure?.original_cash_amount ?? 0)} Â·
                                 Cartao {formatCurrency(masterReviewModal.record.closure?.original_card_amount ?? 0)}
                             </p>
                         </div>
@@ -1258,3 +1270,4 @@ export default function CashClosure({
         </AuthenticatedLayout>
     );
 }
+
