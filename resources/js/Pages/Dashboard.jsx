@@ -481,6 +481,7 @@ export default function Dashboard({ quickLookupProducts = [] }) {
         () => items.reduce((sum, item) => sum + (item.quantity ?? 0), 0),
         [items],
     );
+    const isMaster = effectiveRole === 0;
     const isCashier = effectiveRole === 3;
     const canLaunchSales = isCashier;
     const pendingComandas = useMemo(() => {
@@ -1815,6 +1816,14 @@ export default function Dashboard({ quickLookupProducts = [] }) {
         </div>
     );
 
+    const masterShortcutLinks = [
+        { label: 'Usuarios', icon: 'bi-people-fill', href: route('users.index') },
+        { label: 'Unidades', icon: 'bi-building', href: route('units.index') },
+        { label: 'Relatorios', icon: 'bi-clipboard-data', href: route('reports.index') },
+        { label: 'Contra-cheque', icon: 'bi-receipt-cutoff', href: route('settings.contra-cheque') },
+        { label: 'AnyDesck', icon: 'bi-pc-display', href: route('settings.anydesck') },
+    ];
+
     const headerContent = (
         <div className="space-y-2">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:gap-4">
@@ -1908,6 +1917,39 @@ export default function Dashboard({ quickLookupProducts = [] }) {
                                         Para registrar vendas, troque o perfil atual para CAIXA na tela de troca de funcao.
                                     </p>
                                 </div>
+                                {isMaster && (
+                                    <div className="mt-6">
+                                        <div className="mb-3">
+                                            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                                                Acessos do perfil MASTER
+                                            </h3>
+                                            <p className="text-sm text-gray-500 dark:text-gray-300">
+                                                Utilize estes atalhos para as areas administrativas disponiveis no Dashboard.
+                                            </p>
+                                        </div>
+                                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                                            {masterShortcutLinks.map((link) => (
+                                                <Link
+                                                    key={link.href}
+                                                    href={link.href}
+                                                    className="flex items-center gap-3 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-4 text-left shadow-sm transition hover:border-indigo-400 hover:bg-indigo-100 dark:border-indigo-500/30 dark:bg-indigo-900/20 dark:hover:bg-indigo-900/30"
+                                                >
+                                                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600 text-lg text-white shadow">
+                                                        <i className={link.icon} aria-hidden="true"></i>
+                                                    </span>
+                                                    <span className="min-w-0">
+                                                        <span className="block text-sm font-semibold text-indigo-900 dark:text-indigo-100">
+                                                            {link.label}
+                                                        </span>
+                                                        <span className="block text-xs text-indigo-700 dark:text-indigo-200">
+                                                            Abrir
+                                                        </span>
+                                                    </span>
+                                                </Link>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>

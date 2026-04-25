@@ -5214,3 +5214,9 @@ MODIFY tipo_pagamento VARCHAR(40) NOT NULL;
 - Arquivos sincronizados nesta alteracao:
   - pp/Http/Controllers/SalesReportController.php
   - esources/js/Pages/Reports/CashClosure.jsx
+
+- No Dashboard, quando o perfil atual for MASTER, o formulario de lancamentos continua bloqueado, mas agora a tela exibe atalhos administrativos para Usuarios, Unidades, Relatorios, Contra-cheque e AnyDesck.
+- Os demais perfis que nao sao CAIXA continuam vendo apenas o aviso de bloqueio de lancamentos, sem ganhar esses atalhos extras.
+- Script de solicitacao: no dashboard mostrar os seguintes acessos para o perfil master: Usuarios, Unidades, Relatorios, Contra-cheque e AnyDesck.
+- Arquivos sincronizados nesta alteracao:
+  - esources/js/Pages/Dashboard.jsx
