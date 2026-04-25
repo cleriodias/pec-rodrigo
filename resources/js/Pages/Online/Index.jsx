@@ -224,13 +224,43 @@ export default function OnlineIndex({
     const selectedUserIdRef = useRef(initialSelectedUserId);
     const hasInitialConversationScrollRef = useRef(false);
 
+    const sortedContacts = useMemo(() => {
+        const toTimestamp = (value) => {
+            if (!value) {
+                return 0;
+            }
+
+            const date = new Date(value);
+
+            return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+        };
+
+        return [...onlineUsers, ...offlineUsers]
+            .sort((left, right) => {
+                const leftHasUnread = Number(left.unread_count ?? 0) > 0 ? 1 : 0;
+                const rightHasUnread = Number(right.unread_count ?? 0) > 0 ? 1 : 0;
+
+                if (leftHasUnread !== rightHasUnread) {
+                    return rightHasUnread - leftHasUnread;
+                }
+
+                const leftTimestamp = toTimestamp(left.last_message_at);
+                const rightTimestamp = toTimestamp(right.last_message_at);
+
+                if (leftTimestamp !== rightTimestamp) {
+                    return rightTimestamp - leftTimestamp;
+                }
+
+                return String(left.name ?? '').localeCompare(String(right.name ?? ''), 'pt-BR');
+            });
+    }, [onlineUsers, offlineUsers]);
+
     const selectedUser = useMemo(
         () =>
-            [...onlineUsers, ...offlineUsers].find((user) => Number(user.id) === Number(selectedUserId)) ??
-            onlineUsers[0] ??
-            offlineUsers[0] ??
+            sortedContacts.find((user) => Number(user.id) === Number(selectedUserId)) ??
+            sortedContacts[0] ??
             null,
-        [onlineUsers, offlineUsers, selectedUserId],
+        [sortedContacts, selectedUserId],
     );
 
     const editingMessage = useMemo(
@@ -678,14 +708,14 @@ export default function OnlineIndex({
                     <span
                         className={COMPACT_BADGE_CLASSNAME}
                         style={{
-                            ...getRoleBadgeStyle(user.role_label),
+                            ...getRoleBadgeStyle(user.original_role_label ?? user.role_label),
                             padding: '0 6px',
                             fontSize: '9px',
                             lineHeight: '12px',
                             minHeight: '16px',
                         }}
                     >
-                        {formatRoleBadgeLabel(user.role_label)}
+                        {formatRoleBadgeLabel(user.original_role_label ?? user.role_label)}
                     </span>
                     <span
                         className={COMPACT_BADGE_CLASSNAME}
@@ -738,9 +768,9 @@ export default function OnlineIndex({
                             <div className="border-b border-gray-200 px-4 py-4 dark:border-gray-700">
                                 <div className="flex items-center justify-between gap-3">
                                     <div>
-                                        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">On-Line</p>
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">Conversas</p>
                                         <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
-                                            {onlineUsers.length} usuario(s)
+                                            {sortedContacts.length} conversa(s)
                                         </h3>
                                     </div>
                                     <button
@@ -755,24 +785,12 @@ export default function OnlineIndex({
                             </div>
 
                             <div className="max-h-[68vh] overflow-y-auto">
-                                {onlineUsers.length === 0 && offlineUsers.length === 0 ? (
+                                {sortedContacts.length === 0 ? (
                                     <div className="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">
-                                        Nenhum usuario visivel neste momento.
+                                        Nenhuma conversa disponivel neste momento.
                                     </div>
                                 ) : (
-                                    <>
-                                        {onlineUsers.length > 0 && onlineUsers.map((user) => renderContactButton(user))}
-
-                                        {offlineUsers.length > 0 && (
-                                            <div className="border-t border-gray-200 px-4 py-3 dark:border-gray-700">
-                                                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                                                    Offline
-                                                </p>
-                                            </div>
-                                        )}
-
-                                        {offlineUsers.length > 0 && offlineUsers.map((user) => renderContactButton(user, true))}
-                                    </>
+                                    sortedContacts.map((user) => renderContactButton(user, !user.is_online))
                                 )}
                             </div>
                         </div>
@@ -785,7 +803,7 @@ export default function OnlineIndex({
                                             {selectedUser.name}
                                         </h3>
                                         <p className="text-sm text-gray-500 dark:text-gray-300">
-                                            {selectedUser.role_label} | Loja: {selectedUser.unit_name ?? '---'}
+                                            {selectedUser.original_role_label ?? selectedUser.role_label} | Loja: {selectedUser.unit_name ?? '---'}
                                         </p>
                                     </div>
                                 ) : (
@@ -833,7 +851,7 @@ export default function OnlineIndex({
                                                             }`}
                                                             style={message.is_mine ? { color: '#475569' } : undefined}
                                                         >
-                                                            {String(message.sender_name ?? '---').toUpperCase()} - {message.sender_role_label}
+                                                            {String(message.sender_name ?? '---').toUpperCase()} - {message.sender_original_role_label ?? message.sender_role_label}
                                                         </div>
                                                         <div
                                                             className="prose prose-sm max-w-none text-inherit prose-p:my-0 prose-strong:text-inherit prose-em:text-inherit prose-u:text-inherit"

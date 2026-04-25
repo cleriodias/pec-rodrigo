@@ -35,6 +35,7 @@ export default function SwitchUnit({
     const renderOption = (item, index, selected, onSelect, valueKey = 'id') => {
         const color = COLOR_CYCLE[index % COLOR_CYCLE.length];
         const isCurrent = item.active;
+        const isInactiveUnit = valueKey === 'id' && Number(item.status ?? 1) !== 1;
 
         return (
             <button
@@ -43,14 +44,25 @@ export default function SwitchUnit({
                 onClick={() => onSelect(item[valueKey])}
                 className={`relative rounded-2xl border px-4 py-3 text-left text-sm font-semibold shadow-sm transition ${
                     selected
-                        ? `${color} ring-2 ring-offset-2 ring-indigo-500 dark:ring-offset-gray-900`
-                        : 'border-gray-200 bg-white text-gray-700 hover:border-indigo-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100'
+                        ? `${isInactiveUnit ? 'border-red-300 bg-red-50 text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-100' : color} ring-2 ring-offset-2 ring-indigo-500 dark:ring-offset-gray-900`
+                        : isInactiveUnit
+                          ? 'border-red-200 bg-red-50/80 text-red-700 hover:border-red-300 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-100'
+                          : 'border-gray-200 bg-white text-gray-700 hover:border-indigo-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100'
                 }`}
             >
-                <span className="block pr-16">{item.name ?? item.label}</span>
+                <span className="block pr-28">{item.name ?? item.label}</span>
                 {isCurrent && (
                     <span className="absolute right-3 top-3 rounded-full bg-white/80 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-gray-700 dark:bg-gray-900/70 dark:text-gray-100">
                         Atual
+                    </span>
+                )}
+                {isInactiveUnit && (
+                    <span className={`absolute ${isCurrent ? 'right-20' : 'right-3'} top-3 rounded-full px-2 py-1 text-[11px] font-bold uppercase tracking-wide ${
+                        selected
+                            ? 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-100'
+                            : 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-100'
+                    }`}>
+                        Inativa
                     </span>
                 )}
             </button>

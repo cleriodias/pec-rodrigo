@@ -12,12 +12,13 @@ class ApplyActiveRole
         $user = $request->user();
 
         if ($user) {
-            $originalRole = (int) ($user->funcao_original ?? $user->funcao ?? 0);
+            $databaseRole = (int) ($user->funcao ?? 0);
+            $originalRole = (int) ($user->funcao_original ?? $databaseRole);
             $activeRole = $request->session()->get('active_role');
-            $activeRole = is_numeric($activeRole) ? (int) $activeRole : $originalRole;
+            $activeRole = is_numeric($activeRole) ? (int) $activeRole : $databaseRole;
 
             if ($activeRole < $originalRole || $activeRole > 6) {
-                $activeRole = $originalRole;
+                $activeRole = $databaseRole;
                 $request->session()->put('active_role', $activeRole);
             }
 

@@ -42,6 +42,7 @@ class CashierClosureController extends Controller
 
         return Inertia::render('Cashier/Close', [
             'activeUnit' => $activeUnit,
+            'hasOpenComandas' => $this->hasOpenComandas($unitId),
             'todayClosure' => $todayClosure ? [
                 'cash_amount' => $todayClosure->cash_amount,
                 'card_amount' => $todayClosure->card_amount,
@@ -68,6 +69,7 @@ class CashierClosureController extends Controller
             'card_amount' => ['required', 'numeric', 'min:0'],
             'closure_date' => ['nullable', 'date'],
             'confirm_pending' => ['nullable', 'boolean'],
+            'open_comandas_observation' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $today = Carbon::today();
@@ -75,19 +77,21 @@ class CashierClosureController extends Controller
         $unitId = $activeUnit['id'] ?? $user->tb2_id;
         $unitName = $activeUnit['name'] ?? optional($user->primaryUnit)->tb2_nome;
 
-        $openComandas = Venda::query()
-            ->whereNotNull('id_comanda')
-            ->whereBetween('id_comanda', [3000, 3100])
-            ->where('status', 0)
-            ->where('id_unidade', $unitId)
-            ->exists();
+        $openComandas = $this->hasOpenComandas($unitId);
 
         if ($openComandas) {
-            return redirect()
-                ->route('cashier.close')
-                ->withErrors([
-                    'cash_amount' => 'Existem comandas da lanchonete em aberto. Finalize antes de fechar o caixa.',
-                ]);
+            $openComandasObservation = trim((string) ($validated['open_comandas_observation'] ?? ''));
+
+            if ($openComandasObservation === '') {
+                return redirect()
+                    ->route('cashier.close')
+                    ->withErrors([
+                        'open_comandas_observation' => 'Informe a observacao justificando o fechamento com comandas em aberto.',
+                    ])
+                    ->withInput();
+            }
+        } else {
+            $openComandasObservation = null;
         }
 
         $pendingClosureDate = $this->resolvePendingClosureDate($user, $unitId, $today);
@@ -142,6 +146,7 @@ class CashierClosureController extends Controller
             'unit_name' => $unitName,
             'cash_amount' => $validated['cash_amount'],
             'card_amount' => $validated['card_amount'],
+            'open_comandas_observation' => $openComandasObservation,
             'closed_date' => $closureDate->toDateString(),
             'closed_at' => now(),
         ]);
@@ -193,5 +198,15 @@ class CashierClosureController extends Controller
             ->exists();
 
         return $hasClosure ? null : $lastSaleDay;
+    }
+
+    private function hasOpenComandas(int $unitId): bool
+    {
+        return Venda::query()
+            ->whereNotNull('id_comanda')
+            ->whereBetween('id_comanda', [3000, 3100])
+            ->where('status', 0)
+            ->where('id_unidade', $unitId)
+            ->exists();
     }
 }

@@ -66,7 +66,7 @@ class UserController extends Controller
             })
             ->when($request->filled('funcao'), function ($query) use ($request) {
                 $funcao = (int) $request->input('funcao');
-                $query->where('funcao', $funcao);
+                $query->where('funcao_original', $funcao);
             })
             ->when($request->filled('unit'), function ($query) use ($request) {
                 $unitId = (int) $request->input('unit');

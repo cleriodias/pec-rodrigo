@@ -1,3 +1,106 @@
+## 25/04/26 - Filtro de funcao em user usando funcao_original
+
+Causa:
+- na tela `user`, o filtro `Funcao` era aplicado em `app/Http/Controllers/UserController.php` usando `where('funcao', ...)`;
+- isso fazia a busca considerar a funcao atual do usuario;
+- a regra correta para essa tela e filtrar pela funcao original.
+
+O que foi alterado:
+- o filtro `funcao` em `UserController::index()` passou a usar `where('funcao_original', ...)`;
+- a listagem visual da coluna `Funcao` nao foi alterada nesta etapa;
+- a mudanca ficou restrita ao comportamento do filtro.
+
+Script de solicitacao:
+- Em `user`
+- O filtro `Funcao` deve buscar pela funcao original para filtrar.
+
+Como sincronizar no projeto espelho:
+- copiar `app/Http/Controllers/UserController.php`;
+- copiar este registro para `SYNC.md` do projeto espelho;
+- nao ha alteracao de frontend, banco, migration, update ou delete nesta etapa.
+
+Arquivos alterados:
+- `app/Http/Controllers/UserController.php`
+- `SYNC.md`
+
+## 25/04/26 - Persistencia da troca de funcao no banco
+
+Causa:
+- a tela `reports/switch-unit` alterava a funcao apenas na sessao em `app/Http/Controllers/UnitSwitchController.php`;
+- o middleware `app/Http/Middleware/ApplyActiveRole.php` aplicava `active_role` apenas em memoria durante a requisicao;
+- com isso a interface mudava, mas o campo `users.funcao` no banco permanecia antigo, afetando relatorios e qualquer consulta que dependesse do valor persistido.
+
+O que foi alterado:
+- `UnitSwitchController::update()` agora atualiza o campo `funcao` do proprio usuario no banco quando a funcao escolhida muda;
+- `funcao_original` permanece intacta;
+- `ApplyActiveRole` foi ajustado para usar `users.funcao` como base persistida da sessao atual;
+- a unidade continua sendo controlada pela sessao, mas a funcao agora reflete no banco e tambem na sessao.
+
+Script de solicitacao:
+- Ao trocar a funcao em `reports/switch-unit`, a mudanca deve ocorrer no banco de dados e refletir apenas no campo `funcao`, pois os relatorios sao afetados.
+
+Como sincronizar no projeto espelho:
+- copiar `app/Http/Controllers/UnitSwitchController.php`;
+- copiar `app/Http/Middleware/ApplyActiveRole.php`;
+- copiar este registro para `SYNC.md` do projeto espelho;
+- nao ha migration nem alteracao estrutural de banco nesta etapa.
+
+Arquivos alterados:
+- `app/Http/Controllers/UnitSwitchController.php`
+- `app/Http/Middleware/ApplyActiveRole.php`
+- `SYNC.md`
+
+## 25/04/26 - Correção da listagem de unidades em reports/switch-unit
+
+Causa:
+- a tela `reports/switch-unit` ja tinha destaque visual para unidade inativa em `resources/js/Pages/Reports/SwitchUnit.jsx`;
+- porem o backend em `app/Http/Controllers/UnitSwitchController.php` ainda limitava a listagem e a troca apenas as unidades vinculadas ao usuario em `allowedUnits()`;
+- com isso, unidades inativas fora desse vinculo nunca apareciam, dando a impressao de que a solicitacao nao funcionava.
+
+O que foi alterado:
+- `UnitSwitchController::allowedUnits()` passou a buscar todas as unidades do sistema;
+- a ordenacao agora prioriza unidades ativas primeiro e depois ordena por nome;
+- a tela continua recebendo `status` e `status_label`, mantendo o destaque visual de `Inativa`;
+- o `update()` continua coerente com a tela, porque passa a validar a troca com a mesma lista completa exibida ao usuario.
+
+Script de solicitacao:
+- Em `reports/switch-unit`
+- Mostrar todas as unidades disponiveis para troca, inclusive as inativas, e destacar as inativas sinalizando o status.
+
+Como sincronizar no projeto espelho:
+- copiar `app/Http/Controllers/UnitSwitchController.php`;
+- copiar este registro para `SYNC.md` do projeto espelho;
+- nao ha alteracao de banco, migration, rotas ou frontend nesta correcao.
+
+Arquivos alterados:
+- `app/Http/Controllers/UnitSwitchController.php`
+- `SYNC.md`
+
+## 25/04/26 - Correcao da tela em branco em reports/cash-closure
+
+Causa:
+- ao trocar o filtro de data para calendario nativo em `resources/js/Pages/Reports/CashClosure.jsx`, foi removida a funcao antiga `shortInputToIsoDate`;
+- uma chamada restante dessa funcao continuou no componente, na montagem de `discrepancyParams`;
+- isso gerava erro de JavaScript em runtime ao abrir a pagina, deixando `reports/cash-closure` em branco.
+
+O que foi alterado:
+- removida a chamada restante de `shortInputToIsoDate(dateInput)`;
+- a tela agora usa diretamente `dateInput`, que ja esta em formato ISO por vir de `input type="date"`;
+- mantido o envio do parametro `date` para o atalho de discrepancias sem depender mais do fluxo antigo de data.
+
+Script de solicitacao:
+- Em: `reports/cash-closure`
+- Corrigir a tela em branco apos a alteracao do campo de data para calendario.
+
+Como sincronizar no projeto espelho:
+- copiar `resources/js/Pages/Reports/CashClosure.jsx`;
+- copiar este registro para `SYNC.md` do projeto espelho;
+- nao ha alteracao de backend, rotas ou banco de dados nesta correcao.
+
+Arquivos alterados:
+- `resources/js/Pages/Reports/CashClosure.jsx`
+- `SYNC.md`
+
 ## 24/04/26 - Fallback com LIKE na busca de produtos do Dashboard
 
 Causa:
@@ -4842,3 +4945,69 @@ MODIFY tipo_pagamento VARCHAR(40) NOT NULL;
 - Observacoes para sincronizar em `C:\xampp\htdocs\pec1`:
   - nao copiar automaticamente esta alteracao de `.env`, pois `pec1` possui conexao de banco propria;
   - se for necessario validar o ambiente apos sincronizar, conferir com `php artisan config:show database.connections.mysql.database`.
+# 25/04/26
+
+- Em `reports/cash-closure`, o filtro de data foi alterado para usar campo com calendario nativo (`type=\"date\"`), substituindo a digitacao manual mascarada. Isso atende ao padrao do projeto para campos de data.
+- Script de solicitacao: em `reports/cash-closure`, mudar o campo data para abrir o calendario.
+- Arquivos sincronizados nesta alteracao:
+  - `resources/js/Pages/Reports/CashClosure.jsx`
+
+- Em `reports/switch-unit`, a listagem de unidades agora inclui tambem as unidades inativas vinculadas ao usuario. As unidades inativas passam a ser destacadas visualmente com identificacao clara de status.
+- Script de solicitacao: em `reports/switch-unit`, mostrar todas as unidades disponiveis para troca, inclusive as inativas, destacando e sinalizando o status de inativo.
+- Arquivos sincronizados nesta alteracao:
+  - `app/Http/Controllers/UnitSwitchController.php`
+  - `resources/js/Pages/Reports/SwitchUnit.jsx`
+
+- A mensagem automatica de exclusao de itens da lanchonete agora inclui uma linha extra com a diferenca em minutos entre a data/hora de inclusao e a data/hora de exclusao do item.
+- Script de solicitacao: na mensagem de exclusao de itens da lanchonete adicionar mais uma linha com a diferenca em minutos em relacao a hora de inclusao e a hora de exclusao.
+- Arquivos sincronizados nesta alteracao:
+  - `app/Http/Controllers/SaleController.php`
+
+- O chat passou a ordenar as conversas pela prioridade operacional solicitada: primeiro conversas nao lidas mais recentes e, em seguida, conversas lidas mais recentes. A ordenacao agora considera `unread_count` e a data/hora da ultima mensagem por contato.
+- A lista lateral do bate-papo foi ajustada para seguir essa ordem unica de conversas, sem depender de agrupamento alfabetico por on-line/off-line.
+- Script de solicitacao: no chat, a ordem das conversas deve ser pela ultima mensagem e pelas conversas nao lidas; primeiro conversas mais recentes nao lidas, depois conversas mais recentes lidas.
+- Arquivos sincronizados nesta alteracao:
+  - `app/Http/Controllers/OnlineController.php`
+  - `resources/js/Pages/Online/Index.jsx`
+
+- Ajustada a interface do bate-papo para mostrar apenas uma badge de funcao por usuario, sem a legenda `ORIGEM`. A exibicao passa a usar somente a funcao original como referencia visual no chat.
+- Script de solicitacao: no bate-papo, nao precisa mostrar funcao atual e original ao mesmo tempo; mostrar apenas uma funcao, sem legenda na badge.
+- Arquivos sincronizados nesta alteracao:
+  - `resources/js/Pages/Online/Index.jsx`
+
+- Ajustado o bate-papo para incluir tambem usuarios que ja possuem conversa com o destinatario, mesmo quando a regra padrao de visibilidade por funcao/sessao os ocultaria. Isso corrige o caso das mensagens do usuario `Sistema`, que aumentavam o contador de nao lidas mas nao apareciam para abrir.
+- O payload do chat agora envia funcao atual e funcao original dos contatos e das mensagens.
+- A interface do bate-papo agora mostra a funcao original junto ao nome/identificacao do usuario na lista de contatos e no cabecalho das mensagens.
+- Script de solicitacao: na exclusao de itens da lanchonete, mesmo com troca de funcao entre master, caixa e lanchonete, as mensagens do usuario `Sistema` devem aparecer no bate-papo; as funcoes devem ser apenas informativas e a funcao original deve ser exibida junto ao nome do usuario.
+- Arquivos sincronizados nesta alteracao:
+  - `app/Http/Controllers/OnlineController.php`
+  - `resources/js/Pages/Online/Index.jsx`
+
+- Corrigida a validacao do codigo de acesso em `lanchonete/terminal` para aceitar usuarios cujo perfil elegivel esteja em `funcao` ou em `funcao_original`, evitando rejeicao incorreta quando a sessao esta em `LANCHONETE` mas o perfil salvo no banco esta diferente.
+- Essa correcao foi feita em `app/Http/Controllers/LanchoneteTerminalController.php`.
+- Arquivos sincronizados nesta alteracao:
+  - `app/Http/Controllers/LanchoneteTerminalController.php`
+
+- Corrigido o fluxo de validacao do codigo de acesso em `lanchonete/terminal` para retornar JSON consistente tambem quando houver erro de validacao do `cod_acesso`.
+- A tela `resources/js/Pages/Lanchonete/Terminal.jsx` agora mostra a mensagem real do erro; se a sessao expirar, informa isso explicitamente em vez de exibir apenas `Codigo invalido`.
+- Arquivos sincronizados nesta alteracao:
+  - `app/Http/Controllers/LanchoneteTerminalController.php`
+  - `resources/js/Pages/Lanchonete/Terminal.jsx`
+
+- Em `lanchonete/terminal`, ao remover um item pelo botao `Remover` ou pelo `-` quando a quantidade chega a zero, agora abre modal obrigando informar o motivo da remocao.
+- A exclusao do item em comanda agora exige `removal_reason` no backend em `app/Http/Controllers/SaleController.php`; sem motivo a remocao e bloqueada.
+- Ao excluir, o sistema envia mensagem automatica no bate-papo pelo usuario `Sistema` para todos os usuarios MASTER, para os GERENTES da unidade da comanda e tambem para o proprio executor da acao.
+- A mensagem enviada informa usuario executor, comanda, item removido, quantidade removida, valor unitario, data/hora da inclusao, data/hora da exclusao e motivo da exclusao.
+- Arquivos sincronizados nesta alteracao:
+  - `resources/js/Pages/Lanchonete/Terminal.jsx`
+  - `app/Http/Controllers/SaleController.php`
+
+- Fechamento de caixa em `cashier/close` nao bloqueia mais quando existem comandas da lanchonete em aberto.
+- O bloqueio anterior ficava em `app/Http/Controllers/CashierClosureController.php`, retornando erro e impedindo salvar o fechamento.
+- Agora, quando houver comanda em aberto, a tela exibe um aviso e exige preenchimento da observacao justificando o motivo do fechamento com pendencia.
+- Foi adicionada a coluna `open_comandas_observation` na tabela `cashier_closures` para armazenar a justificativa informada no fechamento.
+- Arquivos sincronizados nesta alteracao:
+  - `app/Http/Controllers/CashierClosureController.php`
+  - `app/Models/CashierClosure.php`
+  - `resources/js/Pages/Cashier/Close.jsx`
+  - `database/migrations/2026_04_25_120000_add_open_comandas_observation_to_cashier_closures_table.php`

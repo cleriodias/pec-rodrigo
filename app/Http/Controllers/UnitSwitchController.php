@@ -31,6 +31,8 @@ class UnitSwitchController extends Controller
             ->map(fn (Unidade $unit) => [
                 'id' => $unit->tb2_id,
                 'name' => $unit->tb2_nome,
+                'status' => (int) ($unit->tb2_status ?? 1),
+                'status_label' => (int) ($unit->tb2_status ?? 1) === 1 ? 'Ativa' : 'Inativa',
                 'active' => (int) ($request->session()->get('active_unit.id')) === $unit->tb2_id,
             ])
             ->values();
@@ -74,6 +76,11 @@ class UnitSwitchController extends Controller
             abort(403);
         }
 
+        if ((int) $user->funcao !== $role) {
+            $user->funcao = $role;
+            $user->save();
+        }
+
         $request->session()->put('active_unit', [
             'id' => $unit->tb2_id,
             'name' => $unit->tb2_nome,
@@ -87,20 +94,10 @@ class UnitSwitchController extends Controller
 
     private function allowedUnits($user)
     {
-        $primaryId = (int) ($user->tb2_id ?? 0);
-
-        $unitIds = $user->units()
-            ->pluck('tb2_unidades.tb2_id')
-            ->map(fn ($value) => (int) $value);
-
-        if ($primaryId > 0 && ! $unitIds->contains($primaryId)) {
-            $unitIds->push($primaryId);
-        }
-
-        return Unidade::active()
-            ->whereIn('tb2_id', $unitIds->unique())
+        return Unidade::query()
+            ->orderByDesc('tb2_status')
             ->orderBy('tb2_nome')
-            ->get(['tb2_id', 'tb2_nome', 'tb2_endereco', 'tb2_cnpj']);
+            ->get(['tb2_id', 'tb2_nome', 'tb2_endereco', 'tb2_cnpj', 'tb2_status']);
     }
 
     private function ensureCanSwitchUnit($user): void
