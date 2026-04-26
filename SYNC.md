@@ -5220,3 +5220,33 @@ MODIFY tipo_pagamento VARCHAR(40) NOT NULL;
 - Script de solicitacao: no dashboard mostrar os seguintes acessos para o perfil master: Usuarios, Unidades, Relatorios, Contra-cheque e AnyDesck.
 - Arquivos sincronizados nesta alteracao:
   - esources/js/Pages/Dashboard.jsx
+
+- Em eports/hoje, o botao existente Abrir cupom foi renomeado para Nao Fiscal, mantendo a abertura/impressao do cupom nao fiscal da venda.
+- Foi criado um novo botao verde Fiscal na listagem, que abre/imprime o cupom fiscal somente quando existir nota fiscal vinculada ao pagamento; quando a venda ainda nao tiver documento fiscal gerado, o botao permanece desabilitado.
+- O backend do relatorio Hoje agora envia tambem o payload iscal_receipt por venda, reaproveitando a mesma estrutura usada nos relatorios fiscais do sistema.
+- Script de solicitacao: em eports/hoje, mudar o nome do botao Abrir Cupom para Nao Fiscal e criar um novo botao verde Fiscal, abrindo o cupom fiscal quando existir, pois nem todas as vendas foram transmitidas ou geradas.
+- Arquivos sincronizados nesta alteracao:
+  - pp/Http/Controllers/SalesReportController.php
+  - esources/js/Pages/Reports/Hoje.jsx
+
+- Em eports/hoje, o botao Fiscal deixou de imprimir diretamente em nova janela e agora abre uma modal propria, no mesmo padrao do cupom nao fiscal.
+- A modal fiscal exibe os dados principais do documento, os itens e oferece o botao Imprimir Fiscal, mantendo a impressao somente quando o usuario decidir dentro da modal.
+- Script de solicitacao: abrir a fiscal em uma modal com opcao para imprimir, como e feito com o cupom nao fiscal.
+- Arquivos sincronizados nesta alteracao:
+  - esources/js/Pages/Reports/Hoje.jsx
+
+- A modal de pre-visualizacao fiscal em eports/hoje passou a exibir tambem o QRCode da consulta quando o payload fiscal trouxer qr_code_data.
+- Quando existir consulta_url, a modal tambem mostra o link de consulta abaixo do QRCode para completar a pre-visualizacao do documento fiscal.
+- Script de solicitacao: faltou o QRCode na pre-visualizacao.
+- Arquivos sincronizados nesta alteracao:
+  - esources/js/Pages/Reports/Hoje.jsx
+
+- Em expenses, a acao visivel da listagem deixou de ser Excluir e passou a ser Editar, reaproveitando o formulario da propria tela para carregar o gasto selecionado, atualizar seus campos e permitir cancelamento da edicao.
+- Foi criada a rota de atualizacao PUT /expenses/{expense} e o backend passou a suportar edicao de gastos mantendo a mesma regra de permissao anterior: apenas o proprio usuario que cadastrou o gasto, dentro da unidade ativa correspondente, pode altera-lo.
+- Toda edicao de gasto agora envia mensagem automatica no chat pelo usuario Sistema para usuarios MASTER e GERENTE da unidade, usando uncao_original para definir os destinatarios.
+- A mensagem informa usuario executor, unidade, data/hora da edicao, gasto ID, dados originais e dados alterados (fornecedor, data, valor e observacao).
+- Script de solicitacao: em expenses, trocar a opcao excluir por editar; todas as edicoes devem ser enviadas no chat para Master e Gerente da unidade; enviar o original e a alteracao no chat.
+- Arquivos sincronizados nesta alteracao:
+  - pp/Http/Controllers/ExpenseController.php
+  - esources/js/Pages/Finance/ExpenseIndex.jsx
+  - outes/web.php

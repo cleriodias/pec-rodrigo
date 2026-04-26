@@ -1621,6 +1621,7 @@ class SalesReportController extends Controller
                             'id_unidade',
                         ]);
                 },
+                'notaFiscal.unidade:tb2_id,tb2_nome,tb2_endereco,tb2_cnpj',
             ])
             ->whereHas('vendas', function ($query) use ($unitId, $start, $end, $timeWindow, $comandaId) {
                 $query
@@ -1661,6 +1662,9 @@ class SalesReportController extends Controller
                 $saleDateTime = $firstSale?->data_hora ?? $payment->created_at;
                 $receiptComanda = $this->resolveReceiptComanda($sales);
                 $displayPaymentType = $this->normalizePaymentTypeForDisplay($payment->tipo_pagamento);
+                $fiscalReceipt = $payment->notaFiscal
+                    ? $this->buildReportFiscalReceiptPayload($payment->notaFiscal)
+                    : null;
 
                 return [
                     'id' => $payment->tb4_id,
@@ -1668,6 +1672,7 @@ class SalesReportController extends Controller
                     'time' => $saleDateTime?->format('H:i'),
                     'comanda' => $receiptComanda,
                     'total' => round((float) $payment->valor_total, 2),
+                    'fiscal_receipt' => $fiscalReceipt,
                     'receipt' => [
                         'id' => $payment->tb4_id,
                         'comanda' => $receiptComanda,
@@ -1703,6 +1708,7 @@ class SalesReportController extends Controller
                                 ];
                             })
                             ->values(),
+                        'fiscal_receipt' => $fiscalReceipt,
                     ],
                 ];
             })
@@ -3758,4 +3764,3 @@ class SalesReportController extends Controller
     }
 
 }
-

@@ -1,6 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { formatBrazilDateTime } from '@/Utils/date';
-import { buildReceiptHtml } from '@/Utils/receipt';
+import { buildFiscalReceiptHtml, buildReceiptHtml } from '@/Utils/receipt';
 import { Head, useForm } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
 
@@ -26,6 +26,16 @@ const formatDateTime = (value) => {
     return formatBrazilDateTime(value);
 };
 
+const buildQrCodeImageUrl = (value) => {
+    const normalized = String(value ?? '').trim();
+
+    if (normalized === '') {
+        return null;
+    }
+
+    return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(normalized)}`;
+};
+
 export default function Hoje({ records = [], reportDate, unit, filters = {} }) {
     const { data, setData, get, processing } = useForm({
         cupom: filters.cupom ?? '',
@@ -34,11 +44,16 @@ export default function Hoje({ records = [], reportDate, unit, filters = {} }) {
         hora: filters.hora ?? '',
     });
     const [selectedReceipt, setSelectedReceipt] = useState(null);
+    const [selectedFiscalReceipt, setSelectedFiscalReceipt] = useState(null);
     const [printError, setPrintError] = useState('');
 
     const totalValue = useMemo(
         () => records.reduce((sum, record) => sum + Number(record.total ?? 0), 0),
         [records],
+    );
+    const fiscalQrCodeImageUrl = useMemo(
+        () => buildQrCodeImageUrl(selectedFiscalReceipt?.qr_code_data),
+        [selectedFiscalReceipt],
     );
 
     const handleSubmit = (event) => {
@@ -93,6 +108,28 @@ export default function Hoje({ records = [], reportDate, unit, filters = {} }) {
         }
 
         printWindow.document.write(buildReceiptHtml(receipt));
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
+        printWindow.close();
+    };
+
+    const handlePrintFiscal = (receipt) => {
+        setPrintError('');
+
+        if (!receipt) {
+            setPrintError('Esta venda ainda nao possui cupom fiscal gerado.');
+            return;
+        }
+
+        const printWindow = window.open('', '_blank', 'width=420,height=680');
+
+        if (!printWindow) {
+            setPrintError('Permita pop-ups para abrir o cupom fiscal.');
+            return;
+        }
+
+        printWindow.document.write(buildFiscalReceiptHtml(receipt));
         printWindow.document.close();
         printWindow.focus();
         printWindow.print();
@@ -251,7 +288,7 @@ export default function Hoje({ records = [], reportDate, unit, filters = {} }) {
                                                 Valor
                                             </th>
                                             <th className="px-3 py-2 text-right font-medium text-gray-600 dark:text-gray-300">
-                                                Cupom
+                                                Cupons
                                             </th>
                                         </tr>
                                     </thead>
@@ -274,13 +311,28 @@ export default function Hoje({ records = [], reportDate, unit, filters = {} }) {
                                                     {formatCurrency(record.total)}
                                                 </td>
                                                 <td className="px-3 py-2 text-right">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setSelectedReceipt(record.receipt)}
-                                                        className="rounded-xl bg-indigo-600 px-3 py-1 text-xs font-semibold text-white shadow hover:bg-indigo-700"
-                                                    >
-                                                        Abrir cupom
-                                                    </button>
+                                                    <div className="flex justify-end gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setSelectedReceipt(record.receipt)}
+                                                            className="rounded-xl bg-indigo-600 px-3 py-1 text-xs font-semibold text-white shadow hover:bg-indigo-700"
+                                                        >
+                                                            Nao Fiscal
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setSelectedFiscalReceipt(record.fiscal_receipt)}
+                                                            disabled={!record.fiscal_receipt}
+                                                            title={record.fiscal_receipt ? 'Abrir cupom fiscal' : 'Venda sem cupom fiscal gerado'}
+                                                            className={`rounded-xl px-3 py-1 text-xs font-semibold text-white shadow ${
+                                                                record.fiscal_receipt
+                                                                    ? 'bg-emerald-600 hover:bg-emerald-700'
+                                                                    : 'cursor-not-allowed bg-emerald-300 opacity-60'
+                                                            }`}
+                                                        >
+                                                            Fiscal
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
@@ -298,7 +350,7 @@ export default function Hoje({ records = [], reportDate, unit, filters = {} }) {
                         <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-6 py-4 dark:border-gray-700">
                             <div>
                                 <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                                    Cupom #{selectedReceipt.id}
+                                    Cupom Nao Fiscal #{selectedReceipt.id}
                                 </h3>
                                 <p className="text-sm text-gray-500 dark:text-gray-300">
                                     {formatDateTime(selectedReceipt.date_time)}
@@ -385,7 +437,160 @@ export default function Hoje({ records = [], reportDate, unit, filters = {} }) {
                                 onClick={() => handlePrint(selectedReceipt)}
                                 className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-indigo-700"
                             >
-                                Imprimir
+                                Imprimir Nao Fiscal
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {selectedFiscalReceipt && (
+                <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4 py-6">
+                    <div className="flex max-h-[calc(100vh-3rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-gray-900">
+                        <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+                            <div>
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                                    {selectedFiscalReceipt.model_label ?? 'Documento Fiscal'}
+                                </h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-300">
+                                    {formatDateTime(selectedFiscalReceipt.issued_at)}
+                                </p>
+                                <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+                                    Loja: {selectedFiscalReceipt.emitter_name ?? '---'}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedFiscalReceipt(null)}
+                                className="text-sm font-semibold text-gray-500 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white"
+                            >
+                                Fechar
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto px-6 py-4">
+                            <div className="space-y-2 text-sm text-gray-700 dark:text-gray-200">
+                                <p>
+                                    <span className="font-medium">Tipo:</span>{' '}
+                                    {selectedFiscalReceipt.consumer_type === 'cupom_fiscal'
+                                        ? 'Cupom Fiscal'
+                                        : selectedFiscalReceipt.consumer_type === 'consumidor'
+                                            ? 'NF Consumidor'
+                                            : 'NF Balcao'}
+                                </p>
+                                <p>
+                                    <span className="font-medium">Pagamento:</span>{' '}
+                                    {selectedFiscalReceipt.payment_label ?? '--'}
+                                </p>
+                                <p>
+                                    <span className="font-medium">Numero:</span>{' '}
+                                    {selectedFiscalReceipt.number ?? '--'}
+                                </p>
+                                <p>
+                                    <span className="font-medium">Serie:</span>{' '}
+                                    {selectedFiscalReceipt.serie ?? '--'}
+                                </p>
+                                <p>
+                                    <span className="font-medium">Status:</span>{' '}
+                                    {selectedFiscalReceipt.status ?? '--'}
+                                </p>
+                                {selectedFiscalReceipt.consumer_name && (
+                                    <p>
+                                        <span className="font-medium">Consumidor:</span>{' '}
+                                        {selectedFiscalReceipt.consumer_name}
+                                    </p>
+                                )}
+                                {selectedFiscalReceipt.consumer_document && (
+                                    <p>
+                                        <span className="font-medium">Documento:</span>{' '}
+                                        {selectedFiscalReceipt.consumer_document}
+                                    </p>
+                                )}
+                                {selectedFiscalReceipt.access_key && (
+                                    <p className="break-all">
+                                        <span className="font-medium">Chave:</span>{' '}
+                                        {selectedFiscalReceipt.access_key}
+                                    </p>
+                                )}
+                                <p className="text-lg font-bold text-emerald-600">
+                                    Total: {formatCurrency(selectedFiscalReceipt.total)}
+                                </p>
+                            </div>
+
+                            {selectedFiscalReceipt.is_preview && (
+                                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-400/40 dark:bg-amber-900/20 dark:text-amber-100">
+                                    Documento fiscal em preparo. Status atual: {selectedFiscalReceipt.status_message || selectedFiscalReceipt.status || 'pendente'}.
+                                </div>
+                            )}
+
+                            {(fiscalQrCodeImageUrl || selectedFiscalReceipt.consulta_url) && (
+                                <div className="mt-6 rounded-2xl border border-gray-100 bg-gray-50 p-4 text-center dark:border-gray-700 dark:bg-gray-900/40">
+                                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                                        QRCode / Consulta
+                                    </h4>
+                                    {fiscalQrCodeImageUrl && (
+                                        <div className="mt-3 flex justify-center">
+                                            <img
+                                                src={fiscalQrCodeImageUrl}
+                                                alt="QRCode da consulta fiscal"
+                                                className="h-52 w-52 rounded-xl border border-gray-200 bg-white p-2 shadow-sm dark:border-gray-700"
+                                            />
+                                        </div>
+                                    )}
+                                    {selectedFiscalReceipt.consulta_url && (
+                                        <a
+                                            href={selectedFiscalReceipt.consulta_url}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="mt-3 inline-flex break-all text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-300 dark:hover:text-emerald-200"
+                                        >
+                                            {selectedFiscalReceipt.consulta_url}
+                                        </a>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="mt-6 rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/40">
+                                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                                    Itens
+                                </h4>
+                                <div className="mt-3 space-y-3 text-sm">
+                                    {(selectedFiscalReceipt.items || []).map((item, index) => (
+                                        <div
+                                            key={item.id ?? `fiscal-item-${index}`}
+                                            className="flex items-center justify-between rounded-xl bg-white/80 px-3 py-2 shadow-sm dark:bg-gray-800/70"
+                                        >
+                                            <div>
+                                                <p className="font-medium text-gray-900 dark:text-gray-100">
+                                                    {item.quantity}x {item.product_name}
+                                                </p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-300">
+                                                    {formatCurrency(item.unit_price)} cada
+                                                </p>
+                                            </div>
+                                            <p className="font-semibold text-gray-900 dark:text-gray-100">
+                                                {formatCurrency(item.subtotal)}
+                                            </p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3 border-t border-gray-200 px-6 py-4 dark:border-gray-700">
+                            <button
+                                type="button"
+                                onClick={() => setSelectedFiscalReceipt(null)}
+                                className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
+                            >
+                                Fechar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handlePrintFiscal(selectedFiscalReceipt)}
+                                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-700"
+                            >
+                                Imprimir Fiscal
                             </button>
                         </div>
                     </div>

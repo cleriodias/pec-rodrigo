@@ -1,7 +1,8 @@
 import AlertMessage from '@/Components/Alert/AlertMessage';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { formatBrazilDate, getBrazilTodayInputValue } from '@/Utils/date';
-import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { Head, useForm, usePage } from '@inertiajs/react';
+import { useState } from 'react';
 
 const formatCurrency = (value) =>
     Number(value ?? 0).toLocaleString('pt-BR', {
@@ -17,6 +18,14 @@ const formatDate = (value) => {
     return formatBrazilDate(value);
 };
 
+const normalizeInputDate = (value) => {
+    if (!value) {
+        return '';
+    }
+
+    return String(value).slice(0, 10);
+};
+
 export default function ExpenseIndex({
     suppliers = [],
     expenses = [],
@@ -30,7 +39,8 @@ export default function ExpenseIndex({
     const defaultSupplier = suppliers.length ? String(suppliers[0].id) : '';
     const today = getBrazilTodayInputValue();
     const hasActiveUnit = Boolean(activeUnit?.id);
-    const { data, setData, post, processing, errors, reset } = useForm({
+    const [editingExpense, setEditingExpense] = useState(null);
+    const { data, setData, post, put, processing, errors } = useForm({
         supplier_id: defaultSupplier,
         expense_date: today,
         amount: '',
@@ -61,8 +71,22 @@ export default function ExpenseIndex({
 
     const handleSubmit = (event) => {
         event.preventDefault();
+
+        if (editingExpense?.id) {
+            put(route('expenses.update', { expense: editingExpense.id, ...buildFilterParams() }), {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setEditingExpense(null);
+                    resetForm();
+                },
+            });
+
+            return;
+        }
+
         post(route('expenses.store', buildFilterParams()), {
-            onSuccess: () => reset('amount', 'notes'),
+            preserveScroll: true,
+            onSuccess: () => resetForm(),
         });
     };
 
@@ -76,14 +100,32 @@ export default function ExpenseIndex({
         });
     };
 
-    const handleDelete = (expenseId) => {
-        if (!expenseId) {
+    const resetForm = () => {
+        setData({
+            supplier_id: defaultSupplier,
+            expense_date: today,
+            amount: '',
+            notes: '',
+        });
+    };
+
+    const handleEdit = (expense) => {
+        if (!expense?.id) {
             return;
         }
-        if (!window.confirm('Confirma excluir este gasto?')) {
-            return;
-        }
-        router.delete(route('expenses.destroy', { expense: expenseId, ...buildFilterParams() }));
+
+        setEditingExpense(expense);
+        setData({
+            supplier_id: expense.supplier_id ? String(expense.supplier_id) : defaultSupplier,
+            expense_date: normalizeInputDate(expense.expense_date) || today,
+            amount: expense.amount !== null && expense.amount !== undefined ? String(expense.amount) : '',
+            notes: expense.notes ?? '',
+        });
+    };
+
+    const handleCancelEdit = () => {
+        setEditingExpense(null);
+        resetForm();
     };
 
     const headerContent = (
@@ -194,13 +236,24 @@ export default function ExpenseIndex({
                             </div>
 
                             <div className="flex justify-end">
-                                <button
-                                    type="submit"
-                                    disabled={processing || !suppliers.length || !hasActiveUnit}
-                                    className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-indigo-700 disabled:opacity-50"
-                                >
-                                    Salvar
-                                </button>
+                                <div className="flex gap-2">
+                                    {editingExpense && (
+                                        <button
+                                            type="button"
+                                            onClick={handleCancelEdit}
+                                            className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+                                        >
+                                            Cancelar
+                                        </button>
+                                    )}
+                                    <button
+                                        type="submit"
+                                        disabled={processing || !suppliers.length || !hasActiveUnit}
+                                        className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-indigo-700 disabled:opacity-50"
+                                    >
+                                        {editingExpense ? 'Atualizar' : 'Salvar'}
+                                    </button>
+                                </div>
                             </div>
                         </form>
                     </div>
@@ -328,13 +381,13 @@ export default function ExpenseIndex({
                                                     {formatCurrency(expense.amount)}
                                                 </td>
                                                 <td className="px-3 py-2 text-center">
-                                                    {expense.can_delete ? (
+                                                    {expense.can_edit ? (
                                                         <button
                                                             type="button"
-                                                            onClick={() => handleDelete(expense.id)}
-                                                            className="rounded-lg border border-red-200 px-3 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-200 dark:border-red-500/60 dark:text-red-300 dark:hover:bg-red-500/10"
+                                                            onClick={() => handleEdit(expense)}
+                                                            className="rounded-lg border border-indigo-200 px-3 py-1 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-indigo-500/60 dark:text-indigo-300 dark:hover:bg-indigo-500/10"
                                                         >
-                                                            Excluir
+                                                            Editar
                                                         </button>
                                                     ) : (
                                                         <span className="text-xs text-gray-400 dark:text-gray-500">
