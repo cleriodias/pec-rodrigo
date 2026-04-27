@@ -191,9 +191,14 @@ export default function ExpenseIndex({
                                         type="date"
                                         value={data.expense_date}
                                         onChange={(event) => setData('expense_date', event.target.value)}
-                                        className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-gray-800 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-                                        disabled={!hasActiveUnit}
+                                        className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-gray-800 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:disabled:bg-gray-800 dark:disabled:text-gray-400"
+                                        disabled={!hasActiveUnit || Boolean(editingExpense)}
                                     />
+                                    {editingExpense && (
+                                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                            A data do gasto nao pode ser alterada na edicao.
+                                        </p>
+                                    )}
                                     {errors.expense_date && (
                                         <p className="text-sm text-red-600">{errors.expense_date}</p>
                                     )}

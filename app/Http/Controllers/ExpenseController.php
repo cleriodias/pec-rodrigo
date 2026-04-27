@@ -118,7 +118,6 @@ class ExpenseController extends Controller
 
         $data = $request->validate([
             'supplier_id' => ['required', 'integer', 'exists:suppliers,id'],
-            'expense_date' => ['required', 'date'],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
@@ -156,7 +155,7 @@ class ExpenseController extends Controller
         $originalPayload = $this->mapExpenseSnapshot($originalExpense);
 
         $expense->fill($data);
-        $hasChanges = $expense->isDirty(['supplier_id', 'expense_date', 'amount', 'notes']);
+        $hasChanges = $expense->isDirty(['supplier_id', 'amount', 'notes']);
         $expense->save();
 
         $updatedExpense = $expense->fresh(['supplier:id,name', 'unit:tb2_id,tb2_nome']);
@@ -313,8 +312,7 @@ class ExpenseController extends Controller
     ): string {
         $lines = [
             '[b]Edicao de gasto[/b]',
-            sprintf('Usuario executor: %s', $executor->name),
-            sprintf('Unidade: %s', $unitName ?: '---'),
+            sprintf('Usuario executor: %s', $this->formatExecutorLabel($unitName, $executor->name)),
             sprintf('Data e hora da edicao: %s', $editedAt->format('d/m/y H:i:s')),
             sprintf('Gasto ID: %s', (string) ($updatedExpense['id'] ?? $originalExpense['id'] ?? '---')),
             'Original:',
@@ -330,6 +328,13 @@ class ExpenseController extends Controller
         ];
 
         return implode("\n", $lines);
+    }
+
+    private function formatExecutorLabel(?string $unitName, string $executorName): string
+    {
+        $normalizedUnitName = trim((string) $unitName);
+
+        return sprintf('%s - %s', $normalizedUnitName !== '' ? $normalizedUnitName : '---', $executorName);
     }
 
     private function mapExpenseSnapshot(?Expense $expense): array

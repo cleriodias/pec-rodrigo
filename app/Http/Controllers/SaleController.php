@@ -1185,7 +1185,11 @@ class SaleController extends Controller
             ->unique()
             ->values();
 
-        $message = $this->buildComandaItemRemovalMessage($executor, $record, $removalReason, $removedAt);
+        $unitName = Unidade::query()
+            ->where('tb2_id', $unitId)
+            ->value('tb2_nome');
+
+        $message = $this->buildComandaItemRemovalMessage($executor, $record, $removalReason, $removedAt, $unitName);
 
         foreach ($recipientIds as $recipientId) {
             ChatMessage::create([
@@ -1198,7 +1202,7 @@ class SaleController extends Controller
         }
     }
 
-    private function buildComandaItemRemovalMessage(User $executor, Venda $record, string $removalReason, Carbon $removedAt): string
+    private function buildComandaItemRemovalMessage(User $executor, Venda $record, string $removalReason, Carbon $removedAt, ?string $unitName): string
     {
         $includedAt = $record->created_at instanceof Carbon
             ? $record->created_at
@@ -1207,7 +1211,7 @@ class SaleController extends Controller
 
         $lines = [
             '[b]Remocao de item da comanda[/b]',
-            sprintf('Usuario executor: %s', $executor->name),
+            sprintf('Usuario executor: %s', $this->formatExecutorLabel($unitName, $executor->name)),
             sprintf('Comanda: %s', $record->id_comanda ? (string) $record->id_comanda : '---'),
             sprintf('Item removido: %s', (string) $record->produto_nome),
             sprintf('Quantidade removida: %d', (int) $record->quantidade),
@@ -1219,6 +1223,13 @@ class SaleController extends Controller
         ];
 
         return implode("\n", $lines);
+    }
+
+    private function formatExecutorLabel(?string $unitName, string $executorName): string
+    {
+        $normalizedUnitName = trim((string) $unitName);
+
+        return sprintf('%s - %s', $normalizedUnitName !== '' ? $normalizedUnitName : '---', $executorName);
     }
 
     private function ensureSystemUser(?int $activeUnitId = null): User

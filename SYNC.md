@@ -5250,3 +5250,52 @@ MODIFY tipo_pagamento VARCHAR(40) NOT NULL;
   - pp/Http/Controllers/ExpenseController.php
   - esources/js/Pages/Finance/ExpenseIndex.jsx
   - outes/web.php
+## 27/04/26 - Nome do executor com loja corrente nas mensagens automaticas
+
+Causa:
+- as mensagens automaticas exibiam apenas o nome do usuario executor;
+- em alguns fluxos a unidade aparecia em linha separada, o que nao seguia o formato solicitado `SETOR-1 - Clerio`.
+
+O que foi alterado:
+- as mensagens automaticas de remocao de item da lanchonete, fechamento de caixa com comandas em aberto e edicao de gastos agora montam o executor no formato `LOJA - USUARIO`;
+- o nome da unidade deixou de aparecer em linha separada nos fluxos onde isso gerava redundancia;
+- a loja usada no texto e a unidade corrente da acao.
+
+Script de solicitacao:
+- `Eu quero que nas mensagens seja enviada a loja corrente junto ao nome do usuario que fez a acao.`
+- `Nessa formato, exemplo: SETOR-1 - Clerio`
+
+Como sincronizar no projeto espelho:
+- copiar as alteracoes de `app/Http/Controllers/SaleController.php`, `app/Http/Controllers/CashierClosureController.php` e `app/Http/Controllers/ExpenseController.php`;
+- garantir que os builders das mensagens usem o mesmo formato `LOJA - USUARIO`;
+- copiar este registro para o `SYNC.md` do projeto espelho.
+
+Arquivos alterados:
+- `app/Http/Controllers/SaleController.php`
+- `app/Http/Controllers/CashierClosureController.php`
+- `app/Http/Controllers/ExpenseController.php`
+- `SYNC.md`
+## 27/04/26 - Data do gasto bloqueada na edicao
+
+Causa:
+- a tela de `expenses` reaproveitava o mesmo formulario de cadastro e edicao;
+- por isso o campo `Data` continuava habilitado durante a edicao;
+- o backend da atualizacao tambem aceitava `expense_date`, entao a data podia ser alterada tanto pela interface quanto por requisicao manual.
+
+O que foi alterado:
+- o campo `Data` passou a ficar desabilitado durante a edicao de gastos, com aviso visual informando que a data nao pode ser alterada;
+- o backend de atualizacao de gastos deixou de aceitar `expense_date`, ignorando qualquer tentativa de mudanca enviada na requisicao;
+- a deteccao de alteracoes do gasto agora considera apenas fornecedor, valor e observacao.
+
+Script de solicitacao:
+- `Na ediçao de gasto a data nao poderá ser editada.`
+
+Como sincronizar no projeto espelho:
+- copiar as alteracoes de `resources/js/Pages/Finance/ExpenseIndex.jsx` e `app/Http/Controllers/ExpenseController.php`;
+- garantir que o formulario de edicao bloqueie a data e que o controller de update nao aceite `expense_date`;
+- copiar este registro para o `SYNC.md` do projeto espelho.
+
+Arquivos alterados:
+- `resources/js/Pages/Finance/ExpenseIndex.jsx`
+- `app/Http/Controllers/ExpenseController.php`
+- `SYNC.md`

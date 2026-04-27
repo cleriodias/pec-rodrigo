@@ -320,8 +320,7 @@ class CashierClosureController extends Controller
     ): string {
         $lines = [
             '[b]Fechamento de caixa com comandas em aberto[/b]',
-            sprintf('Usuario executor: %s', $executor->name),
-            sprintf('Unidade: %s', $unitName ?: '---'),
+            sprintf('Usuario executor: %s', $this->formatExecutorLabel($unitName, $executor->name)),
             sprintf('Data e hora do fechamento: %s', $closedAt->format('d/m/y H:i:s')),
             sprintf('Quantidade de comandas em aberto: %d', count($openComandas)),
             sprintf('Observacao informada: %s', $observation),
@@ -343,6 +342,13 @@ class CashierClosureController extends Controller
         }
 
         return implode("\n", $lines);
+    }
+
+    private function formatExecutorLabel(?string $unitName, string $executorName): string
+    {
+        $normalizedUnitName = trim((string) $unitName);
+
+        return sprintf('%s - %s', $normalizedUnitName !== '' ? $normalizedUnitName : '---', $executorName);
     }
 
     private function ensureSystemUser(?int $activeUnitId = null): User
