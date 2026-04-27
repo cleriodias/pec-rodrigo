@@ -1,73 +1,135 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, useForm } from '@inertiajs/react';
-
-const COLOR_CYCLE = [
-    'border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-100',
-    'border-slate-400 bg-slate-100 text-slate-900 dark:border-slate-500/40 dark:bg-slate-500/10 dark:text-slate-100',
-    'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100',
-    'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-100',
-    'border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-100',
-    'border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-500/40 dark:bg-violet-500/10 dark:text-violet-100',
-    'border-cyan-300 bg-cyan-50 text-cyan-800 dark:border-cyan-500/40 dark:bg-cyan-500/10 dark:text-cyan-100',
-];
+import {
+    formatRoleBadgeLabel,
+    formatUnitBadgeLabel,
+    getRoleBadgeClassName,
+    getRoleBadgeStyle,
+    getUnitBadgeClassName,
+    getUnitBadgeStyle,
+} from '@/Utils/brandBadges';
+import { Head, router } from '@inertiajs/react';
+import { useCallback, useMemo, useState } from 'react';
 
 export default function SwitchUnit({
     units = [],
     roles = [],
     currentUnitId,
-    currentRole,
     currentRoleLabel,
     originalRoleLabel,
 }) {
-    const { data, setData, post, processing } = useForm({
-        unit_id: currentUnitId ?? units[0]?.id ?? null,
-        role: currentRole ?? roles[0]?.value ?? null,
-    });
+    const [selectedUnitId, setSelectedUnitId] = useState(currentUnitId ?? null);
+    const [selectedRole, setSelectedRole] = useState(null);
+    const [submitting, setSubmitting] = useState(false);
 
-    const submit = (event) => {
-        event.preventDefault();
-        post(route('reports.switch-unit.update'));
-    };
+    const currentUnitName = useMemo(
+        () => units.find((unit) => unit.id === Number(currentUnitId))?.name ?? '---',
+        [currentUnitId, units],
+    );
 
-    const selectedUnitName = units.find((unit) => unit.id === Number(data.unit_id))?.name ?? '---';
-    const selectedRoleLabel = roles.find((role) => role.value === Number(data.role))?.label ?? currentRoleLabel ?? '---';
+    const submitSelection = useCallback((unitId, role) => {
+        const normalizedUnitId = Number(unitId);
+        const normalizedRole = Number(role);
 
-    const renderOption = (item, index, selected, onSelect, valueKey = 'id') => {
-        const color = COLOR_CYCLE[index % COLOR_CYCLE.length];
-        const isCurrent = item.active;
-        const isInactiveUnit = valueKey === 'id' && Number(item.status ?? 1) !== 1;
+        if (
+            submitting ||
+            Number.isNaN(normalizedUnitId) ||
+            Number.isNaN(normalizedRole)
+        ) {
+            return;
+        }
+
+        setSubmitting(true);
+
+        router.post(
+            route('reports.switch-unit.update'),
+            {
+                unit_id: normalizedUnitId,
+                role: normalizedRole,
+            },
+            {
+                preserveScroll: true,
+                onFinish: () => setSubmitting(false),
+            },
+        );
+    }, [submitting]);
+
+    const handleUnitSelect = useCallback((unitId) => {
+        const normalizedUnitId = Number(unitId);
+
+        if (submitting || Number.isNaN(normalizedUnitId)) {
+            return;
+        }
+
+        setSelectedUnitId(normalizedUnitId);
+
+        if (selectedRole !== null) {
+            submitSelection(normalizedUnitId, selectedRole);
+        }
+    }, [selectedRole, submitSelection, submitting]);
+
+    const handleRoleSelect = useCallback((roleValue) => {
+        const normalizedRole = Number(roleValue);
+
+        if (submitting || Number.isNaN(normalizedRole)) {
+            return;
+        }
+
+        setSelectedRole(normalizedRole);
+
+        if (selectedUnitId !== null) {
+            submitSelection(selectedUnitId, normalizedRole);
+        }
+    }, [selectedUnitId, submitSelection, submitting]);
+
+    const renderSwitch = useCallback((option, kind) => {
+        const optionId = kind === 'unit' ? Number(option.id) : Number(option.value);
+        const selected = kind === 'unit'
+            ? selectedUnitId === optionId
+            : selectedRole === optionId;
+        const isCurrent = Boolean(option.active);
+        const isInactiveUnit = kind === 'unit' && Number(option.status ?? 1) !== 1;
+        const label = kind === 'unit' ? option.name : option.label;
+        const switchStyle = kind === 'unit' ? getUnitBadgeStyle(label) : getRoleBadgeStyle(label);
 
         return (
             <button
-                key={item[valueKey]}
+                key={`${kind}-${optionId}`}
                 type="button"
-                onClick={() => onSelect(item[valueKey])}
-                className={`relative rounded-2xl border px-4 py-3 text-left text-sm font-semibold shadow-sm transition ${
-                    selected
-                        ? `${isInactiveUnit ? 'border-red-300 bg-red-50 text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-100' : color} ring-2 ring-offset-2 ring-indigo-500 dark:ring-offset-gray-900`
-                        : isInactiveUnit
-                          ? 'border-red-200 bg-red-50/80 text-red-700 hover:border-red-300 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-100'
-                          : 'border-gray-200 bg-white text-gray-700 hover:border-indigo-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100'
-                }`}
+                onClick={() => (kind === 'unit' ? handleUnitSelect(optionId) : handleRoleSelect(optionId))}
+                disabled={submitting}
+                className="flex items-center gap-3 rounded-2xl border border-transparent px-1 py-1 text-left transition hover:border-gray-200 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:border-gray-700"
             >
-                <span className="block pr-28">{item.name ?? item.label}</span>
-                {isCurrent && (
-                    <span className="absolute right-3 top-3 rounded-full bg-white/80 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-gray-700 dark:bg-gray-900/70 dark:text-gray-100">
-                        Atual
+                <span
+                    className="relative inline-flex h-7 w-12 shrink-0 rounded-full border transition duration-200"
+                    style={{
+                        backgroundColor: selected ? switchStyle.backgroundColor : '#cbd5e1',
+                        borderColor: selected ? switchStyle.borderColor : '#cbd5e1',
+                    }}
+                >
+                    <span
+                        className={`pointer-events-none absolute top-[2px] h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${
+                            selected ? 'translate-x-6' : 'translate-x-[2px]'
+                        }`}
+                    ></span>
+                </span>
+                <span className="flex items-center gap-2">
+                    <span className="text-sm font-semibold uppercase tracking-wide text-gray-800 dark:text-gray-100">
+                        {kind === 'unit' ? formatUnitBadgeLabel(label) : formatRoleBadgeLabel(label)}
                     </span>
-                )}
-                {isInactiveUnit && (
-                    <span className={`absolute ${isCurrent ? 'right-20' : 'right-3'} top-3 rounded-full px-2 py-1 text-[11px] font-bold uppercase tracking-wide ${
-                        selected
-                            ? 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-100'
-                            : 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-100'
-                    }`}>
-                        Inativa
-                    </span>
-                )}
+                    {isCurrent && (
+                        <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                            Atual
+                        </span>
+                    )}
+                    {isInactiveUnit && (
+                        <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-600 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-100">
+                            Inativa
+                        </span>
+                    )}
+                </span>
             </button>
         );
-    };
+    }, [handleRoleSelect, handleUnitSelect, selectedRole, selectedUnitId, submitting]);
 
     const headerContent = (
         <div>
@@ -75,7 +137,7 @@ export default function SwitchUnit({
                 Trocar
             </h2>
             <p className="text-sm text-gray-500 dark:text-gray-300">
-                Unidade selecionada: {selectedUnitName} | Funcao selecionada: {selectedRoleLabel} | Funcao de origem: {originalRoleLabel ?? '---'}
+                Unidade atual: {currentUnitName} | Funcao atual: {currentRoleLabel ?? '---'} | Funcao de origem: {originalRoleLabel ?? '---'}
             </p>
         </div>
     );
@@ -86,47 +148,53 @@ export default function SwitchUnit({
 
             <div className="py-12">
                 <div className="mx-auto max-w-6xl space-y-6 px-4 sm:px-6 lg:px-8">
-                    <form onSubmit={submit} className="space-y-6">
-                        <div className="rounded-2xl bg-white p-6 shadow dark:bg-gray-800">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                                Trocar Unidade
+                    <div className="rounded-2xl border border-slate-200 bg-white px-6 py-6 shadow dark:border-gray-700 dark:bg-gray-800">
+                        <div className="space-y-1">
+                            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                                Troca rapida
                             </h3>
-                            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                                {units.map((unit, index) =>
-                                    renderOption(unit, index, Number(data.unit_id) === unit.id, (value) =>
-                                        setData('unit_id', value),
-                                    ),
-                                )}
+                            <p className="text-sm text-gray-500 dark:text-gray-300">
+                                Selecione uma unidade e uma funcao. Ao marcar uma de cada, a sessao e atualizada automaticamente.
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2 pt-2">
+                                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                    Sessao atual
+                                </span>
+                                <span
+                                    className={getUnitBadgeClassName()}
+                                    style={getUnitBadgeStyle(currentUnitName)}
+                                >
+                                    {formatUnitBadgeLabel(currentUnitName)}
+                                </span>
+                                <span
+                                    className={getRoleBadgeClassName()}
+                                    style={getRoleBadgeStyle(currentRoleLabel)}
+                                >
+                                    {formatRoleBadgeLabel(currentRoleLabel)}
+                                </span>
                             </div>
                         </div>
 
-                        <div className="rounded-2xl bg-white p-6 shadow dark:bg-gray-800">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                                Trocar Funcao
-                            </h3>
-                            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                                {roles.map((role, index) =>
-                                    renderOption(
-                                        role,
-                                        index,
-                                        Number(data.role) === role.value,
-                                        (value) => setData('role', value),
-                                        'value',
-                                    ),
-                                )}
+                        <div className="mt-6 grid gap-6 xl:grid-cols-2">
+                            <div>
+                                <h4 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
+                                    Unidades
+                                </h4>
+                                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
+                                    {units.map((unit) => renderSwitch(unit, 'unit'))}
+                                </div>
+                            </div>
+
+                            <div>
+                                <h4 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
+                                    Funcao
+                                </h4>
+                                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
+                                    {roles.map((role) => renderSwitch(role, 'role'))}
+                                </div>
                             </div>
                         </div>
-
-                        <div className="flex justify-end">
-                            <button
-                                type="submit"
-                                disabled={processing}
-                                className="rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-70"
-                            >
-                                Atualizar sessao
-                            </button>
-                        </div>
-                    </form>
+                    </div>
                 </div>
             </div>
         </AuthenticatedLayout>

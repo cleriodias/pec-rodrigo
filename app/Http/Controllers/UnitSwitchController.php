@@ -22,39 +22,7 @@ class UnitSwitchController extends Controller
 
     public function index(Request $request): Response
     {
-        $user = $request->user();
-        $this->ensureCanSwitchUnit($user);
-        $originalRole = $this->originalRole($user);
-        $currentRole = (int) $user->funcao;
-
-        $units = $this->allowedUnits($user)
-            ->map(fn (Unidade $unit) => [
-                'id' => $unit->tb2_id,
-                'name' => $unit->tb2_nome,
-                'status' => (int) ($unit->tb2_status ?? 1),
-                'status_label' => (int) ($unit->tb2_status ?? 1) === 1 ? 'Ativa' : 'Inativa',
-                'active' => (int) ($request->session()->get('active_unit.id')) === $unit->tb2_id,
-            ])
-            ->values();
-
-        $roles = collect(self::ROLE_OPTIONS)
-            ->filter(fn (string $label, int $value) => $value >= $originalRole)
-            ->map(fn (string $label, int $value) => [
-                'value' => $value,
-                'label' => $label,
-                'active' => $currentRole === $value,
-            ])
-            ->values();
-
-        return Inertia::render('Reports/SwitchUnit', [
-            'units' => $units,
-            'roles' => $roles,
-            'currentUnitId' => (int) ($request->session()->get('active_unit.id') ?? $user->tb2_id ?? 0),
-            'currentRole' => $currentRole,
-            'currentRoleLabel' => self::ROLE_OPTIONS[$currentRole] ?? '---',
-            'originalRole' => $originalRole,
-            'originalRoleLabel' => self::ROLE_OPTIONS[$originalRole] ?? '---',
-        ]);
+        return Inertia::render('Reports/SwitchUnit', $this->buildSwitchPayload($request));
     }
 
     public function update(Request $request): RedirectResponse
@@ -89,7 +57,63 @@ class UnitSwitchController extends Controller
         ]);
         $request->session()->put('active_role', $role);
 
-        return redirect()->route('dashboard')->with('success', 'Sessao atualizada com sucesso!');
+        $targetRoute = $role === 4 ? 'lanchonete.terminal' : 'dashboard';
+
+        return redirect()->route($targetRoute)->with('success', 'Sessao atualizada com sucesso!');
+    }
+
+    public function dashboardOptions(Request $request): ?array
+    {
+        $user = $request->user();
+
+        if (! $user || (int) $user->funcao !== 0) {
+            return null;
+        }
+
+        return $this->buildSwitchPayload($request);
+    }
+
+    private function buildSwitchPayload(Request $request): array
+    {
+        $user = $request->user();
+        $this->ensureCanSwitchUnit($user);
+        $originalRole = $this->originalRole($user);
+        $currentRole = (int) $user->funcao;
+        $currentUnitId = (int) ($request->session()->get('active_unit.id') ?? $user->tb2_id ?? 0);
+
+        $units = $this->allowedUnits($user)
+            ->map(fn (Unidade $unit) => [
+                'id' => (int) $unit->tb2_id,
+                'name' => $unit->tb2_nome,
+                'status' => (int) ($unit->tb2_status ?? 1),
+                'status_label' => (int) ($unit->tb2_status ?? 1) === 1 ? 'Ativa' : 'Inativa',
+                'active' => $currentUnitId === (int) $unit->tb2_id,
+            ])
+            ->values();
+
+        $roles = collect(self::ROLE_OPTIONS)
+            ->filter(fn (string $label, int $value) => $value >= $originalRole)
+            ->map(fn (string $label, int $value) => [
+                'value' => $value,
+                'label' => $label,
+                'active' => $currentRole === $value,
+            ])
+            ->values();
+
+        $currentUnitName = $units->firstWhere('id', $currentUnitId)['name']
+            ?? optional($user->primaryUnit)->tb2_nome
+            ?? '---';
+
+        return [
+            'units' => $units,
+            'roles' => $roles,
+            'currentUnitId' => $currentUnitId,
+            'currentUnitName' => $currentUnitName,
+            'currentRole' => $currentRole,
+            'currentRoleLabel' => self::ROLE_OPTIONS[$currentRole] ?? '---',
+            'originalRole' => $originalRole,
+            'originalRoleLabel' => self::ROLE_OPTIONS[$originalRole] ?? '---',
+        ];
     }
 
     private function allowedUnits($user)

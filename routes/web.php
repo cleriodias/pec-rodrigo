@@ -70,6 +70,7 @@ if (class_exists(\App\Http\Controllers\MobileRevenueController::class)) {
 Route::get('/dashboard', function (Request $request, ProductQuickLookupCache $quickLookupCache) {
     return Inertia::render('Dashboard', [
         'quickLookupProducts' => fn () => $quickLookupCache->forRequest($request),
+        'masterSwitchOptions' => fn () => app(UnitSwitchController::class)->dashboardOptions($request),
     ]);
 })->middleware(['auth', 'verified'])->name('dashboard');
 

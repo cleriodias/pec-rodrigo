@@ -265,6 +265,31 @@ Arquivos alterados:
 - `app/Http/Controllers/UnitSwitchController.php`
 - `SYNC.md`
 
+## 27/04/26 - Unidade atual vem selecionada no Dashboard e em Trocar
+
+Causa:
+- os switches de unidade no `Dashboard` e em `reports/switch-unit` iniciavam com estado nulo;
+- por isso a unidade atual aparecia apenas como informacao visual, mas nao vinha ligada no switch.
+
+O que foi alterado:
+- o `Dashboard` agora inicializa e ressincroniza o estado do seletor com a `currentUnitId` da sessao;
+- a tela `reports/switch-unit` agora abre com a unidade atual ja selecionada no grupo `Unidades`;
+- a funcao continua com o comportamento anterior, pois o ajuste solicitado foi apenas para a unidade.
+
+Script de solicitacao:
+- `vamos fazer uma pequena alteraçao.`
+- `A unidade atual ja vem selecionada, tanto no dashboard quanto em trocar.`
+
+Como sincronizar no projeto espelho:
+- copiar as alteracoes de `resources/js/Pages/Dashboard.jsx` e `resources/js/Pages/Reports/SwitchUnit.jsx`;
+- garantir que os estados iniciais dos seletores usem `currentUnitId` em vez de `null`;
+- copiar este registro para o `SYNC.md` do projeto espelho.
+
+Arquivos alterados:
+- `resources/js/Pages/Dashboard.jsx`
+- `resources/js/Pages/Reports/SwitchUnit.jsx`
+- `SYNC.md`
+
 ## 25/04/26 - Correcao da tela em branco em reports/cash-closure
 
 Causa:
@@ -5298,4 +5323,86 @@ Como sincronizar no projeto espelho:
 Arquivos alterados:
 - `resources/js/Pages/Finance/ExpenseIndex.jsx`
 - `app/Http/Controllers/ExpenseController.php`
+- `SYNC.md`
+
+## 27/04/26 - Troca rapida de unidade e funcao para MASTER no Dashboard
+
+Causa:
+- o `Dashboard` do perfil `MASTER` mostrava apenas atalhos administrativos;
+- a troca de unidade e funcao existia somente em `reports/switch-unit`, com botoes e envio manual por `Atualizar sessao`;
+- o `Dashboard` nao recebia o payload de unidades e funcoes permitido para montar esse formulario.
+
+O que foi alterado:
+- o `UnitSwitchController` passou a expor um payload reutilizavel com unidades, funcoes, unidade atual e funcao atual;
+- a rota do `Dashboard` agora envia esse payload para o frontend;
+- o `Dashboard` ganhou um formulario de troca rapida com layout de switches, separado em `Unidades` e `Funcao`, apenas para o perfil `MASTER`;
+- os switches iniciam desmarcados, aceitam selecao unica por grupo e, ao selecionar uma unidade e uma funcao, a sessao e atualizada automaticamente;
+- os atalhos administrativos do `MASTER` foram mantidos abaixo do novo formulario.
+
+Script de solicitacao:
+- `Em : dashboard`
+- `Apenas para o perfil MASTER`
+- `Formulario como na imagem, todos os checkbox desmarcados, seleçao unica, selecionou um de cada ja grava.`
+- `User o mesmo layout`
+- `Url com exemplo do estilo: https://lineone.piniastudio.com/form-switch.html`
+
+Como sincronizar no projeto espelho:
+- copiar as alteracoes de `app/Http/Controllers/UnitSwitchController.php`, `routes/web.php` e `resources/js/Pages/Dashboard.jsx`;
+- garantir que o `Dashboard` receba o payload de troca e dispare `reports.switch-unit.update` automaticamente quando houver uma unidade e uma funcao selecionadas;
+- copiar este registro para o `SYNC.md` do projeto espelho.
+
+Arquivos alterados:
+- `app/Http/Controllers/UnitSwitchController.php`
+- `routes/web.php`
+- `resources/js/Pages/Dashboard.jsx`
+- `SYNC.md`
+
+## 27/04/26 - Mesmo layout de switches em reports/switch-unit
+
+Causa:
+- a tela `reports/switch-unit` ainda usava o layout antigo de cartoes/botoes e dependia do botao `Atualizar sessao`;
+- o `Dashboard` do `MASTER` ja havia recebido o novo padrao visual com switches, selecao unica e gravacao automatica;
+- isso deixou as duas telas inconsistentes visual e funcionalmente.
+
+O que foi alterado:
+- `reports/switch-unit` passou a usar o mesmo layout de switches aplicado no `Dashboard`;
+- os grupos `Unidades` e `Funcao` agora usam selecao unica visual, com todos os switches inicialmente desmarcados;
+- a unidade atual e a funcao atual continuam visiveis por badges no topo do bloco;
+- ao selecionar uma unidade e uma funcao, a tela grava automaticamente a sessao;
+- a dependencia do botao `Atualizar sessao` foi removida da interface.
+
+Script de solicitacao:
+- `Aplique o mesmo layout em: "reports/switch-unit"`
+
+Como sincronizar no projeto espelho:
+- copiar a nova versao de `resources/js/Pages/Reports/SwitchUnit.jsx`;
+- garantir que a tela continue postando para `reports.switch-unit.update` automaticamente quando houver uma unidade e uma funcao selecionadas;
+- copiar este registro para o `SYNC.md` do projeto espelho.
+
+Arquivos alterados:
+- `resources/js/Pages/Reports/SwitchUnit.jsx`
+- `SYNC.md`
+
+## 27/04/26 - Troca para lanchonete vai direto para a tela correta
+
+Causa:
+- a troca de unidade/funcao sempre redirecionava primeiro para o `Dashboard`;
+- depois disso, o frontend do `Dashboard` detectava `LANCHONETE` e fazia um segundo redirecionamento para `lanchonete/terminal`;
+- por isso o fluxo passava visualmente pelo `Dashboard` antes de chegar na tela correta.
+
+O que foi alterado:
+- o `UnitSwitchController` passou a decidir o destino logo apos salvar a troca;
+- quando a funcao escolhida e `LANCHONETE`, o redirecionamento agora vai direto para `lanchonete.terminal`;
+- os demais perfis continuam usando o destino padrao do `Dashboard`.
+
+Script de solicitacao:
+- `Eu percebi que na troca de perfil para lanchonete ele passa pelo dashboard depois vai para a tela da lanchonte, tem como mudar isso e ir direto para a tela correta?`
+
+Como sincronizar no projeto espelho:
+- copiar a alteracao de `app/Http/Controllers/UnitSwitchController.php`;
+- garantir que o `update()` redirecione direto para `lanchonete.terminal` quando `role === 4`;
+- copiar este registro para o `SYNC.md` do projeto espelho.
+
+Arquivos alterados:
+- `app/Http/Controllers/UnitSwitchController.php`
 - `SYNC.md`

@@ -1,6 +1,14 @@
 ﻿import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Modal from '@/Components/Modal';
 import { Head, Link, usePage, router } from '@inertiajs/react';
+import {
+    formatRoleBadgeLabel,
+    formatUnitBadgeLabel,
+    getRoleBadgeClassName,
+    getRoleBadgeStyle,
+    getUnitBadgeClassName,
+    getUnitBadgeStyle,
+} from '@/Utils/brandBadges';
 import { formatBrazilDate, formatBrazilDateTime } from '@/Utils/date';
 import { buildFiscalReceiptHtml, buildReceiptHtml, resolveReceiptComanda, resolveReceiptId } from '@/Utils/receipt';
 import axios from 'axios';
@@ -348,7 +356,7 @@ const cacheDirectProductLookup = (cache, product) => {
     }
 };
 
-export default function Dashboard({ quickLookupProducts = [] }) {
+export default function Dashboard({ quickLookupProducts = [], masterSwitchOptions = null }) {
     const pageProps = usePage().props;
     const { auth } = pageProps;
     const effectiveRole = Number(auth?.user?.funcao ?? -1);
@@ -399,6 +407,11 @@ export default function Dashboard({ quickLookupProducts = [] }) {
     const [selectedComandaCode, setSelectedComandaCode] = useState(null);
     const [cashierRestrictions, setCashierRestrictions] = useState(null);
     const [cashierRestrictionsLoading, setCashierRestrictionsLoading] = useState(false);
+    const [selectedMasterUnitId, setSelectedMasterUnitId] = useState(
+        masterSwitchOptions?.currentUnitId ?? null,
+    );
+    const [selectedMasterRole, setSelectedMasterRole] = useState(null);
+    const [masterSwitchSubmitting, setMasterSwitchSubmitting] = useState(false);
     const lastAutoOpenComandasKey = useRef('');
 
     useEffect(() => {
@@ -484,6 +497,16 @@ export default function Dashboard({ quickLookupProducts = [] }) {
     const isMaster = effectiveRole === 0;
     const isCashier = effectiveRole === 3;
     const canLaunchSales = isCashier;
+    const masterUnitOptions = useMemo(
+        () => (Array.isArray(masterSwitchOptions?.units) ? masterSwitchOptions.units : []),
+        [masterSwitchOptions],
+    );
+    const masterRoleOptions = useMemo(
+        () => (Array.isArray(masterSwitchOptions?.roles) ? masterSwitchOptions.roles : []),
+        [masterSwitchOptions],
+    );
+    const currentMasterUnitName = masterSwitchOptions?.currentUnitName ?? activeUnitName ?? '---';
+    const currentMasterRoleLabel = masterSwitchOptions?.currentRoleLabel ?? '---';
     const pendingComandas = useMemo(() => {
         const list = cashierRestrictions?.pending_comandas;
         if (!Array.isArray(list)) {
@@ -563,6 +586,146 @@ export default function Dashboard({ quickLookupProducts = [] }) {
         (requiresClosure || hasPendingComandas) &&
         visibleComandasList.length > 0;
     const autoOpenComandasKey = `${requiresClosure ? '1' : '0'}-${pendingComandasLabel}-${openComandasDisplayCount}`;
+
+    useEffect(() => {
+        setSelectedMasterUnitId(masterSwitchOptions?.currentUnitId ?? null);
+        setSelectedMasterRole(null);
+        setMasterSwitchSubmitting(false);
+    }, [masterSwitchOptions?.currentRole, masterSwitchOptions?.currentUnitId]);
+
+    const submitMasterSwitch = useCallback(
+        (unitId, role) => {
+            const normalizedUnitId = Number(unitId);
+            const normalizedRole = Number(role);
+
+            if (
+                !isMaster ||
+                masterSwitchSubmitting ||
+                Number.isNaN(normalizedUnitId) ||
+                Number.isNaN(normalizedRole)
+            ) {
+                return;
+            }
+
+            setMasterSwitchSubmitting(true);
+
+            router.post(
+                route('reports.switch-unit.update'),
+                {
+                    unit_id: normalizedUnitId,
+                    role: normalizedRole,
+                },
+                {
+                    preserveScroll: true,
+                    onFinish: () => {
+                        setMasterSwitchSubmitting(false);
+                    },
+                },
+            );
+        },
+        [isMaster, masterSwitchSubmitting],
+    );
+
+    const handleMasterUnitSelect = useCallback(
+        (unitId) => {
+            const normalizedUnitId = Number(unitId);
+
+            if (Number.isNaN(normalizedUnitId) || masterSwitchSubmitting) {
+                return;
+            }
+
+            setSelectedMasterUnitId(normalizedUnitId);
+
+            if (selectedMasterRole !== null) {
+                submitMasterSwitch(normalizedUnitId, selectedMasterRole);
+            }
+        },
+        [masterSwitchSubmitting, selectedMasterRole, submitMasterSwitch],
+    );
+
+    const handleMasterRoleSelect = useCallback(
+        (roleValue) => {
+            const normalizedRole = Number(roleValue);
+
+            if (Number.isNaN(normalizedRole) || masterSwitchSubmitting) {
+                return;
+            }
+
+            setSelectedMasterRole(normalizedRole);
+
+            if (selectedMasterUnitId !== null) {
+                submitMasterSwitch(selectedMasterUnitId, normalizedRole);
+            }
+        },
+        [masterSwitchSubmitting, selectedMasterUnitId, submitMasterSwitch],
+    );
+
+    const renderMasterSwitch = useCallback(
+        (option, kind) => {
+            const optionId = kind === 'unit' ? Number(option.id) : Number(option.value);
+            const selected =
+                kind === 'unit'
+                    ? selectedMasterUnitId === optionId
+                    : selectedMasterRole === optionId;
+            const isCurrent = Boolean(option.active);
+            const isInactiveUnit = kind === 'unit' && Number(option.status ?? 1) !== 1;
+            const label = kind === 'unit' ? option.name : option.label;
+            const switchStyle =
+                kind === 'unit' ? getUnitBadgeStyle(label) : getRoleBadgeStyle(label);
+
+            return (
+                <button
+                    key={`${kind}-${optionId}`}
+                    type="button"
+                    onClick={() =>
+                        kind === 'unit'
+                            ? handleMasterUnitSelect(optionId)
+                            : handleMasterRoleSelect(optionId)
+                    }
+                    disabled={masterSwitchSubmitting}
+                    className="flex items-center gap-3 rounded-2xl border border-transparent px-1 py-1 text-left transition hover:border-gray-200 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:border-gray-700"
+                >
+                    <span
+                        className="relative inline-flex h-7 w-12 shrink-0 rounded-full border transition duration-200"
+                        style={{
+                            backgroundColor: selected ? switchStyle.backgroundColor : '#cbd5e1',
+                            borderColor: selected ? switchStyle.borderColor : '#cbd5e1',
+                        }}
+                    >
+                        <span
+                            className={`pointer-events-none absolute top-[2px] h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${
+                                selected ? 'translate-x-6' : 'translate-x-[2px]'
+                            }`}
+                        ></span>
+                    </span>
+                    <span className="flex items-center gap-2">
+                        <span className="text-sm font-semibold uppercase tracking-wide text-gray-800 dark:text-gray-100">
+                            {kind === 'unit'
+                                ? formatUnitBadgeLabel(label)
+                                : formatRoleBadgeLabel(label)}
+                        </span>
+                        {isCurrent && (
+                            <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                                Atual
+                            </span>
+                        )}
+                        {isInactiveUnit && (
+                            <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-600 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-100">
+                                Inativa
+                            </span>
+                        )}
+                    </span>
+                </button>
+            );
+        },
+        [
+            handleMasterRoleSelect,
+            handleMasterUnitSelect,
+            masterSwitchSubmitting,
+            selectedMasterRole,
+            selectedMasterUnitId,
+        ],
+    );
 
     const hasVrRestrictions = useMemo(
         () => items.some((item) => !item.vrEligible),
@@ -1918,35 +2081,85 @@ export default function Dashboard({ quickLookupProducts = [] }) {
                                     </p>
                                 </div>
                                 {isMaster && (
-                                    <div className="mt-6">
-                                        <div className="mb-3">
-                                            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
-                                                Acessos do perfil MASTER
-                                            </h3>
-                                            <p className="text-sm text-gray-500 dark:text-gray-300">
-                                                Utilize estes atalhos para as areas administrativas disponiveis no Dashboard.
-                                            </p>
+                                    <div className="mt-6 space-y-6">
+                                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-5 dark:border-gray-700 dark:bg-gray-900/60">
+                                            <div className="space-y-1">
+                                                <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                                                    Troca rapida do perfil MASTER
+                                                </h3>
+                                                <p className="text-sm text-gray-500 dark:text-gray-300">
+                                                    Selecione uma unidade e uma funcao. Ao marcar uma de cada, a sessao e atualizada automaticamente.
+                                                </p>
+                                                <div className="flex flex-wrap items-center gap-2 pt-2">
+                                                    <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                                        Sessao atual
+                                                    </span>
+                                                    <span
+                                                        className={getUnitBadgeClassName()}
+                                                        style={getUnitBadgeStyle(currentMasterUnitName)}
+                                                    >
+                                                        {formatUnitBadgeLabel(currentMasterUnitName)}
+                                                    </span>
+                                                    <span
+                                                        className={getRoleBadgeClassName()}
+                                                        style={getRoleBadgeStyle(currentMasterRoleLabel)}
+                                                    >
+                                                        {formatRoleBadgeLabel(currentMasterRoleLabel)}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-6 grid gap-6 xl:grid-cols-2">
+                                                <div>
+                                                    <h4 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
+                                                        Unidades
+                                                    </h4>
+                                                    <div className="grid gap-3 sm:grid-cols-2">
+                                                        {masterUnitOptions.map((unit) => renderMasterSwitch(unit, 'unit'))}
+                                                    </div>
+                                                </div>
+
+                                                <div>
+                                                    <h4 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
+                                                        Funcao
+                                                    </h4>
+                                                    <div className="grid gap-3 sm:grid-cols-2">
+                                                        {masterRoleOptions.map((role) => renderMasterSwitch(role, 'role'))}
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                                            {masterShortcutLinks.map((link) => (
-                                                <Link
-                                                    key={link.href}
-                                                    href={link.href}
-                                                    className="flex items-center gap-3 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-4 text-left shadow-sm transition hover:border-indigo-400 hover:bg-indigo-100 dark:border-indigo-500/30 dark:bg-indigo-900/20 dark:hover:bg-indigo-900/30"
-                                                >
-                                                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600 text-lg text-white shadow">
-                                                        <i className={link.icon} aria-hidden="true"></i>
-                                                    </span>
-                                                    <span className="min-w-0">
-                                                        <span className="block text-sm font-semibold text-indigo-900 dark:text-indigo-100">
-                                                            {link.label}
+
+                                        <div>
+                                            <div className="mb-3">
+                                                <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                                                    Acessos do perfil MASTER
+                                                </h3>
+                                                <p className="text-sm text-gray-500 dark:text-gray-300">
+                                                    Utilize estes atalhos para as areas administrativas disponiveis no Dashboard.
+                                                </p>
+                                            </div>
+                                            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                                                {masterShortcutLinks.map((link) => (
+                                                    <Link
+                                                        key={link.href}
+                                                        href={link.href}
+                                                        className="flex items-center gap-3 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-4 text-left shadow-sm transition hover:border-indigo-400 hover:bg-indigo-100 dark:border-indigo-500/30 dark:bg-indigo-900/20 dark:hover:bg-indigo-900/30"
+                                                    >
+                                                        <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600 text-lg text-white shadow">
+                                                            <i className={link.icon} aria-hidden="true"></i>
                                                         </span>
-                                                        <span className="block text-xs text-indigo-700 dark:text-indigo-200">
-                                                            Abrir
+                                                        <span className="min-w-0">
+                                                            <span className="block text-sm font-semibold text-indigo-900 dark:text-indigo-100">
+                                                                {link.label}
+                                                            </span>
+                                                            <span className="block text-xs text-indigo-700 dark:text-indigo-200">
+                                                                Abrir
+                                                            </span>
                                                         </span>
-                                                    </span>
-                                                </Link>
-                                            ))}
+                                                    </Link>
+                                                ))}
+                                            </div>
                                         </div>
                                     </div>
                                 )}
