@@ -265,6 +265,168 @@ Arquivos alterados:
 - `app/Http/Controllers/UnitSwitchController.php`
 - `SYNC.md`
 
+## 28/04/26 - Replay do dia 27 normaliza datas zeradas em SQL legado
+
+Causa:
+- o arquivo de replay do dia `27/04/26` estava levando valores legados `0000-00-00 00:00:00` em campos `datetime`, como `users.email_verified_at`;
+- o Azure MySQL da producao rejeita esse valor com `ERROR 1292 (22007)` durante a reaplicacao do SQL;
+- por isso o replay parava logo no inicio, antes de concluir a transacao.
+
+O que foi alterado:
+- o gerador `tmp_generate_day27_replay_sql.php` passou a converter qualquer data zerada no formato `0000-00-00` ou `0000-00-00 00:00:00` para `NULL` ao montar o SQL;
+- os arquivos `bkp/replay_day27_after_restore_27-04-26.sql` e `bkp/validate_day27_after_restore_27-04-26.sql` foram regenerados apos esse ajuste;
+- o replay final foi conferido para garantir que nao restaram ocorrencias de `0000-00-00`.
+
+Script de solicitacao:
+- `cmd /c ""C:\xampp\mysql\bin\mysql.exe" --host=pdv.mysql.database.azure.com --port=3306 --user=pdv --password --ssl-ca=C:\xampp\htdocs\pec-rodrigo\storage\app\private\cacert.pem paoecafe83 < C:\xampp\htdocs\pec-rodrigo\bkp\replay_day27_after_restore_27-04-26.sql"`
+
+Como sincronizar no projeto espelho:
+- copiar a alteracao de `tmp_generate_day27_replay_sql.php`, preservando a normalizacao para `NULL` de datas zeradas;
+- copiar os arquivos SQL regenerados se o outro projeto usar o mesmo fluxo de replay manual;
+- manter a validacao final sem datas zeradas antes de executar qualquer replay em ambiente remoto.
+
+Arquivos alterados:
+- `tmp_generate_day27_replay_sql.php`
+- `bkp/replay_day27_after_restore_27-04-26.sql`
+- `bkp/validate_day27_after_restore_27-04-26.sql`
+- `SYNC.md`
+
+## 28/04/26 - Replay de fechamento de caixa passou a usar os registros do restore
+
+Causa:
+- o replay do dia `27/04/26` estava lendo `cashier_closures` apenas da staging `paoecafe83_d27_prod`;
+- essa staging veio com `0` registros de fechamento, embora a base restaurada/consolidada tivesse `5` fechamentos com movimentacao em `27/04/26`;
+- por isso a producao recebia o replay sem nenhum `cashier_closures`, deixando o fechamento de caixa ausente.
+
+O que foi alterado:
+- `tmp_generate_day27_replay_sql.php` passou a buscar `cashier_closures` na base `paoecafe83_merge_27`, filtrando apenas os `5` registros do recorte validado;
+- `bkp/replay_day27_after_restore_27-04-26.sql` foi regenerado e agora inclui explicitamente o bloco de `cashier_closures`;
+- foi criado um arquivo complementar focado apenas nesses fechamentos: `bkp/replay_cashier_closures_day27_after_restore_27-04-26.sql`.
+
+Script de solicitacao:
+- `o fechamento de caixa do dia 27 nao foi para producao`
+
+Como sincronizar no projeto espelho:
+- copiar a alteracao de `tmp_generate_day27_replay_sql.php`, preservando a origem especial de `cashier_closures` na base consolidada local;
+- copiar o replay completo regenerado e o novo SQL complementar de `cashier_closures`, caso o outro projeto use o mesmo fluxo de reaplicacao apos restore;
+- manter a conferencia do bloco `cashier_closures` no replay final antes de aplicar em ambiente remoto.
+
+Arquivos alterados:
+- `tmp_generate_day27_replay_sql.php`
+- `bkp/replay_day27_after_restore_27-04-26.sql`
+- `bkp/replay_cashier_closures_day27_after_restore_27-04-26.sql`
+- `SYNC.md`
+
+## 27/04/26 - Ambiente local isolado da producao no pec-rodrigo
+
+Causa:
+- o arquivo `.env` local ainda apontava para o MySQL Azure de producao (`pdv.mysql.database.azure.com`);
+- mesmo com `APP_ENV=local`, a aplicacao continuava usando credenciais reais e a flag `LOCAL_USING_PRODUCTION_DB=true`;
+- isso mantinha o ambiente de desenvolvimento exposto ao banco de producao.
+
+O que foi alterado:
+- o `.env` local passou a usar `DB_HOST=127.0.0.1`, `DB_PORT=3306`, `DB_DATABASE=paoecafe83`, `DB_USERNAME=root` e `DB_PASSWORD=` para trabalhar apenas com o MySQL local;
+- a flag `LOCAL_USING_PRODUCTION_DB` foi alterada para `false`;
+- a configuracao `MYSQL_ATTR_SSL_CA` foi removida do `.env` local, porque era especifica da conexao SSL da producao e nao deve interferir no ambiente local;
+- o banco local esperado por esta configuracao e `paoecafe83`, compatibilizado com o backup `bkp/paoecafe83_recuperada_27-04-26.sql` importado manualmente no MySQL local.
+
+Script de solicitacao:
+- `crie um ambinete local no mysql e ajuste o .env para nao afetar mais produçao`
+- `use o bkp: C:\xampp\htdocs\pec-rodrigo\bkp\paoecafe83_recuperada_27-04-26.sql`
+
+Como sincronizar no projeto espelho:
+- nao copiar automaticamente este `.env` para `C:\xampp\htdocs\pec1`, porque o projeto espelho tem conexao propria de banco, dominio e login;
+- usar este registro apenas como referencia de seguranca para garantir que o ambiente local do projeto espelho tambem nao aponte para producao;
+- se for necessario replicar a protecao no espelho, ajustar manualmente o `.env` de la para o banco local correspondente, sem reutilizar credenciais deste projeto;
+- manter o `.env.testing` isolado em `sqlite` em memoria, sem qualquer apontamento para MySQL real.
+
+Arquivos alterados:
+- `.env`
+- `SYNC.md`
+
+## 27/04/26 - Blindagem para testes nunca atingirem o banco real
+
+Causa:
+- o `phpunit.xml` marcava `APP_ENV=testing`, mas nao forçava um banco isolado para os testes;
+- como nao havia `.env.testing`, comandos como `php artisan test` herdavam a conexao real definida em `.env`;
+- testes com `RefreshDatabase` executavam `migrate:fresh` no banco configurado, o que podia recriar o banco real vazio.
+
+O que foi alterado:
+- `phpunit.xml` passou a forçar `DB_CONNECTION=sqlite` e `DB_DATABASE=:memory:` para toda execucao de testes;
+- `tests/TestCase.php` ganhou uma trava de seguranca que aborta imediatamente qualquer ambiente `testing` que nao esteja usando `sqlite` em memoria;
+- o teste `ExpenseManagementTest` foi ajustado para criar `supplier` com `access_code`, mantendo compatibilidade com a estrutura atual da tabela;
+- `AGENTS.md` recebeu instrucao explicita proibindo testes/reset em MySQL ou banco real.
+
+Script de solicitacao:
+- `Pare isso, pois nao pode mais acontecer.`
+- `ok, coloque algo no AGENTS.md para reforçao isso`
+
+Como sincronizar no projeto espelho:
+- copiar as alteracoes de `phpunit.xml`, `tests/TestCase.php`, `tests/Feature/ExpenseManagementTest.php` e `AGENTS.md`;
+- confirmar no projeto espelho que `php artisan test` esta preso a `sqlite` em memoria ou outro banco de teste realmente isolado;
+- manter a trava que interrompe a execucao se o ambiente `testing` apontar para MySQL ou para qualquer banco real;
+- copiar este registro para o `SYNC.md` do projeto espelho.
+
+Arquivos alterados:
+- `phpunit.xml`
+- `tests/TestCase.php`
+- `tests/Feature/ExpenseManagementTest.php`
+- `AGENTS.md`
+- `SYNC.md`
+
+## 27/04/26 - Blindagem extra contra testes e resets no banco real
+
+Causa:
+- mesmo com `phpunit.xml` e `tests/TestCase.php` protegendo o ambiente de testes, ainda faltava uma trava global para o proprio `php artisan test` e para comandos destrutivos de schema;
+- sem essa camada adicional, qualquer regressao futura na configuracao de ambiente ainda poderia abrir margem para risco operacional;
+- tambem faltava um `.env.testing` explicito no projeto para separar o ambiente de teste do `.env` principal.
+
+O que foi alterado:
+- `app/Providers/AppServiceProvider.php` passou a bloquear `php artisan test` se o ambiente nao estiver em `sqlite` com `:memory:`;
+- o provider tambem bloqueia `migrate:fresh`, `migrate:refresh`, `migrate:reset`, `migrate:rollback` e `db:wipe` quando a conexao estiver em `mysql`/`mariadb` ou no banco protegido `paoecafe83`;
+- foi criado o arquivo `.env.testing` com configuracao isolada para testes em `sqlite` em memoria;
+- `AGENTS.md` recebeu reforco adicional proibindo qualquer alteracao futura que aponte `.env.testing` para MySQL/MariaDB.
+
+Script de solicitacao:
+- `ok, deixe isso ainda mais blindado`
+
+Como sincronizar no projeto espelho:
+- copiar as alteracoes de `app/Providers/AppServiceProvider.php`, `.env.testing`, `AGENTS.md` e este registro do `SYNC.md`;
+- confirmar no espelho que `php artisan test` aborta se o banco de teste nao for `sqlite` em memoria;
+- confirmar que comandos destrutivos de schema tambem ficam bloqueados em MySQL/MariaDB e no banco protegido.
+
+Arquivos alterados:
+- `app/Providers/AppServiceProvider.php`
+- `.env.testing`
+- `AGENTS.md`
+- `SYNC.md`
+
+## 27/04/26 - Erro 500 ao incluir gastos
+
+Causa:
+- o formulario de gastos enviava `expense_date`, mas o metodo `store()` de `ExpenseController` nao validava nem repassava esse campo ao `Expense::create()`;
+- a tabela `expenses` exige `expense_date` obrigatoriamente, entao o insert era executado sem data e o banco devolvia erro;
+- por isso o cadastro falhava com erro 500 ao tentar incluir qualquer gasto novo.
+
+O que foi alterado:
+- o `store()` de `app/Http/Controllers/ExpenseController.php` passou a validar `expense_date` como campo obrigatorio;
+- o cadastro de gastos agora grava a data enviada pelo formulario junto com fornecedor, valor, observacao, unidade e usuario;
+- foi adicionado um teste de regressao cobrindo o POST de `expenses.store` para garantir que o gasto seja salvo com a data informada.
+
+Script de solicitacao:
+- `erro 500 ao incluir gastos`
+
+Como sincronizar no projeto espelho:
+- copiar a alteracao de `app/Http/Controllers/ExpenseController.php`;
+- copiar o teste `tests/Feature/ExpenseManagementTest.php` se quiser manter a mesma cobertura automatizada no espelho;
+- conferir no projeto espelho se o `store()` de gastos tambem valida e grava `expense_date` antes de chamar `Expense::create()`;
+- copiar este registro para o `SYNC.md` do projeto espelho.
+
+Arquivos alterados:
+- `app/Http/Controllers/ExpenseController.php`
+- `tests/Feature/ExpenseManagementTest.php`
+- `SYNC.md`
+
 ## 27/04/26 - Unidade atual vem selecionada no Dashboard e em Trocar
 
 Causa:

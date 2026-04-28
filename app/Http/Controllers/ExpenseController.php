@@ -118,6 +118,7 @@ class ExpenseController extends Controller
 
         $data = $request->validate([
             'supplier_id' => ['required', 'integer', 'exists:suppliers,id'],
+            'expense_date' => ['required', 'date'],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
