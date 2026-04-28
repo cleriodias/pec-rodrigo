@@ -317,6 +317,34 @@ Arquivos alterados:
 - `bkp/replay_cashier_closures_day27_after_restore_27-04-26.sql`
 - `SYNC.md`
 
+## 28/04/26 - Master pode fechar caixa zerado no relatorio de fechamento
+
+Causa:
+- a tela `reports/cash-closure` apenas mostrava o status `Pendente` quando um caixa nao tinha fechamento;
+- o master conseguia apenas conferir um fechamento ja existente, mas nao tinha como criar o fechamento zerado direto no relatorio;
+- isso obrigava a buscar outro fluxo quando o objetivo era apenas registrar o fechamento com `dinheiro = 0` e `cartao = 0`.
+
+O que foi alterado:
+- foi criada a rota `reports.cash.closure.zero-close`, exclusiva para o master;
+- `SalesReportController` passou a aceitar a criacao de um `CashierClosure` zerado a partir do proprio relatorio, validando `cashier_id`, `unit_id`, `date`, existencia de vendas no dia e ausencia de fechamento duplicado;
+- o fechamento zerado ja nasce com conferencia do master em zero, registrando `master_checked_by` e `master_checked_at`;
+- `resources/js/Pages/Reports/CashClosure.jsx` agora mostra o botao `Fechar zerado` logo abaixo do nome do caixa, apenas para master e apenas quando o fechamento estiver pendente.
+
+Script de solicitacao:
+- `Em: "reports/cash-closure" Criar um botao para fechar o caixa com valores zerados`
+
+Como sincronizar no projeto espelho:
+- copiar a nova rota em `routes/web.php`;
+- copiar o metodo `storeZeroCashClosure()` em `app/Http/Controllers/SalesReportController.php`;
+- copiar a alteracao visual e o `axios.post` de `resources/js/Pages/Reports/CashClosure.jsx`, preservando a posicao do botao abaixo do nome do caixa e a visibilidade apenas para master;
+- manter a recarga parcial do Inertia apos a criacao do fechamento zerado.
+
+Arquivos alterados:
+- `routes/web.php`
+- `app/Http/Controllers/SalesReportController.php`
+- `resources/js/Pages/Reports/CashClosure.jsx`
+- `SYNC.md`
+
 ## 27/04/26 - Ambiente local isolado da producao no pec-rodrigo
 
 Causa:

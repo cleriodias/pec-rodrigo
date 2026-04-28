@@ -2237,6 +2237,80 @@ class SalesReportController extends Controller
         ]);
     }
 
+    public function storeZeroCashClosure(Request $request): JsonResponse
+    {
+        $this->ensureMaster($request);
+
+        $validated = $request->validate([
+            'cashier_id' => ['required', 'integer', 'exists:users,id'],
+            'unit_id' => ['required', 'integer', 'exists:tb2_unidades,tb2_id'],
+            'date' => ['required', 'date_format:Y-m-d'],
+        ]);
+
+        $user = $request->user();
+        $availableUnits = $this->availableUnits($user);
+        $unitId = (int) $validated['unit_id'];
+
+        if (! $availableUnits->contains(fn (array $unit) => (int) ($unit['id'] ?? 0) === $unitId)) {
+            abort(403);
+        }
+
+        $cashierId = (int) $validated['cashier_id'];
+        $closureDate = $this->parseDate($validated['date'], 'Y-m-d', Carbon::today())->startOfDay();
+        $start = $closureDate->copy()->startOfDay();
+        $end = $closureDate->copy()->endOfDay();
+
+        $hasPayments = VendaPagamento::query()
+            ->whereBetween('created_at', [$start, $end])
+            ->whereHas('vendas', function ($query) use ($cashierId, $unitId) {
+                $query->where('id_user_caixa', $cashierId)
+                    ->where('id_unidade', $unitId);
+            })
+            ->exists();
+
+        if (! $hasPayments) {
+            return response()->json([
+                'message' => 'Nao existem vendas para este caixa nesta data.',
+            ], 422);
+        }
+
+        $alreadyClosed = CashierClosure::query()
+            ->where('user_id', $cashierId)
+            ->where('unit_id', $unitId)
+            ->whereDate('closed_date', $closureDate)
+            ->exists();
+
+        if ($alreadyClosed) {
+            return response()->json([
+                'message' => 'Ja existe fechamento para este caixa na data informada.',
+            ], 422);
+        }
+
+        $unit = $availableUnits->first(fn (array $item) => (int) ($item['id'] ?? 0) === $unitId);
+        $closedAt = now();
+
+        CashierClosure::create([
+            'user_id' => $cashierId,
+            'unit_id' => $unitId,
+            'unit_name' => $unit['name'] ?? ('Unidade #' . $unitId),
+            'cash_amount' => 0,
+            'card_amount' => 0,
+            'master_cash_amount' => 0,
+            'master_card_amount' => 0,
+            'closed_date' => $closureDate->toDateString(),
+            'closed_at' => $closedAt,
+            'master_checked_by' => $user->id,
+            'master_checked_at' => $closedAt,
+        ]);
+
+        return response()->json([
+            'message' => sprintf(
+                'Fechamento zerado criado para %s.',
+                $closureDate->format('d/m/y')
+            ),
+        ]);
+    }
+
     public function cashDiscrepancies(Request $request): Response
     {
         $this->ensureManager($request);

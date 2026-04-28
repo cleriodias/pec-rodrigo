@@ -169,9 +169,11 @@ export default function CashClosure({
 }) {
     const { auth } = usePage().props;
     const isMaster = Number(auth?.user?.funcao ?? -1) === 0;
+    const selectedClosureDate = dateInputValue ?? '';
     const normalizedSelectedUnit = selectedUnitId ?? null;
     const [dateInput, setDateInput] = useState(dateInputValue ?? '');
     const [unitFilter, setUnitFilter] = useState(normalizedSelectedUnit);
+    const [zeroCloseRowKey, setZeroCloseRowKey] = useState(null);
     const [masterReviewModal, setMasterReviewModal] = useState({
         open: false,
         record: null,
@@ -473,6 +475,53 @@ export default function CashClosure({
         }
     };
 
+    const submitZeroClosure = async (record) => {
+        const rowKey = record?.row_key ?? `${record?.cashier_id}-${record?.unit_id ?? 'none'}`;
+        const closureDate = dateInput || selectedClosureDate || '';
+
+        if (!record?.cashier_id || !record?.unit_id || !closureDate || zeroCloseRowKey === rowKey) {
+            return;
+        }
+
+        const confirmed = window.confirm(
+            `Confirma o fechamento zerado do caixa ${record.cashier_name} em ${formatShortDate(closureDate)}?`,
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        setZeroCloseRowKey(rowKey);
+
+        try {
+            await axios.post(route('reports.cash.closure.zero-close'), {
+                cashier_id: record.cashier_id,
+                unit_id: record.unit_id,
+                date: closureDate,
+            });
+
+            router.reload({
+                only: ['records', 'dateValue', 'dateInputValue', 'filterUnits', 'selectedUnitId', 'selectedUnit', 'discardDetails', 'meta'],
+                preserveScroll: true,
+            });
+        } catch (error) {
+            let message = 'Nao foi possivel fechar o caixa com valores zerados.';
+
+            if (error.response?.data?.errors) {
+                const firstError = Object.values(error.response.data.errors).flat()[0];
+                if (firstError) {
+                    message = String(firstError);
+                }
+            } else if (error.response?.data?.message) {
+                message = String(error.response.data.message);
+            }
+
+            window.alert(message);
+        } finally {
+            setZeroCloseRowKey(null);
+        }
+    };
+
     const renderSystemAlignedCell = (label, value) => (
         <div className="space-y-1 text-right">
             <div>
@@ -741,7 +790,19 @@ export default function CashClosure({
                                 return (
                                     <tr key={rowKey}>
                                         <td className="px-3 py-2 text-gray-800 dark:text-gray-100">
-                                            {record.cashier_name}
+                                            <div className="flex flex-col items-start gap-2">
+                                                <span>{record.cashier_name}</span>
+                                                {isMaster && !closed && record.unit_id ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => submitZeroClosure(record)}
+                                                        disabled={zeroCloseRowKey === rowKey}
+                                                        className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-amber-500/50 dark:bg-amber-900/30 dark:text-amber-100"
+                                                    >
+                                                        {zeroCloseRowKey === rowKey ? 'Fechando...' : 'Fechar zerado'}
+                                                    </button>
+                                                ) : null}
+                                            </div>
                                         </td>
                                         <td className="px-3 py-2 text-gray-600 dark:text-gray-300">
                                             {record.unit_name ?? '---'}
@@ -1270,4 +1331,3 @@ export default function CashClosure({
         </AuthenticatedLayout>
     );
 }
-
