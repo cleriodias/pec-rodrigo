@@ -1014,6 +1014,7 @@ class FiscalConfigurationController extends Controller
     {
         $activeUnit = $request->session()->get('active_unit');
         $activeUnitId = 0;
+        $loggedUnitId = (int) ($request->user()?->tb2_id ?? 0);
 
         if (is_array($activeUnit)) {
             $activeUnitId = (int) ($activeUnit['id'] ?? $activeUnit['tb2_id'] ?? 0);
@@ -1023,6 +1024,10 @@ class FiscalConfigurationController extends Controller
 
         if ($activeUnitId > 0 && collect($units)->contains(fn ($unit) => (int) ($unit['id'] ?? 0) === $activeUnitId)) {
             return $activeUnitId;
+        }
+
+        if ($loggedUnitId > 0 && collect($units)->contains(fn ($unit) => (int) ($unit['id'] ?? 0) === $loggedUnitId)) {
+            return $loggedUnitId;
         }
 
         return (int) ($units->first()['id'] ?? 0);

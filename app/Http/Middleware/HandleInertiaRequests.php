@@ -125,7 +125,7 @@ class HandleInertiaRequests extends Middleware
                     'total' => round((float) ($invoice->pagamento?->valor_total ?? 0), 2),
                     'created_at' => optional($invoice->created_at)->format('d/m/y H:i'),
                     'transmit_url' => route('settings.fiscal.invoices.transmit', ['notaFiscal' => $invoice->tb27_id]),
-                    'settings_url' => route('settings.fiscal', ['unit_id' => $invoice->tb2_id]),
+                    'settings_url' => route('settings.fiscal'),
                 ])
                 ->values()
                 ->all();
