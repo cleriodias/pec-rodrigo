@@ -2756,6 +2756,7 @@ class SalesReportController extends Controller
                         'quantity' => (int) $item->quantidade,
                         'unit_price' => (float) $item->valor_unitario,
                         'total' => round((float) $item->valor_total, 2),
+                        'launched_at' => $item->data_hora ? $item->data_hora->toIso8601String() : null,
                         'launched_by' => $item->id_lanc ? ($users[$item->id_lanc] ?? null) : null,
                         'cashier' => $item->id_user_caixa ? ($users[$item->id_user_caixa] ?? null) : null,
                     ];

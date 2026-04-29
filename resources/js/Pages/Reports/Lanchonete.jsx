@@ -1,5 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { formatBrazilDateTime } from '@/Utils/date';
+import { formatBrazilDateTime, formatBrazilTime } from '@/Utils/date';
 import { Head, Link, useForm } from '@inertiajs/react';
 
 const formatCurrency = (value) =>
@@ -14,6 +14,14 @@ const formatDateTime = (value) => {
     }
 
     return formatBrazilDateTime(value);
+};
+
+const formatTime = (value) => {
+    if (!value) {
+        return '--';
+    }
+
+    return formatBrazilTime(value);
 };
 
 const paymentTypeLabels = {
@@ -69,6 +77,9 @@ const ComandaCard = ({ data, statusLabel, showPaymentType = false }) => (
                             Unidade
                         </th>
                         <th className="px-3 py-2 text-center font-medium text-gray-600 dark:text-gray-300">
+                            Hora
+                        </th>
+                        <th className="px-3 py-2 text-center font-medium text-gray-600 dark:text-gray-300">
                             Qtde
                         </th>
                         <th className="px-3 py-2 text-right font-medium text-gray-600 dark:text-gray-300">
@@ -93,6 +104,9 @@ const ComandaCard = ({ data, statusLabel, showPaymentType = false }) => (
                             </td>
                             <td className="px-3 py-2 text-gray-700 dark:text-gray-200">
                                 {data.unit_name ?? '--'}
+                            </td>
+                            <td className="px-3 py-2 text-center text-gray-700 dark:text-gray-200">
+                                {formatTime(item.launched_at)}
                             </td>
                             <td className="px-3 py-2 text-center text-gray-700 dark:text-gray-200">
                                 {item.quantity}
