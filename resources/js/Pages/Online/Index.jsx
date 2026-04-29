@@ -800,21 +800,29 @@ export default function OnlineIndex({
                             <div className="border-b border-gray-200 px-4 py-4 dark:border-gray-700">
                                 <div className="flex items-center justify-between gap-3">
                                     <div>
-                                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-300">Central de Conversas</p>
+                                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-300">Central de CHATS</p>
                                         <h3 className="text-2xl font-semibold tracking-tight text-gray-800 dark:text-gray-100">
-                                            {sortedContacts.length} conversa(s)
+                                            {sortedContacts.length} chats(s)
                                         </h3>
                                         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                                            Conversas ordenadas por mensagens recentes e pendencias de leitura.
+                                            Mensagens Internas.
                                         </p>
                                     </div>
                                     <button
                                         type="button"
                                         onClick={() => loadSnapshot(selectedUserIdRef.current)}
                                         disabled={loadingSnapshot || refreshingSnapshot}
-                                        className="rounded-full border border-gray-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-700 transition hover:border-indigo-400 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-70 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                                        title={loadingSnapshot || refreshingSnapshot ? 'Atualizando conversas' : 'Atualizar conversas'}
+                                        aria-label={loadingSnapshot || refreshingSnapshot ? 'Atualizando conversas' : 'Atualizar conversas'}
+                                        className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-700 transition hover:border-indigo-400 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-70 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
                                     >
-                                        {loadingSnapshot || refreshingSnapshot ? 'Atualizando...' : 'Atualizar'}
+                                        <i
+                                            className={`bi ${loadingSnapshot || refreshingSnapshot ? 'bi-arrow-repeat animate-spin' : 'bi-arrow-clockwise'} text-lg`}
+                                            aria-hidden="true"
+                                        ></i>
+                                        <span className="sr-only">
+                                            {loadingSnapshot || refreshingSnapshot ? 'Atualizando conversas' : 'Atualizar conversas'}
+                                        </span>
                                     </button>
                                 </div>
                             </div>
