@@ -427,7 +427,7 @@ class OnlineController extends Controller
         }
 
         $messages = ChatMessage::query()
-            ->select(['id', 'sender_id', 'recipient_id', 'message'])
+            ->select(['id', 'sender_id', 'recipient_id', 'message', 'created_at'])
             ->where(function ($query) use ($viewerId, $visibleUserIds) {
                 $query->where('sender_id', $viewerId)
                     ->whereIn('recipient_id', $visibleUserIds);
