@@ -62,6 +62,11 @@ export default function Config({ auth }) {
             href: route('settings.fiscal'),
         },
         {
+            label: 'NFe',
+            icon: 'bi-file-earmark-text',
+            href: route('settings.nfe'),
+        },
+        {
             label: 'Contra-Cheque',
             icon: 'bi-receipt-cutoff',
             href: route('settings.contra-cheque'),

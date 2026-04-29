@@ -465,11 +465,19 @@ export default function FiscalConfig({
 
                     <section className="rounded-2xl bg-white p-6 shadow dark:bg-gray-800">
                         <div className="flex flex-col gap-3">
-                            <div>
-                                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Unidade</h3>
-                                <p className="text-sm text-gray-500 dark:text-gray-300">
-                                    Selecione a loja pelos botoes abaixo.
-                                </p>
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Unidade</h3>
+                                    <p className="text-sm text-gray-500 dark:text-gray-300">
+                                        Selecione a loja pelos botoes abaixo.
+                                    </p>
+                                </div>
+                                <Link
+                                    href={route('settings.nfe', selectedUnitId ? { unit_id: selectedUnitId } : {})}
+                                    className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:border-blue-300 hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200 dark:hover:bg-blue-500/20"
+                                >
+                                    Abrir NFe
+                                </Link>
                             </div>
                             <div className="flex flex-wrap gap-3">
                                 {units.map((store) => {

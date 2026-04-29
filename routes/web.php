@@ -153,6 +153,8 @@ Route::middleware('auth')->group(function () {
         ->name('settings.payroll');
     Route::get('/settings/fiscal', [FiscalConfigurationController::class, 'index'])
         ->name('settings.fiscal');
+    Route::get('/settings/nfe', [FiscalConfigurationController::class, 'nfeIndex'])
+        ->name('settings.nfe');
     Route::post('/settings/fiscal', [FiscalConfigurationController::class, 'update'])
         ->name('settings.fiscal.update');
     Route::post('/settings/fiscal/reprocess', [FiscalConfigurationController::class, 'reprocess'])

@@ -23,3 +23,4 @@ PADRAO VISUAL OBRIGATORIO:
 - Botoes e badges de loja devem sempre usar as cores primarias predefinidas centralmente no codigo.
 - Botoes e badges de funcao devem sempre usar as cores primarias predefinidas centralmente no codigo.
 - Badge de nome de usuario deve sempre usar texto preto com fundo branco.
+- Sempre formatar quando mostrar os dados como CPF(###.###.###-##), CNPJ(##.###.###/####-##), Data(DD/MM/YY), telefone((##)# ####-####)
