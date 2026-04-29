@@ -2694,6 +2694,7 @@ class SalesReportController extends Controller
             ->orderByDesc('data_hora')
             ->get([
                 'tb3_id',
+                'tb4_id',
                 'id_comanda',
                 'produto_nome',
                 'valor_unitario',
@@ -2731,9 +2732,9 @@ class SalesReportController extends Controller
         $openComandas = [];
         $closedComandas = [];
 
-        $grouped = $rows->groupBy('id_comanda');
+        $grouped = $rows->groupBy(fn (Venda $row) => $this->buildLanchoneteGroupKey($row));
 
-        foreach ($grouped as $comanda => $items) {
+        foreach ($grouped as $groupKey => $items) {
             $first = $items->first();
             $status = (int) ($first->status ?? 0);
             $lastUpdate = $items->max('data_hora');
@@ -2741,7 +2742,8 @@ class SalesReportController extends Controller
             $unitName = $first?->id_unidade ? ($units[$first->id_unidade] ?? null) : null;
 
             $payload = [
-                'comanda' => (int) $comanda,
+                'group_key' => $groupKey,
+                'comanda' => (int) ($first->id_comanda ?? 0),
                 'status' => $status,
                 'payment_type' => $first->tipo_pago,
                 'status_paid' => (bool) $first->status_pago,
@@ -3067,6 +3069,23 @@ class SalesReportController extends Controller
         } catch (InvalidFormatException $exception) {
             return $fallback;
         }
+    }
+
+    private function buildLanchoneteGroupKey(Venda $sale): string
+    {
+        $comandaId = (int) ($sale->id_comanda ?? 0);
+        $unitId = (int) ($sale->id_unidade ?? 0);
+        $status = (int) ($sale->status ?? 0);
+
+        if ($status === 0) {
+            return sprintf('unit-%d-comanda-%d-open', $unitId, $comandaId);
+        }
+
+        if ($sale->tb4_id) {
+            return sprintf('unit-%d-comanda-%d-payment-%d', $unitId, $comandaId, (int) $sale->tb4_id);
+        }
+
+        return sprintf('unit-%d-comanda-%d-closed-row-%d', $unitId, $comandaId, (int) $sale->tb3_id);
     }
 
     private function parseReceiptIdFilter(mixed $value): ?int

@@ -11,6 +11,14 @@ IMPORTANT:
 - Todas as datas devem usar o formato DD/MM/AA, tanto para preenchimento quanto para visualizacao.
 - Existe um outro sistema que é uma copia deste aqui, com excao do dominio, banco de dados, tela de login(resources/js/Pages/Welcome.jsx) 
 
+CONSULTA NO BANCO DE DADOS:
+- Para verificaçao de bugs as consulta devem ser feitas em produçao:
+    hostname=pdv.mysql.database.azure.com
+    port=3306
+    username=pdv
+    base=paoecafe83
+    password=6yh&UJ8ik
+
 PADRAO VISUAL OBRIGATORIO:
 - Botoes e badges de loja devem sempre usar as cores primarias predefinidas centralmente no codigo.
 - Botoes e badges de funcao devem sempre usar as cores primarias predefinidas centralmente no codigo.

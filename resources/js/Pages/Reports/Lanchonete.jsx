@@ -147,7 +147,7 @@ const ComandaSection = ({ title, items, emptyMessage, statusLabel, showPaymentTy
             <div className="mt-4 space-y-4">
                 {items.map((item) => (
                     <ComandaCard
-                        key={`${item.comanda}-${item.status}`}
+                        key={item.group_key ?? `${item.comanda}-${item.status}-${item.updated_at ?? 'na'}`}
                         data={item}
                         statusLabel={statusLabel}
                         showPaymentType={showPaymentType}
