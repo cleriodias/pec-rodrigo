@@ -234,31 +234,33 @@ export default function OnlineIndex({
             return Number.isNaN(date.getTime()) ? 0 : date.getTime();
         };
 
-        return [...onlineUsers, ...offlineUsers]
-            .sort((left, right) => {
-                const leftHasUnread = Number(left.unread_count ?? 0) > 0 ? 1 : 0;
-                const rightHasUnread = Number(right.unread_count ?? 0) > 0 ? 1 : 0;
+        const getUnreadRank = (user) => (Number(user.unread_count ?? 0) > 0 ? 1 : 0);
+        const getAvailabilityRank = (user) => (user.is_online ? 1 : 0);
 
-                if (leftHasUnread !== rightHasUnread) {
-                    return rightHasUnread - leftHasUnread;
-                }
+        return [...onlineUsers, ...offlineUsers].sort((left, right) => {
+            const leftUnreadRank = getUnreadRank(left);
+            const rightUnreadRank = getUnreadRank(right);
 
-                const leftTimestamp = toTimestamp(left.last_message_at);
-                const rightTimestamp = toTimestamp(right.last_message_at);
+            if (leftUnreadRank !== rightUnreadRank) {
+                return rightUnreadRank - leftUnreadRank;
+            }
 
-                if (leftTimestamp !== rightTimestamp) {
-                    return rightTimestamp - leftTimestamp;
-                }
+            const leftTimestamp = toTimestamp(left.last_message_at);
+            const rightTimestamp = toTimestamp(right.last_message_at);
 
-                const leftIsOnline = left.is_online ? 1 : 0;
-                const rightIsOnline = right.is_online ? 1 : 0;
+            if (leftTimestamp !== rightTimestamp) {
+                return rightTimestamp - leftTimestamp;
+            }
 
-                if (leftIsOnline !== rightIsOnline) {
-                    return rightIsOnline - leftIsOnline;
-                }
+            const leftAvailabilityRank = getAvailabilityRank(left);
+            const rightAvailabilityRank = getAvailabilityRank(right);
 
-                return String(left.name ?? '').localeCompare(String(right.name ?? ''), 'pt-BR');
-            });
+            if (leftAvailabilityRank !== rightAvailabilityRank) {
+                return rightAvailabilityRank - leftAvailabilityRank;
+            }
+
+            return String(left.name ?? '').localeCompare(String(right.name ?? ''), 'pt-BR');
+        });
     }, [onlineUsers, offlineUsers]);
 
     const selectedUser = useMemo(
