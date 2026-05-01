@@ -19,6 +19,8 @@ const numericRegex = /^\d+$/;
 const BARCODE_MIN_LENGTH = 5;
 const WEIGHTED_BARCODE_PREFIX = '2';
 const WEIGHTED_BARCODE_LENGTH = 13;
+const QUANTITY_HOLD_INITIAL_DELAY = 350;
+const QUANTITY_HOLD_REPEAT_INTERVAL = 90;
 const paymentLabels = {
     maquina: 'Maquina',
     cartao_credito: 'Cartao credito',
@@ -413,6 +415,8 @@ export default function Dashboard({ quickLookupProducts = [], masterSwitchOption
     const [selectedMasterRole, setSelectedMasterRole] = useState(null);
     const [masterSwitchSubmitting, setMasterSwitchSubmitting] = useState(false);
     const lastAutoOpenComandasKey = useRef('');
+    const quantityHoldTimeoutRef = useRef(null);
+    const quantityHoldIntervalRef = useRef(null);
 
     useEffect(() => {
         if (!Array.isArray(quickLookupProducts) || quickLookupProducts.length === 0) {
@@ -459,6 +463,24 @@ export default function Dashboard({ quickLookupProducts = [], masterSwitchOption
 
         window.localStorage.setItem(ITEMS_STORAGE_KEY, JSON.stringify(items));
     }, [items]);
+
+    const clearQuantityHold = useCallback(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        if (quantityHoldTimeoutRef.current !== null) {
+            window.clearTimeout(quantityHoldTimeoutRef.current);
+            quantityHoldTimeoutRef.current = null;
+        }
+
+        if (quantityHoldIntervalRef.current !== null) {
+            window.clearInterval(quantityHoldIntervalRef.current);
+            quantityHoldIntervalRef.current = null;
+        }
+    }, []);
+
+    useEffect(() => () => clearQuantityHold(), [clearQuantityHold]);
 
     const totalAmount = useMemo(
         () => items.reduce((sum, item) => sum + item.quantity * item.price, 0),
@@ -563,6 +585,13 @@ export default function Dashboard({ quickLookupProducts = [], masterSwitchOption
         pendingComandaMessage,
         requiresClosure,
     ]);
+
+    useEffect(() => {
+        if (saleLoading || isSalesBlocked) {
+            clearQuantityHold();
+        }
+    }, [clearQuantityHold, isSalesBlocked, saleLoading]);
+
     const visibleComandasList = useMemo(() => {
         if (!hasPendingComandas) {
             return openComandasList;
@@ -1132,7 +1161,7 @@ export default function Dashboard({ quickLookupProducts = [], masterSwitchOption
         addItemFromProduct(product);
     };
 
-    const incrementItemQuantity = (itemId) => {
+    const incrementItemQuantity = useCallback((itemId) => {
         setItems((prevItems) =>
             prevItems.map((item) =>
                 item.id === itemId
@@ -1140,9 +1169,9 @@ export default function Dashboard({ quickLookupProducts = [], masterSwitchOption
                     : item,
             ),
         );
-    };
+    }, []);
 
-    const decrementItemQuantity = (itemId) => {
+    const decrementItemQuantity = useCallback((itemId) => {
         setItems((prevItems) =>
             prevItems
                 .map((item) => {
@@ -1155,7 +1184,45 @@ export default function Dashboard({ quickLookupProducts = [], masterSwitchOption
                 })
                 .filter((item) => item.quantity > 0),
         );
-    };
+    }, []);
+
+    const startQuantityHold = useCallback((itemId, action) => {
+        if (saleLoading || isSalesBlocked || typeof window === 'undefined') {
+            return;
+        }
+
+        clearQuantityHold();
+        action(itemId);
+        quantityHoldTimeoutRef.current = window.setTimeout(() => {
+            quantityHoldIntervalRef.current = window.setInterval(() => {
+                action(itemId);
+            }, QUANTITY_HOLD_REPEAT_INTERVAL);
+        }, QUANTITY_HOLD_INITIAL_DELAY);
+    }, [clearQuantityHold, isSalesBlocked, saleLoading]);
+
+    const startIncrementItemQuantityHold = useCallback((itemId) => {
+        startQuantityHold(itemId, incrementItemQuantity);
+    }, [incrementItemQuantity, startQuantityHold]);
+
+    const startDecrementItemQuantityHold = useCallback((itemId) => {
+        startQuantityHold(itemId, decrementItemQuantity);
+    }, [decrementItemQuantity, startQuantityHold]);
+
+    const handleIncrementButtonClick = useCallback((event, itemId) => {
+        if (event.detail !== 0) {
+            return;
+        }
+
+        incrementItemQuantity(itemId);
+    }, [incrementItemQuantity]);
+
+    const handleDecrementButtonClick = useCallback((event, itemId) => {
+        if (event.detail !== 0) {
+            return;
+        }
+
+        decrementItemQuantity(itemId);
+    }, [decrementItemQuantity]);
 
     const removeItem = (itemId) => {
         setItems((prevItems) => prevItems.filter((item) => item.id !== itemId));
@@ -2348,7 +2415,18 @@ export default function Dashboard({ quickLookupProducts = [], masterSwitchOption
                                                                 <div className="flex items-center justify-center gap-2">
                                                                     <button
                                                                         type="button"
-                                                                        onClick={() => incrementItemQuantity(item.id)}
+                                                                        onClick={(event) => handleIncrementButtonClick(event, item.id)}
+                                                                        onPointerDown={(event) => {
+                                                                            if (event.button !== 0) {
+                                                                                return;
+                                                                            }
+
+                                                                            event.preventDefault();
+                                                                            startIncrementItemQuantityHold(item.id);
+                                                                        }}
+                                                                        onPointerUp={clearQuantityHold}
+                                                                        onPointerLeave={clearQuantityHold}
+                                                                        onPointerCancel={clearQuantityHold}
                                                                         className="text-indigo-600 transition hover:text-indigo-400 focus:outline-none disabled:opacity-50"
                                                                         disabled={saleLoading || isSalesBlocked}
                                                                         aria-label={`Adicionar uma unidade de ${item.name}`}
@@ -2358,7 +2436,18 @@ export default function Dashboard({ quickLookupProducts = [], masterSwitchOption
                                                                     <span className="text-base font-semibold">{item.quantity}</span>
                                                                     <button
                                                                         type="button"
-                                                                        onClick={() => decrementItemQuantity(item.id)}
+                                                                        onClick={(event) => handleDecrementButtonClick(event, item.id)}
+                                                                        onPointerDown={(event) => {
+                                                                            if (event.button !== 0) {
+                                                                                return;
+                                                                            }
+
+                                                                            event.preventDefault();
+                                                                            startDecrementItemQuantityHold(item.id);
+                                                                        }}
+                                                                        onPointerUp={clearQuantityHold}
+                                                                        onPointerLeave={clearQuantityHold}
+                                                                        onPointerCancel={clearQuantityHold}
                                                                         className="text-red-500 transition hover:text-red-400 focus:outline-none disabled:opacity-50"
                                                                         disabled={saleLoading || isSalesBlocked}
                                                                         aria-label={`Remover uma unidade de ${item.name}`}
