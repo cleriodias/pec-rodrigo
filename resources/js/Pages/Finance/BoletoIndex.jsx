@@ -777,9 +777,6 @@ export default function BoletoIndex({
 
                             <div className="grid gap-4 lg:grid-cols-2">
                                 <div>
-                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                                        Codigo de barras
-                                    </label>
                                     <label className="mt-2 inline-flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
                                         <input
                                             type="checkbox"
