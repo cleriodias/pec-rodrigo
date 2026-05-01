@@ -326,7 +326,7 @@ class CashClosureMasterReviewTest extends TestCase
             'user_id' => $cashier->id,
             'unit_id' => $unit->tb2_id,
             'unit_name' => $unit->tb2_nome,
-            'cash_amount' => 80,
+            'cash_amount' => 100,
             'card_amount' => 0,
             'closed_date' => '2026-04-08',
             'closed_at' => now(),
@@ -365,6 +365,8 @@ class CashClosureMasterReviewTest extends TestCase
             ->where('records.0.expense_details.0.notes', 'Gasto do caixa')
             ->where('records.0.conference_base_cash', 80.0)
             ->where('records.0.conference_base_total', 80.0)
+            ->where('records.0.closure.cash_amount', 100.0)
+            ->where('records.0.closure.total_amount', 100.0)
             ->where('records.0.closure.differences.cash', 0.0)
             ->where('records.0.closure.differences.total', 0.0)
         );
@@ -414,7 +416,7 @@ class CashClosureMasterReviewTest extends TestCase
             'user_id' => $cashier->id,
             'unit_id' => $unit->tb2_id,
             'unit_name' => $unit->tb2_nome,
-            'cash_amount' => 80,
+            'cash_amount' => 100,
             'card_amount' => 0,
             'closed_date' => '2026-04-08',
             'closed_at' => now(),
