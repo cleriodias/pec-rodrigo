@@ -25,9 +25,9 @@ const formatCurrency = (value) =>
 
 export default function SalesPeriod({
     chartData,
-    totals,
     expenseTotal = 0,
-    dailyTotals,
+    dailyTotals = [],
+    loadDailyTotals = false,
     mode,
     dateValue,
     startDate,
@@ -43,16 +43,31 @@ export default function SalesPeriod({
             selectedUnitId !== null && selectedUnitId !== undefined
                 ? String(selectedUnitId)
                 : 'all',
+        load_daily_totals: loadDailyTotals ? '1' : '0',
     });
 
-    const handleSubmit = (event) => {
-        event.preventDefault();
+    const submitReport = (payload) => {
         get(route('reports.sales.period'), {
             preserveState: true,
             preserveScroll: true,
             replace: true,
-            data,
+            data: payload,
         });
+    };
+
+    const handleSubmit = (event) => {
+        event.preventDefault();
+        submitReport(data);
+    };
+
+    const handleLoadDailyTotals = () => {
+        const nextData = {
+            ...data,
+            load_daily_totals: '1',
+        };
+
+        setData('load_daily_totals', '1');
+        submitReport(nextData);
     };
 
     const totalSum = chartData.reduce((sum, item) => sum + item.total, 0);
@@ -265,17 +280,33 @@ export default function SalesPeriod({
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                                 Totais diarios
                             </h3>
-                            <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-indigo-700 shadow-sm dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200">
-                                <p className="text-[10px] font-semibold uppercase tracking-wide">
-                                    Total do periodo
-                                </p>
-                                <p className="text-sm font-bold">
-                                    {formatCurrency(totalSum)}
-                                </p>
+                            <div className="flex flex-wrap items-center justify-end gap-3">
+                                {!loadDailyTotals && (
+                                    <button
+                                        type="button"
+                                        onClick={handleLoadDailyTotals}
+                                        disabled={processing}
+                                        className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-indigo-700 disabled:opacity-60"
+                                    >
+                                        {processing ? 'Carregando...' : 'Carregar totais diarios'}
+                                    </button>
+                                )}
+                                <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-indigo-700 shadow-sm dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide">
+                                        Total do periodo
+                                    </p>
+                                    <p className="text-sm font-bold">
+                                        {formatCurrency(totalSum)}
+                                    </p>
+                                </div>
                             </div>
                         </div>
                         <div className="mt-4 overflow-x-auto">
-                            {dailyTotals.length === 0 ? (
+                            {!loadDailyTotals ? (
+                                <p className="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-300">
+                                    Os totais diarios ficam sob demanda para evitar timeout em periodos com muitos pagamentos.
+                                </p>
+                            ) : dailyTotals.length === 0 ? (
                                 <p className="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-300">
                                     Nenhuma venda registrada neste periodo.
                                 </p>
