@@ -304,7 +304,7 @@ class BoletoController extends Controller
             'description' => ['required', 'string', 'max:255'],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'due_date' => ['required', 'string'],
-            'barcode' => ['required', 'string', 'max:128'],
+            'barcode' => ['nullable', 'string', 'max:128'],
             'digitable_line' => ['required', 'string', 'max:256'],
             'unit_id' => ['nullable'],
         ]);
@@ -313,7 +313,7 @@ class BoletoController extends Controller
             'description' => trim((string) $data['description']),
             'amount' => round((float) $data['amount'], 2),
             'due_date' => $this->parseDateInput((string) $data['due_date'], 'due_date')->toDateString(),
-            'barcode' => $this->normalizeBarcode((string) $data['barcode']),
+            'barcode' => $this->normalizeBarcode((string) ($data['barcode'] ?? '')),
             'digitable_line' => $this->normalizeDigitableLine((string) $data['digitable_line']),
         ];
     }
@@ -378,6 +378,10 @@ class BoletoController extends Controller
     private function normalizeBarcode(string $value): string
     {
         $digits = preg_replace('/\D+/', '', $value) ?? '';
+
+        if ($digits === '') {
+            return '';
+        }
 
         if (strlen($digits) !== self::BARCODE_LENGTH) {
             throw ValidationException::withMessages([

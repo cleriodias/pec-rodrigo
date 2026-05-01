@@ -61,6 +61,7 @@ const formatDateTime = (value) => {
 };
 
 const onlyDigits = (value) => String(value ?? '').replace(/\D/g, '');
+const hasBarcodeValue = (value) => onlyDigits(value).length > 0;
 
 const BOLETO_BARCODE_LENGTH = 44;
 const INTERLEAVED_2_OF_5_PATTERNS = {
@@ -122,6 +123,14 @@ const buildInterleavedBarcodeSegments = (barcode) => {
 function BoletoBarcode({ value, compact = false }) {
     const digits = onlyDigits(value);
     const segments = buildInterleavedBarcodeSegments(digits);
+
+    if (!digits) {
+        return (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-300">
+                Codigo de barras nao informado.
+            </div>
+        );
+    }
 
     if (!segments.length) {
         return (
@@ -251,6 +260,10 @@ const renderBarcodeBarsSvg = (value) => {
     const digits = onlyDigits(value);
     const segments = buildInterleavedBarcodeSegments(digits);
 
+    if (!digits) {
+        return '<div class="barcode-fallback barcode-fallback-neutral">Codigo de barras nao informado.</div>';
+    }
+
     if (!segments.length) {
         return '<div class="barcode-fallback">Codigo de barras invalido.</div>';
     }
@@ -366,6 +379,11 @@ const buildBoletoBatchPrintHtml = (boletos) => `
                     padding: 12px;
                     font-size: 12px;
                 }
+                .barcode-fallback-neutral {
+                    border-color: #d1d5db;
+                    background: #f9fafb;
+                    color: #4b5563;
+                }
                 @media print {
                     body {
                         padding: 12px;
@@ -457,6 +475,7 @@ export default function BoletoIndex({
     const [showBarcodeModal, setShowBarcodeModal] = useState(false);
     const [showBatchBarcodeModal, setShowBatchBarcodeModal] = useState(false);
     const [editingBoleto, setEditingBoleto] = useState(null);
+    const [barcodeEnabled, setBarcodeEnabled] = useState(false);
 
     const buildFilterParams = () => ({
         start_date: resolveIsoDate(filterData.start_date) || undefined,
@@ -468,6 +487,7 @@ export default function BoletoIndex({
     const resetCreateForm = (preservedUnitId = data.unit_id) => {
         clearErrors();
         setEditingBoleto(null);
+        setBarcodeEnabled(false);
         reset();
         setData({
             unit_id: preservedUnitId,
@@ -477,6 +497,15 @@ export default function BoletoIndex({
             barcode: '',
             digitable_line: '',
         });
+    };
+
+    const handleBarcodeToggle = (enabled) => {
+        setBarcodeEnabled(enabled);
+
+        if (!enabled) {
+            setData('barcode', '');
+            clearErrors('barcode');
+        }
     };
 
     const handleSubmit = (event) => {
@@ -499,7 +528,7 @@ export default function BoletoIndex({
         transform((formData) => ({
             ...formData,
             due_date: dueDateIso,
-            barcode: onlyDigits(formData.barcode),
+            barcode: barcodeEnabled ? onlyDigits(formData.barcode) : '',
             digitable_line: onlyDigits(formData.digitable_line),
         }));
 
@@ -532,7 +561,10 @@ export default function BoletoIndex({
     };
 
     const handleEdit = (boleto) => {
+        const normalizedBarcode = onlyDigits(boleto?.barcode);
+
         setEditingBoleto(boleto);
+        setBarcodeEnabled(Boolean(normalizedBarcode));
         clearErrors();
         setData({
             unit_id:
@@ -542,7 +574,7 @@ export default function BoletoIndex({
             description: boleto?.description ?? '',
             due_date: isoToBrazilShortDateInput(boleto?.due_date ?? ''),
             amount: boleto?.amount !== null && boleto?.amount !== undefined ? String(boleto.amount) : '',
-            barcode: onlyDigits(boleto?.barcode),
+            barcode: normalizedBarcode,
             digitable_line: onlyDigits(boleto?.digitable_line),
         });
 
@@ -563,6 +595,10 @@ export default function BoletoIndex({
     };
 
     const openBarcodeModal = () => {
+        if (!hasBarcodeValue(selectedBoleto?.barcode)) {
+            return;
+        }
+
         setShowBarcodeModal(true);
     };
 
@@ -744,17 +780,31 @@ export default function BoletoIndex({
                                     <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
                                         Codigo de barras
                                     </label>
+                                    <label className="mt-2 inline-flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+                                        <input
+                                            type="checkbox"
+                                            checked={barcodeEnabled}
+                                            onChange={(event) => handleBarcodeToggle(event.target.checked)}
+                                            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                            disabled={!canSubmitForm}
+                                        />
+                                        Ativar preenchimento do codigo de barras
+                                    </label>
                                     <input
                                         type="text"
                                         inputMode="numeric"
                                         value={data.barcode}
                                         onChange={(event) => setData('barcode', onlyDigits(event.target.value))}
                                         placeholder="44 digitos"
-                                        className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-gray-800 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-                                        disabled={!canSubmitForm}
+                                        className={`mt-2 w-full rounded-xl border px-3 py-2 text-gray-800 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:border-gray-600 dark:text-gray-100 ${
+                                            barcodeEnabled
+                                                ? 'border-gray-300 dark:bg-gray-700'
+                                                : 'border-gray-200 bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                                        }`}
+                                        disabled={!canSubmitForm || !barcodeEnabled}
                                     />
                                     <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                        O sistema valida exatamente 44 digitos.
+                                        Quando ativado, o sistema valida exatamente 44 digitos.
                                     </p>
                                     {errors.barcode && (
                                         <p className="mt-1 text-sm text-red-600">{errors.barcode}</p>
@@ -1166,18 +1216,24 @@ export default function BoletoIndex({
                                 <p className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
                                     Codigo de barras
                                 </p>
-                                <button
-                                    type="button"
-                                    onClick={openBarcodeModal}
-                                    className="mt-3 block w-full text-left focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                                >
-                                    <BoletoBarcode value={selectedBoleto.barcode} compact />
-                                    <p className="mt-2 text-xs font-medium text-indigo-600 dark:text-indigo-300">
-                                        Clique para ampliar o codigo de barras.
-                                    </p>
-                                </button>
+                                {hasBarcodeValue(selectedBoleto.barcode) ? (
+                                    <button
+                                        type="button"
+                                        onClick={openBarcodeModal}
+                                        className="mt-3 block w-full text-left focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                                    >
+                                        <BoletoBarcode value={selectedBoleto.barcode} compact />
+                                        <p className="mt-2 text-xs font-medium text-indigo-600 dark:text-indigo-300">
+                                            Clique para ampliar o codigo de barras.
+                                        </p>
+                                    </button>
+                                ) : (
+                                    <div className="mt-3">
+                                        <BoletoBarcode value={selectedBoleto.barcode} compact />
+                                    </div>
+                                )}
                                 <p className="mt-2 select-all break-all text-sm text-gray-900 dark:text-gray-100">
-                                    {selectedBoleto.barcode}
+                                    {hasBarcodeValue(selectedBoleto.barcode) ? selectedBoleto.barcode : 'Nao informado'}
                                 </p>
                             </div>
                             <div className="rounded-xl border border-dashed border-gray-200 bg-white/60 p-4 dark:border-gray-800 dark:bg-gray-800/40">
