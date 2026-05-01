@@ -2116,8 +2116,8 @@ class SalesReportController extends Controller
                         ? (float) $closure->master_card_amount
                         : $cardClosure;
                     $closureTotal = $effectiveCashClosure + $effectiveCardClosure;
-                    $differenceCashReference = $conferenceCashBase + $expenseTotal;
-                    $differenceTotalReference = $systemTotal + $expenseTotal;
+                    $comparableCashClosure = max($effectiveCashClosure - $expenseTotal, 0.0);
+                    $comparableClosureTotal = $comparableCashClosure + $effectiveCardClosure;
 
                     $record['closure'] = [
                         'id' => $closure->id,
@@ -2141,9 +2141,9 @@ class SalesReportController extends Controller
                                 : null,
                         ],
                         'differences' => [
-                            'cash' => round($differenceCashReference - $effectiveCashClosure, 2),
+                            'cash' => round($conferenceCashBase - $comparableCashClosure, 2),
                             'card' => round($cardSystem - $effectiveCardClosure, 2),
-                            'total' => round($differenceTotalReference - $closureTotal, 2),
+                            'total' => round($systemTotal - $comparableClosureTotal, 2),
                         ],
                     ];
                 } else {
@@ -2478,8 +2478,9 @@ class SalesReportController extends Controller
                 $cardClosure = (float) $closure->card_amount;
                 $closureTotal = $cashClosure + $cardClosure;
 
-                $differenceTotalReference = $systemTotal + $expenseTotal;
-                $discrepancy = round($differenceTotalReference - $closureTotal, 2);
+                $comparableCashClosure = max($cashClosure - $expenseTotal, 0.0);
+                $comparableClosureTotal = $comparableCashClosure + $cardClosure;
+                $discrepancy = round($systemTotal - $comparableClosureTotal, 2);
 
                 $totalsRounded = array_map(fn ($value) => round((float) $value, 2), $systemTotals);
 
