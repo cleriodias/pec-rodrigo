@@ -2116,8 +2116,6 @@ class SalesReportController extends Controller
                         ? (float) $closure->master_card_amount
                         : $cardClosure;
                     $closureTotal = $effectiveCashClosure + $effectiveCardClosure;
-                    $comparableCashClosure = max($effectiveCashClosure - $expenseTotal, 0.0);
-                    $comparableClosureTotal = $comparableCashClosure + $effectiveCardClosure;
 
                     $record['closure'] = [
                         'id' => $closure->id,
@@ -2141,9 +2139,9 @@ class SalesReportController extends Controller
                                 : null,
                         ],
                         'differences' => [
-                            'cash' => round($conferenceCashBase - $comparableCashClosure, 2),
+                            'cash' => round($conferenceCashBase - $effectiveCashClosure, 2),
                             'card' => round($cardSystem - $effectiveCardClosure, 2),
-                            'total' => round($systemTotal - $comparableClosureTotal, 2),
+                            'total' => round($systemTotal - $closureTotal, 2),
                         ],
                     ];
                 } else {
@@ -2478,9 +2476,7 @@ class SalesReportController extends Controller
                 $cardClosure = (float) $closure->card_amount;
                 $closureTotal = $cashClosure + $cardClosure;
 
-                $comparableCashClosure = max($cashClosure - $expenseTotal, 0.0);
-                $comparableClosureTotal = $comparableCashClosure + $cardClosure;
-                $discrepancy = round($systemTotal - $comparableClosureTotal, 2);
+                $discrepancy = round($systemTotal - $closureTotal, 2);
 
                 $totalsRounded = array_map(fn ($value) => round((float) $value, 2), $systemTotals);
 

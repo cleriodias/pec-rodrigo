@@ -367,8 +367,8 @@ class CashClosureMasterReviewTest extends TestCase
             ->where('records.0.conference_base_total', 80.0)
             ->where('records.0.closure.cash_amount', 100.0)
             ->where('records.0.closure.total_amount', 100.0)
-            ->where('records.0.closure.differences.cash', 0.0)
-            ->where('records.0.closure.differences.total', 0.0)
+            ->where('records.0.closure.differences.cash', -20.0)
+            ->where('records.0.closure.differences.total', -20.0)
         );
     }
 
@@ -437,7 +437,9 @@ class CashClosureMasterReviewTest extends TestCase
 
         $response->assertOk()->assertInertia(fn (Assert $page) => $page
             ->component('Reports/CashDiscrepancies')
-            ->has('records', 0)
+            ->has('records', 1)
+            ->where('records.0.cashier_name', 'Caixa')
+            ->where('records.0.discrepancy', -20.0)
         );
     }
 
