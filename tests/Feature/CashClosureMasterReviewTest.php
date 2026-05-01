@@ -368,7 +368,7 @@ class CashClosureMasterReviewTest extends TestCase
             ->where('records.0.closure.cash_amount', 100.0)
             ->where('records.0.closure.total_amount', 100.0)
             ->where('records.0.closure.differences.cash', -20.0)
-            ->where('records.0.closure.differences.total', -20.0)
+            ->where('records.0.closure.differences.total', -40.0)
         );
     }
 
@@ -439,7 +439,7 @@ class CashClosureMasterReviewTest extends TestCase
             ->component('Reports/CashDiscrepancies')
             ->has('records', 1)
             ->where('records.0.cashier_name', 'Caixa')
-            ->where('records.0.discrepancy', -20.0)
+            ->where('records.0.discrepancy', -40.0)
         );
     }
 
