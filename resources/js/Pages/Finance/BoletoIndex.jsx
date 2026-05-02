@@ -420,6 +420,7 @@ export default function BoletoIndex({
     activeUnit = null,
     filters = {},
     boletos = null,
+    todayUserBoletos = [],
     canManageList = false,
     filterUnits = [],
     listTotalAmount = 0,
@@ -615,6 +616,7 @@ export default function BoletoIndex({
     };
 
     const visibleBoletos = Array.isArray(boletos?.data) ? boletos.data : [];
+    const visibleTodayUserBoletos = Array.isArray(todayUserBoletos) ? todayUserBoletos : [];
 
     const handlePrintBatchBarcodes = () => {
         if (!visibleBoletos.length) {
@@ -1113,9 +1115,93 @@ export default function BoletoIndex({
                         </>
                     ) : (
                         <div className="rounded-2xl bg-white p-6 shadow dark:bg-gray-800">
-                            <p className="text-sm text-gray-500 dark:text-gray-300">
-                                Apenas usuarios Master e Gerente conseguem visualizar a lista, editar e dar baixa nos boletos.
-                            </p>
+                            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                                        Boletos gravados hoje
+                                    </h3>
+                                    <p className="text-sm text-gray-500 dark:text-gray-300">
+                                        Aqui aparecem os boletos que voce cadastrou no dia corrente.
+                                    </p>
+                                </div>
+                                <span className="text-xs font-semibold text-gray-500 dark:text-gray-300">
+                                    {visibleTodayUserBoletos.length} registro(s)
+                                </span>
+                            </div>
+
+                            <div className="overflow-x-auto">
+                                {visibleTodayUserBoletos.length ? (
+                                    <table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-700">
+                                        <thead className="bg-gray-50 dark:bg-gray-900/40">
+                                            <tr>
+                                                <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
+                                                    Descricao
+                                                </th>
+                                                <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
+                                                    Vencimento
+                                                </th>
+                                                <th className="px-3 py-2 text-right font-medium text-gray-600 dark:text-gray-300">
+                                                    Valor
+                                                </th>
+                                                <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
+                                                    Loja
+                                                </th>
+                                                <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
+                                                    Gravado em
+                                                </th>
+                                                <th className="px-3 py-2 text-center font-medium text-gray-600 dark:text-gray-300">
+                                                    Acoes
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-white/60 dark:divide-gray-900/40">
+                                            {visibleTodayUserBoletos.map((boleto) => {
+                                                const visualState = getBoletoVisualState(boleto, todayIso);
+
+                                                return (
+                                                    <tr
+                                                        key={boleto.id}
+                                                        className={`${visualState.rowClass} transition-colors`}
+                                                    >
+                                                        <td className="px-3 py-3 align-top">
+                                                            <p className="font-semibold text-gray-900 dark:text-gray-100">
+                                                                {boleto.description}
+                                                            </p>
+                                                        </td>
+                                                        <td className="px-3 py-3 align-top font-medium text-gray-700 dark:text-gray-200">
+                                                            {formatDate(boleto.due_date)}
+                                                        </td>
+                                                        <td className="px-3 py-3 text-right align-top font-semibold text-gray-900 dark:text-white">
+                                                            {formatCurrency(boleto.amount)}
+                                                        </td>
+                                                        <td className="px-3 py-3 align-top font-medium text-gray-700 dark:text-gray-200">
+                                                            {boleto.unit?.tb2_nome ?? '--'}
+                                                        </td>
+                                                        <td className="px-3 py-3 align-top font-medium text-gray-700 dark:text-gray-200">
+                                                            {formatDateTime(boleto.created_at)}
+                                                        </td>
+                                                        <td className="px-3 py-3">
+                                                            <div className="flex justify-center">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => openDetails(boleto)}
+                                                                    className="rounded-lg border border-indigo-300 px-3 py-1 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-indigo-500/60 dark:text-indigo-200 dark:hover:bg-indigo-900/30"
+                                                                >
+                                                                    Detalhes
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                ) : (
+                                    <p className="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-300">
+                                        Nenhum boleto foi gravado por voce hoje.
+                                    </p>
+                                )}
+                            </div>
                         </div>
                     )}
                 </div>

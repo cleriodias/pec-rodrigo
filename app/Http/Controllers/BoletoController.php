@@ -25,6 +25,12 @@ class BoletoController extends Controller
         $this->ensureAccess($user);
 
         $today = Carbon::now('America/Sao_Paulo')->toDateString();
+        $todayUserBoletos = Boleto::with(['unit:tb2_id,tb2_nome'])
+            ->where('user_id', $user->id)
+            ->whereDate('created_at', $today)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get();
         $filters = [
             'start_date' => $this->normalizeDateInput($request->query('start_date'))?->toDateString() ?? $today,
             'end_date' => $this->normalizeDateInput($request->query('end_date'))?->toDateString() ?? $today,
@@ -80,6 +86,7 @@ class BoletoController extends Controller
             'activeUnit' => $activeUnit,
             'filters' => $filters,
             'boletos' => $boletos,
+            'todayUserBoletos' => $todayUserBoletos,
             'canManageList' => $canManageList,
             'filterUnits' => $filterUnits,
             'listTotalAmount' => $listTotalAmount,
