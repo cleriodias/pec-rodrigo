@@ -7,6 +7,9 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { printContraCheque, printContraChequePdf } from '@/Utils/contraChequePrint';
 import {
     formatBrazilShortDate,
+    getBrazilTodayShortInputValue,
+    isoToBrazilShortDateInput,
+    shortBrazilDateInputToIso,
 } from '@/Utils/date';
 import {
     formatRoleBadgeLabel,
@@ -24,6 +27,12 @@ const EXTRA_CREDIT_TYPE_OPTIONS = [
     { value: 'feriado', label: 'Feriado' },
     { value: 'bonificacao', label: 'Bonificacao' },
     { value: 'outros', label: 'Outros' },
+];
+
+const PAYMENT_STATUS_OPTIONS = [
+    { value: 'all', label: 'Todos' },
+    { value: 'paid', label: 'Pagos' },
+    { value: 'pending', label: 'Pendentes' },
 ];
 
 const formatCurrency = (value) =>
@@ -67,6 +76,31 @@ const buildWhatsappSummaryMessage = (detail) => {
         .join('\n');
 };
 
+function DatePickerField({ label, value, isoValue, onChange, ariaLabel }) {
+    return (
+        <div>
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                {label}
+            </label>
+            <div className="relative mt-2">
+                <div className="flex items-center rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 shadow-sm transition focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100">
+                    <span className="pointer-events-none">{value || 'DD/MM/AA'}</span>
+                    <span className="ml-auto pointer-events-none text-base text-gray-400 dark:text-gray-300">
+                        <i className="bi bi-calendar3" aria-hidden="true" />
+                    </span>
+                </div>
+                <input
+                    type="date"
+                    value={isoValue}
+                    onChange={onChange}
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    aria-label={ariaLabel}
+                />
+            </div>
+        </div>
+    );
+}
+
 export default function ContraCheque({
     rows = [],
     summary = {},
@@ -78,12 +112,13 @@ export default function ContraCheque({
     selectedUnitId = null,
     selectedRole = null,
     selectedUserId = null,
+    selectedPaymentStatus = 'all',
     unit = null,
 }) {
     const { flash } = usePage().props;
     const { data, setData, get, processing } = useForm({
-        start_date: startDate ?? '',
-        end_date: endDate ?? '',
+        start_date: isoToBrazilShortDateInput(startDate),
+        end_date: isoToBrazilShortDateInput(endDate),
         unit_id:
             selectedUnitId !== null && selectedUnitId !== undefined
                 ? String(selectedUnitId)
@@ -96,12 +131,14 @@ export default function ContraCheque({
             selectedUserId !== null && selectedUserId !== undefined
                 ? String(selectedUserId)
                 : 'all',
+        payment_status: selectedPaymentStatus ?? 'all',
     });
     const [selectedCreditRow, setSelectedCreditRow] = useState(null);
+    const [selectedPaymentRow, setSelectedPaymentRow] = useState(null);
     const [printError, setPrintError] = useState('');
     const creditForm = useForm({
-        start_date: startDate ?? '',
-        end_date: endDate ?? '',
+        start_date: isoToBrazilShortDateInput(startDate),
+        end_date: isoToBrazilShortDateInput(endDate),
         unit_id:
             selectedUnitId !== null && selectedUnitId !== undefined
                 ? String(selectedUnitId)
@@ -114,10 +151,33 @@ export default function ContraCheque({
             selectedUserId !== null && selectedUserId !== undefined
                 ? String(selectedUserId)
                 : 'all',
+        payment_status: selectedPaymentStatus ?? 'all',
         credit_type: 'primeiro_domingo',
         other_description: '',
         amount: '',
     });
+    const paymentForm = useForm({
+        start_date: isoToBrazilShortDateInput(startDate),
+        end_date: isoToBrazilShortDateInput(endDate),
+        unit_id:
+            selectedUnitId !== null && selectedUnitId !== undefined
+                ? String(selectedUnitId)
+                : 'all',
+        role:
+            selectedRole !== null && selectedRole !== undefined
+                ? String(selectedRole)
+                : 'all',
+        user_id:
+            selectedUserId !== null && selectedUserId !== undefined
+                ? String(selectedUserId)
+                : 'all',
+        payment_status: selectedPaymentStatus ?? 'all',
+        payment_date: getBrazilTodayShortInputValue(),
+    });
+
+    const startDateIso = shortBrazilDateInputToIso(data.start_date);
+    const endDateIso = shortBrazilDateInputToIso(data.end_date);
+    const paymentDateIso = shortBrazilDateInputToIso(paymentForm.data.payment_date);
 
     const summaryCards = useMemo(
         () => [
@@ -189,11 +249,12 @@ export default function ContraCheque({
             preserveScroll: true,
             replace: true,
             data: {
-                start_date: data.start_date || undefined,
-                end_date: data.end_date || undefined,
+                start_date: startDateIso || undefined,
+                end_date: endDateIso || undefined,
                 unit_id: data.unit_id,
                 role: data.role,
                 user_id: data.user_id,
+                payment_status: data.payment_status,
             },
         });
     };
@@ -202,8 +263,8 @@ export default function ContraCheque({
         setSelectedCreditRow(row);
         creditForm.clearErrors();
         creditForm.setData({
-            start_date: row?.detail?.start_date ?? startDate ?? '',
-            end_date: row?.detail?.end_date ?? endDate ?? '',
+            start_date: isoToBrazilShortDateInput(row?.detail?.start_date ?? startDate ?? ''),
+            end_date: isoToBrazilShortDateInput(row?.detail?.end_date ?? endDate ?? ''),
             unit_id:
                 selectedUnitId !== null && selectedUnitId !== undefined
                     ? String(selectedUnitId)
@@ -216,6 +277,7 @@ export default function ContraCheque({
                 selectedUserId !== null && selectedUserId !== undefined
                     ? String(selectedUserId)
                     : 'all',
+            payment_status: data.payment_status,
             credit_type: 'primeiro_domingo',
             other_description: '',
             amount: '',
@@ -239,6 +301,50 @@ export default function ContraCheque({
             onSuccess: () => {
                 closeCreditModal();
                 creditForm.reset('credit_type', 'other_description', 'amount');
+            },
+        });
+    };
+
+    const openPaymentModal = (row) => {
+        setSelectedPaymentRow(row);
+        paymentForm.clearErrors();
+        paymentForm.setData({
+            start_date: isoToBrazilShortDateInput(row?.detail?.start_date ?? startDate ?? ''),
+            end_date: isoToBrazilShortDateInput(row?.detail?.end_date ?? endDate ?? ''),
+            unit_id:
+                selectedUnitId !== null && selectedUnitId !== undefined
+                    ? String(selectedUnitId)
+                    : 'all',
+            role:
+                selectedRole !== null && selectedRole !== undefined
+                    ? String(selectedRole)
+                    : 'all',
+            user_id:
+                selectedUserId !== null && selectedUserId !== undefined
+                    ? String(selectedUserId)
+                    : 'all',
+            payment_status: data.payment_status,
+            payment_date: getBrazilTodayShortInputValue(),
+        });
+    };
+
+    const closePaymentModal = () => {
+        setSelectedPaymentRow(null);
+        paymentForm.clearErrors();
+    };
+
+    const handlePaymentSubmit = (event) => {
+        event.preventDefault();
+
+        if (!selectedPaymentRow?.id) {
+            return;
+        }
+
+        paymentForm.post(route('settings.contra-cheque.payments.store', selectedPaymentRow.id), {
+            preserveScroll: true,
+            onSuccess: () => {
+                closePaymentModal();
+                paymentForm.setData('payment_date', getBrazilTodayShortInputValue());
             },
         });
     };
@@ -281,28 +387,20 @@ export default function ContraCheque({
                         className="rounded-2xl bg-white p-4 shadow dark:bg-gray-800"
                     >
                         <div className="flex flex-wrap items-end gap-3">
-                            <div>
-                                <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                                    Inicio
-                                </label>
-                                <input
-                                    type="date"
-                                    value={data.start_date}
-                                    onChange={(event) => setData('start_date', event.target.value)}
-                                    className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                                    Fim
-                                </label>
-                                <input
-                                    type="date"
-                                    value={data.end_date}
-                                    onChange={(event) => setData('end_date', event.target.value)}
-                                    className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-                                />
-                            </div>
+                            <DatePickerField
+                                label="Inicio"
+                                value={data.start_date}
+                                isoValue={startDateIso}
+                                onChange={(event) => setData('start_date', isoToBrazilShortDateInput(event.target.value))}
+                                ariaLabel="Selecionar data inicial do periodo"
+                            />
+                            <DatePickerField
+                                label="Fim"
+                                value={data.end_date}
+                                isoValue={endDateIso}
+                                onChange={(event) => setData('end_date', isoToBrazilShortDateInput(event.target.value))}
+                                ariaLabel="Selecionar data final do periodo"
+                            />
                             <div>
                                 <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
                                     Unidade
@@ -350,6 +448,22 @@ export default function ContraCheque({
                                     {filterUsers.map((filterUser) => (
                                         <option key={filterUser.id} value={filterUser.id}>
                                             {filterUser.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                    Pagamento
+                                </label>
+                                <select
+                                    value={data.payment_status}
+                                    onChange={(event) => setData('payment_status', event.target.value)}
+                                    className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                                >
+                                    {PAYMENT_STATUS_OPTIONS.map((option) => (
+                                        <option key={option.value} value={option.value}>
+                                            {option.label}
                                         </option>
                                     ))}
                                 </select>
@@ -408,10 +522,23 @@ export default function ContraCheque({
                                     className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800"
                                 >
                                     <div className="flex flex-col gap-3 border-b border-gray-100 pb-4 dark:border-gray-700">
-                                        <div>
+                                        <div className="flex items-start justify-between gap-3">
                                             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                                                 {row.name}
                                             </h3>
+                                            {row.payment_status === 'paid' ? (
+                                                <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                                                    Pago em {formatBrazilShortDate(row.payment_date)}
+                                                </span>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openPaymentModal(row)}
+                                                    className="inline-flex items-center justify-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
+                                                >
+                                                    Marcar pago
+                                                </button>
+                                            )}
                                         </div>
                                         <div className="flex flex-wrap gap-2">
                                             <span
@@ -524,7 +651,7 @@ export default function ContraCheque({
                             Adicionar valor ao contra-cheque
                         </h3>
                         <p className="mt-1 text-sm text-gray-600">
-                            {selectedCreditRow?.name ?? '---'} • Periodo {formatBrazilShortDate(creditForm.data.start_date)} a {formatBrazilShortDate(creditForm.data.end_date)}
+                            {selectedCreditRow?.name ?? '---'} - Periodo {formatBrazilShortDate(creditForm.data.start_date)} a {formatBrazilShortDate(creditForm.data.end_date)}
                         </p>
                     </div>
 
@@ -591,6 +718,39 @@ export default function ContraCheque({
                         </SecondaryButton>
                         <PrimaryButton type="submit" disabled={creditForm.processing} className="rounded-xl px-4 py-2 normal-case tracking-normal">
                             Salvar credito
+                        </PrimaryButton>
+                    </div>
+                </form>
+            </Modal>
+
+            <Modal show={Boolean(selectedPaymentRow)} onClose={closePaymentModal} maxWidth="lg" tone="light">
+                <form onSubmit={handlePaymentSubmit}>
+                    <div className="border-b border-gray-200 px-6 py-5">
+                        <h3 className="text-lg font-semibold text-gray-900">
+                            Registrar pagamento do contra-cheque
+                        </h3>
+                        <p className="mt-1 text-sm text-gray-600">
+                            {selectedPaymentRow?.name ?? '---'} - Periodo {formatBrazilShortDate(paymentForm.data.start_date)} a {formatBrazilShortDate(paymentForm.data.end_date)}
+                        </p>
+                    </div>
+
+                    <div className="space-y-5 px-6 py-5">
+                        <DatePickerField
+                            label="Data do pagamento"
+                            value={paymentForm.data.payment_date}
+                            isoValue={paymentDateIso}
+                            onChange={(event) => paymentForm.setData('payment_date', isoToBrazilShortDateInput(event.target.value))}
+                            ariaLabel="Selecionar data do pagamento"
+                        />
+                        <InputError message={paymentForm.errors.payment_date} className="mt-2" />
+                    </div>
+
+                    <div className="flex justify-end gap-3 border-t border-gray-200 px-6 py-4">
+                        <SecondaryButton type="button" onClick={closePaymentModal} className="rounded-xl normal-case tracking-normal">
+                            Cancelar
+                        </SecondaryButton>
+                        <PrimaryButton type="submit" disabled={paymentForm.processing} className="rounded-xl px-4 py-2 normal-case tracking-normal">
+                            Confirmar pagamento
                         </PrimaryButton>
                     </div>
                 </form>

@@ -171,6 +171,8 @@ Route::middleware('auth')->group(function () {
         ->name('settings.contra-cheque');
     Route::post('/settings/contra-cheque/{user}/creditos', [PayrollController::class, 'storeContraChequeCredit'])
         ->name('settings.contra-cheque.creditos.store');
+    Route::post('/settings/contra-cheque/{user}/pagamentos', [PayrollController::class, 'storeContraChequePayment'])
+        ->name('settings.contra-cheque.payments.store');
     Route::get('/settings/avisos', [NoticeController::class, 'index'])
         ->name('settings.notices');
     Route::post('/settings/avisos', [NoticeController::class, 'store'])

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ContraChequeCredito;
+use App\Models\ContraChequePagamento;
 use App\Models\SalaryAdvance;
 use App\Models\Unidade;
 use App\Models\User;
@@ -108,6 +109,68 @@ class PayrollController extends Controller
             ->with('success', 'Credito adicional do contra-cheque cadastrado com sucesso.');
     }
 
+    public function storeContraChequePayment(Request $request, User $user): RedirectResponse
+    {
+        $this->ensureAdmin($request->user());
+        $this->ensureManagedPayrollUser($request->user(), $user);
+
+        $data = $request->validate([
+            'start_date' => ['required', 'string'],
+            'end_date' => ['required', 'string'],
+            'payment_date' => ['required', 'string'],
+            'unit_id' => ['nullable', 'string'],
+            'role' => ['nullable', 'string'],
+            'user_id' => ['nullable', 'string'],
+            'payment_status' => ['nullable', 'string'],
+        ], [
+            'start_date.required' => 'Informe o inicio do periodo.',
+            'end_date.required' => 'Informe o fim do periodo.',
+            'payment_date.required' => 'Informe a data do pagamento.',
+        ]);
+
+        $startDate = $this->parseRequiredDate((string) $data['start_date'], 'start_date');
+        $endDate = $this->parseRequiredDate((string) $data['end_date'], 'end_date');
+        $paymentDate = $this->parseRequiredDate((string) $data['payment_date'], 'payment_date');
+
+        if ($endDate->lt($startDate)) {
+            throw ValidationException::withMessages([
+                'end_date' => 'A data final nao pode ser menor que a data inicial.',
+            ]);
+        }
+
+        $existingPayment = ContraChequePagamento::query()
+            ->where('user_id', $user->id)
+            ->whereDate('tb29_periodo_inicio', $startDate)
+            ->whereDate('tb29_periodo_fim', $endDate)
+            ->first();
+
+        if ($existingPayment) {
+            return redirect()
+                ->route('settings.contra-cheque', $this->buildContraChequeRedirectFilters($data, $startDate, $endDate))
+                ->with('error', sprintf(
+                    'O contra-cheque de %s ja foi marcado como pago em %s.',
+                    $user->name,
+                    $existingPayment->tb29_data_pagamento?->format('d/m/y') ?? $paymentDate->format('d/m/y')
+                ));
+        }
+
+        ContraChequePagamento::create([
+            'user_id' => (int) $user->id,
+            'tb29_registrado_por' => (int) $request->user()->id,
+            'tb29_periodo_inicio' => $startDate->toDateString(),
+            'tb29_periodo_fim' => $endDate->toDateString(),
+            'tb29_data_pagamento' => $paymentDate->toDateString(),
+        ]);
+
+        return redirect()
+            ->route('settings.contra-cheque', $this->buildContraChequeRedirectFilters($data, $startDate, $endDate))
+            ->with('success', sprintf(
+                'Pagamento do contra-cheque de %s registrado em %s.',
+                $user->name,
+                $paymentDate->format('d/m/y')
+            ));
+    }
+
     private function buildPayrollPayload(Request $request, bool $onlyWithSalary = false): array
     {
         [$start, $end, $startDate, $endDate] = $this->resolveDateRange($request);
@@ -121,6 +184,7 @@ class PayrollController extends Controller
         $selectedUnitId = $this->resolveSelectedUnitId($request->query('unit_id'), $allowedUnitIds);
         $selectedRole = $this->resolveSelectedRole($request->query('role'));
         $selectedUserId = $this->resolveSelectedUserId($request->query('user_id'));
+        $selectedPaymentStatus = $this->resolveSelectedPaymentStatus($request->query('payment_status'));
         $selectedUnit = $selectedUnitId
             ? $filterUnits->firstWhere('id', $selectedUnitId)
             : ['id' => null, 'name' => 'Todas as unidades'];
@@ -253,13 +317,27 @@ class PayrollController extends Controller
                     'tb28_descricao',
                     'tb28_valor',
                 ]);
+        $payments = $userIds->isEmpty()
+            ? collect()
+            : ContraChequePagamento::query()
+                ->whereIn('user_id', $userIds)
+                ->whereDate('tb29_periodo_inicio', $startDate)
+                ->whereDate('tb29_periodo_fim', $endDate)
+                ->orderBy('tb29_data_pagamento')
+                ->orderBy('tb29_id')
+                ->get([
+                    'tb29_id',
+                    'user_id',
+                    'tb29_data_pagamento',
+                ]);
 
         $advancesByUser = $advances->groupBy('user_id');
         $valeSalesByUser = $valeSales->groupBy('id_user_vale');
         $extraCreditsByUser = $extraCredits->groupBy('user_id');
+        $paymentsByUser = $payments->keyBy('user_id');
 
         $rows = $users
-            ->map(function (User $user) use ($advancesByUser, $valeSalesByUser, $extraCreditsByUser, $startDate, $endDate) {
+            ->map(function (User $user) use ($advancesByUser, $valeSalesByUser, $extraCreditsByUser, $paymentsByUser, $startDate, $endDate) {
                 $advanceRecords = $advancesByUser
                     ->get($user->id, collect())
                     ->map(function (SalaryAdvance $advance) {
@@ -318,6 +396,10 @@ class PayrollController extends Controller
                 $salary = round((float) ($user->salario ?? 0), 2);
                 $balance = round($salary + $extraCreditTotal - $advanceTotal - $valeTotal, 2);
                 $unitNames = $this->resolveUserUnitNames($user);
+                /** @var ContraChequePagamento|null $paymentRecord */
+                $paymentRecord = $paymentsByUser->get($user->id);
+                $paymentDate = $paymentRecord?->tb29_data_pagamento?->toDateString();
+                $isPaid = $paymentDate !== null;
 
                 return [
                     'id' => (int) $user->id,
@@ -330,6 +412,8 @@ class PayrollController extends Controller
                     'extra_credits_total' => $extraCreditTotal,
                     'balance' => $balance,
                     'unit_names' => $unitNames->values()->all(),
+                    'payment_status' => $isPaid ? 'paid' : 'pending',
+                    'payment_date' => $paymentDate,
                     'detail' => [
                         'user_id' => (int) $user->id,
                         'user_name' => $user->name,
@@ -343,6 +427,8 @@ class PayrollController extends Controller
                         'vales_total' => $valeTotal,
                         'extra_credits_total' => $extraCreditTotal,
                         'balance' => $balance,
+                        'payment_status' => $isPaid ? 'paid' : 'pending',
+                        'payment_date' => $paymentDate,
                         'advances_count' => $advanceRecords->count(),
                         'vales_count' => $valeRecords->count(),
                         'extra_credits_count' => $extraCreditRecords->count(),
@@ -352,6 +438,8 @@ class PayrollController extends Controller
                     ],
                 ];
             })
+            ->when($selectedPaymentStatus === 'paid', fn (Collection $collection) => $collection->where('payment_status', 'paid'))
+            ->when($selectedPaymentStatus === 'pending', fn (Collection $collection) => $collection->where('payment_status', 'pending'))
             ->values();
 
         $summary = [
@@ -374,6 +462,7 @@ class PayrollController extends Controller
             'selectedUnitId' => $selectedUnitId,
             'selectedRole' => $selectedRole,
             'selectedUserId' => $selectedUserId,
+            'selectedPaymentStatus' => $selectedPaymentStatus,
             'unit' => $selectedUnit,
         ];
     }
@@ -477,6 +566,17 @@ class PayrollController extends Controller
         $userId = (int) $requestedUserId;
 
         return $userId > 0 ? $userId : null;
+    }
+
+    private function resolveSelectedPaymentStatus(mixed $requestedStatus): string
+    {
+        if (! is_string($requestedStatus) || $requestedStatus === '') {
+            return 'all';
+        }
+
+        return in_array($requestedStatus, ['all', 'paid', 'pending'], true)
+            ? $requestedStatus
+            : 'all';
     }
 
     private function reportUnitIds(iterable $units): Collection
@@ -605,6 +705,12 @@ class PayrollController extends Controller
             if ($value !== null && $value !== '' && $value !== 'all') {
                 $filters[$field] = $value;
             }
+        }
+
+        $paymentStatus = $data['payment_status'] ?? null;
+
+        if ($paymentStatus !== null && $paymentStatus !== '' && $paymentStatus !== 'all') {
+            $filters['payment_status'] = $paymentStatus;
         }
 
         return $filters;
