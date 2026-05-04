@@ -818,10 +818,42 @@ class SalesReportController extends Controller
         [$filterUnitId, $filterUnits, $selectedUnit] = $this->resolveReportUnit($request);
         $allowedUnitIds = $this->reportUnitIds($filterUnits);
         [$start, $end, $startDate, $endDate] = $this->resolveDateRange($request);
+        $selectedUserId = $this->resolveReportUserId($request->query('user_id'));
+
+        $filterUsersQuery = User::query()
+            ->where('funcao', '!=', 6)
+            ->orderBy('name');
+
+        ManagementScope::applyManagedUserScope($filterUsersQuery, $request->user());
+
+        if ($filterUnitId) {
+            $filterUsersQuery->where(function ($query) use ($filterUnitId) {
+                $query
+                    ->where('tb2_id', $filterUnitId)
+                    ->orWhereHas('units', function ($unitQuery) use ($filterUnitId) {
+                        $unitQuery->where('tb2_unidades.tb2_id', $filterUnitId);
+                    });
+            });
+        }
+
+        $filterUsers = $filterUsersQuery
+            ->get(['id', 'name'])
+            ->map(fn (User $user) => [
+                'id' => (int) $user->id,
+                'name' => $user->name,
+            ])
+            ->values();
+
+        if ($selectedUserId && ! $filterUsers->contains(fn (array $user) => $user['id'] === $selectedUserId)) {
+            $selectedUserId = null;
+        }
 
         $filteredAdvances = SalaryAdvance::query()
             ->with(['user:id,name,tb2_id', 'unit:tb2_id,tb2_nome'])
             ->whereBetween('advance_date', [$startDate, $endDate])
+            ->when($selectedUserId, function ($query) use ($selectedUserId) {
+                $query->where('user_id', $selectedUserId);
+            })
             ->when(! ManagementScope::isMaster($request->user()), function ($query) use ($request) {
                 $query->whereHas('user', function ($userQuery) use ($request) {
                     ManagementScope::applyManagedUserScope($userQuery, $request->user());
@@ -959,7 +991,9 @@ class SalesReportController extends Controller
             'endDate' => $endDate,
             'unit' => $selectedUnit,
             'filterUnits' => $filterUnits,
+            'filterUsers' => $filterUsers,
             'selectedUnitId' => $filterUnitId,
+            'selectedUserId' => $selectedUserId,
         ]);
     }
 

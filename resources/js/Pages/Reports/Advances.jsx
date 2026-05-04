@@ -3,7 +3,6 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import {
     formatBrazilShortDate,
     isoToBrazilShortDateInput,
-    normalizeBrazilShortDateInput,
     shortBrazilDateInputToIso,
 } from '@/Utils/date';
 import { printSalaryAdvanceDetail } from '@/Utils/salaryAdvancePrint';
@@ -16,13 +15,40 @@ const formatCurrency = (value) =>
         currency: 'BRL',
     });
 
+function DatePickerField({ label, value, isoValue, onChange, ariaLabel }) {
+    return (
+        <div>
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                {label}
+            </label>
+            <div className="relative mt-2">
+                <div className="flex items-center rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 shadow-sm transition focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100">
+                    <span className="pointer-events-none">{value || 'DD/MM/AA'}</span>
+                    <span className="ml-auto pointer-events-none text-base text-gray-400 dark:text-gray-300">
+                        <i className="bi bi-calendar3" aria-hidden="true" />
+                    </span>
+                </div>
+                <input
+                    type="date"
+                    value={isoValue}
+                    onChange={onChange}
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    aria-label={ariaLabel}
+                />
+            </div>
+        </div>
+    );
+}
+
 export default function AdvancesReport({
     rows = [],
     startDate,
     endDate,
     unit,
     filterUnits = [],
+    filterUsers = [],
     selectedUnitId = null,
+    selectedUserId = null,
 }) {
     const { data, setData, get, processing } = useForm({
         start_date: isoToBrazilShortDateInput(startDate ?? ''),
@@ -31,9 +57,15 @@ export default function AdvancesReport({
             selectedUnitId !== null && selectedUnitId !== undefined
                 ? String(selectedUnitId)
                 : 'all',
+        user_id:
+            selectedUserId !== null && selectedUserId !== undefined
+                ? String(selectedUserId)
+                : 'all',
     });
     const [selectedDetail, setSelectedDetail] = useState(null);
     const [printError, setPrintError] = useState('');
+    const startDateIso = shortBrazilDateInputToIso(data.start_date);
+    const endDateIso = shortBrazilDateInputToIso(data.end_date);
 
     const totalAmount = useMemo(
         () => rows.reduce((sum, row) => sum + (Number(row.total_amount) || 0), 0),
@@ -51,6 +83,7 @@ export default function AdvancesReport({
                 start_date: shortBrazilDateInputToIso(data.start_date) || undefined,
                 end_date: shortBrazilDateInputToIso(data.end_date) || undefined,
                 unit_id: data.unit_id,
+                user_id: data.user_id,
             },
         });
     };
@@ -92,32 +125,20 @@ export default function AdvancesReport({
                         className="rounded-2xl bg-white p-4 shadow dark:bg-gray-800"
                     >
                         <div className="flex flex-wrap items-end gap-3">
-                            <div>
-                                <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                                    Inicio
-                                </label>
-                                <input
-                                    type="text"
-                                    inputMode="numeric"
-                                    value={data.start_date}
-                                    onChange={(event) => setData('start_date', normalizeBrazilShortDateInput(event.target.value))}
-                                    placeholder="DD/MM/AA"
-                                    className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                                    Fim
-                                </label>
-                                <input
-                                    type="text"
-                                    inputMode="numeric"
-                                    value={data.end_date}
-                                    onChange={(event) => setData('end_date', normalizeBrazilShortDateInput(event.target.value))}
-                                    placeholder="DD/MM/AA"
-                                    className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-                                />
-                            </div>
+                            <DatePickerField
+                                label="Inicio"
+                                value={data.start_date}
+                                isoValue={startDateIso}
+                                onChange={(event) => setData('start_date', isoToBrazilShortDateInput(event.target.value))}
+                                ariaLabel="Selecionar data inicial"
+                            />
+                            <DatePickerField
+                                label="Fim"
+                                value={data.end_date}
+                                isoValue={endDateIso}
+                                onChange={(event) => setData('end_date', isoToBrazilShortDateInput(event.target.value))}
+                                ariaLabel="Selecionar data final"
+                            />
                             <div>
                                 <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
                                     Unidade
@@ -131,6 +152,23 @@ export default function AdvancesReport({
                                     {filterUnits.map((filterUnit) => (
                                         <option key={filterUnit.id} value={filterUnit.id}>
                                             {filterUnit.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                    Usuario
+                                </label>
+                                <select
+                                    value={data.user_id}
+                                    onChange={(event) => setData('user_id', event.target.value)}
+                                    className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                                >
+                                    <option value="all">Todos</option>
+                                    {filterUsers.map((filterUser) => (
+                                        <option key={filterUser.id} value={filterUser.id}>
+                                            {filterUser.name}
                                         </option>
                                     ))}
                                 </select>
