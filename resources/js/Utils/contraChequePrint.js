@@ -89,7 +89,7 @@ export const buildContraChequeHtml = (detail, options = {}) => {
             ${extraCreditsHtml
                 ? `
                     <div class="divider"></div>
-                    <div class="section-title">Lancamentos creditados</div>
+                    <div class="section-title">Lancamentos extras</div>
                     ${extraCreditsHtml}
                 `
                 : ''}
@@ -101,6 +101,8 @@ export const buildContraChequeHtml = (detail, options = {}) => {
         : '';
 
     if (format === 'traditional') {
+        const positiveExtraCredits = extraCredits.filter((credit) => Number(credit.amount ?? 0) >= 0);
+        const negativeExtraCredits = extraCredits.filter((credit) => Number(credit.amount ?? 0) < 0);
         const earningRows = [
             {
                 code: '001',
@@ -108,7 +110,7 @@ export const buildContraChequeHtml = (detail, options = {}) => {
                 reference: '1,00',
                 amount: Number(detail?.salary ?? 0),
             },
-            ...extraCredits.map((credit, index) => ({
+            ...positiveExtraCredits.map((credit, index) => ({
                 code: String(100 + index + 1),
                 description: credit.description || credit.type_label || 'Credito extra',
                 reference: '1,00',
@@ -128,6 +130,12 @@ export const buildContraChequeHtml = (detail, options = {}) => {
                 description: `Vale em compras #${vale.id}`,
                 reference: String(Number(vale.items_count ?? 0) || 1),
                 amount: Number(vale.total ?? 0),
+            })),
+            ...negativeExtraCredits.map((credit, index) => ({
+                code: String(400 + index + 1),
+                description: credit.description || credit.type_label || 'Desconto',
+                reference: '1,00',
+                amount: Math.abs(Number(credit.amount ?? 0)),
             })),
         ];
 
@@ -150,8 +158,11 @@ export const buildContraChequeHtml = (detail, options = {}) => {
             `;
         }).join('');
 
-        const totalEarnings = Number(detail?.salary ?? 0) + Number(detail?.extra_credits_total ?? 0);
-        const totalDeductions = Number(detail?.advances_total ?? 0) + Number(detail?.vales_total ?? 0);
+        const totalEarnings = Number(detail?.salary ?? 0)
+            + positiveExtraCredits.reduce((total, credit) => total + Number(credit.amount ?? 0), 0);
+        const totalDeductions = Number(detail?.advances_total ?? 0)
+            + Number(detail?.vales_total ?? 0)
+            + negativeExtraCredits.reduce((total, credit) => total + Math.abs(Number(credit.amount ?? 0)), 0);
 
         return `
             <!DOCTYPE html>
