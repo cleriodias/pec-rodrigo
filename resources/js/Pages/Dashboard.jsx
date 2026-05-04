@@ -358,7 +358,11 @@ const cacheDirectProductLookup = (cache, product) => {
     }
 };
 
-export default function Dashboard({ quickLookupProducts = [], masterSwitchOptions = null }) {
+export default function Dashboard({
+    quickLookupProducts = [],
+    masterSwitchOptions = null,
+    dashboardContraChequeSummary = null,
+}) {
     const pageProps = usePage().props;
     const { auth } = pageProps;
     const effectiveRole = Number(auth?.user?.funcao ?? -1);
@@ -2050,7 +2054,13 @@ export default function Dashboard({ quickLookupProducts = [], masterSwitchOption
         { label: 'Usuarios', icon: 'bi-people-fill', href: route('users.index') },
         { label: 'Unidades', icon: 'bi-building', href: route('units.index') },
         { label: 'Relatorios', icon: 'bi-clipboard-data', href: route('reports.index') },
-        { label: 'Contra-cheque', icon: 'bi-receipt-cutoff', href: route('settings.contra-cheque') },
+        {
+            label: 'Contra-cheque',
+            icon: 'bi-receipt-cutoff',
+            href: route('settings.contra-cheque'),
+            employeesCount: Number(dashboardContraChequeSummary?.employees_count ?? 0),
+            pendingTotal: Number(dashboardContraChequeSummary?.pending_total ?? 0),
+        },
         { label: 'AnyDesck', icon: 'bi-pc-display', href: route('settings.anydesck') },
     ];
 
@@ -2220,9 +2230,17 @@ export default function Dashboard({ quickLookupProducts = [], masterSwitchOption
                                                             <span className="block text-sm font-semibold text-indigo-900 dark:text-indigo-100">
                                                                 {link.label}
                                                             </span>
-                                                            <span className="block text-xs text-indigo-700 dark:text-indigo-200">
-                                                                Abrir
-                                                            </span>
+                                                            {link.label === 'Contra-cheque' ? (
+                                                                <>
+                                                                    <span className="block text-xs font-semibold text-indigo-800 dark:text-indigo-100">
+                                                                       {link.employeesCount} {formatCurrency(link.pendingTotal)}
+                                                                    </span>
+                                                                </>
+                                                            ) : (
+                                                                <span className="block text-xs text-indigo-700 dark:text-indigo-200">
+                                                                    Abrir
+                                                                </span>
+                                                            )}
                                                         </span>
                                                     </Link>
                                                 ))}
