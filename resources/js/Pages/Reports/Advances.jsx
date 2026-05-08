@@ -17,14 +17,14 @@ const formatCurrency = (value) =>
 
 function DatePickerField({ label, value, isoValue, onChange, ariaLabel }) {
     return (
-        <div>
+        <div className="min-w-[140px]">
             <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
                 {label}
             </label>
             <div className="relative mt-2">
-                <div className="flex items-center rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 shadow-sm transition focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100">
+                <div className="flex min-h-[42px] items-center rounded-xl border border-gray-300 bg-white pl-3 pr-10 py-2 text-sm text-gray-800 shadow-sm transition focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100">
                     <span className="pointer-events-none">{value || 'DD/MM/AA'}</span>
-                    <span className="ml-auto pointer-events-none text-base text-gray-400 dark:text-gray-300">
+                    <span className="pointer-events-none absolute right-3 text-base text-gray-400 dark:text-gray-300">
                         <i className="bi bi-calendar3" aria-hidden="true" />
                     </span>
                 </div>
