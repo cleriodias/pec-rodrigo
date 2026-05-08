@@ -62,6 +62,132 @@ class CashClosureMasterReviewTest extends TestCase
         ]);
     }
 
+    public function test_manager_can_create_ok_cash_closure_with_system_values_from_own_unit(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-04-09 12:00:00'));
+
+        $unit = $this->makeUnit('Setor-30');
+        $manager = $this->makeUser('Gerente', 1, $unit);
+        $cashier = $this->makeUser('Caixa', 3, $unit);
+        $product = $this->makeProduct();
+        $supplier = $this->makeSupplier();
+
+        $paymentCash = VendaPagamento::create([
+            'valor_total' => 100,
+            'tipo_pagamento' => 'dinheiro',
+            'valor_pago' => 100,
+            'troco' => 0,
+            'dois_pgto' => 0,
+            'created_at' => now()->subMinutes(10),
+            'updated_at' => now()->subMinutes(10),
+        ]);
+
+        $paymentCard = VendaPagamento::create([
+            'valor_total' => 55,
+            'tipo_pagamento' => 'maquina',
+            'valor_pago' => null,
+            'troco' => 0,
+            'dois_pgto' => 0,
+            'created_at' => now()->subMinutes(5),
+            'updated_at' => now()->subMinutes(5),
+        ]);
+
+        Venda::create([
+            'tb4_id' => $paymentCash->tb4_id,
+            'tb1_id' => $product->tb1_id,
+            'id_comanda' => '501',
+            'produto_nome' => $product->tb1_nome,
+            'valor_unitario' => 100,
+            'quantidade' => 1,
+            'valor_total' => 100,
+            'data_hora' => now()->subMinutes(10),
+            'id_user_caixa' => $cashier->id,
+            'id_user_vale' => null,
+            'id_lanc' => null,
+            'id_unidade' => $unit->tb2_id,
+            'tipo_pago' => 'dinheiro',
+            'status_pago' => true,
+            'status' => 1,
+            'created_at' => now()->subMinutes(10),
+            'updated_at' => now()->subMinutes(10),
+        ]);
+
+        Venda::create([
+            'tb4_id' => $paymentCard->tb4_id,
+            'tb1_id' => $product->tb1_id,
+            'id_comanda' => '502',
+            'produto_nome' => $product->tb1_nome,
+            'valor_unitario' => 55,
+            'quantidade' => 1,
+            'valor_total' => 55,
+            'data_hora' => now()->subMinutes(5),
+            'id_user_caixa' => $cashier->id,
+            'id_user_vale' => null,
+            'id_lanc' => null,
+            'id_unidade' => $unit->tb2_id,
+            'tipo_pago' => 'maquina',
+            'status_pago' => true,
+            'status' => 1,
+            'created_at' => now()->subMinutes(5),
+            'updated_at' => now()->subMinutes(5),
+        ]);
+
+        Expense::create([
+            'supplier_id' => $supplier->id,
+            'unit_id' => $unit->tb2_id,
+            'user_id' => $cashier->id,
+            'expense_date' => '2026-04-09',
+            'amount' => 20,
+            'notes' => 'Gasto do caixa',
+        ]);
+
+        $response = $this
+            ->actingAs($manager)
+            ->postJson(route('reports.cash.closure.ok-close'), [
+                'cashier_id' => $cashier->id,
+                'unit_id' => $unit->tb2_id,
+                'date' => '2026-04-09',
+            ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('message', 'Fechamento OK criado para 09/04/26.');
+
+        $this->assertDatabaseHas('cashier_closures', [
+            'user_id' => $cashier->id,
+            'unit_id' => $unit->tb2_id,
+            'closed_date' => '2026-04-09',
+            'cash_amount' => 80.0,
+            'card_amount' => 55.0,
+        ]);
+    }
+
+    public function test_manager_cannot_create_ok_cash_closure_for_unit_outside_scope(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-04-09 12:00:00'));
+
+        $managerUnit = $this->makeUnit('Setor-31');
+        $otherUnit = $this->makeUnit('Setor-32');
+        $manager = $this->makeUser('Gerente', 1, $managerUnit);
+        $cashier = $this->makeUser('Caixa', 3, $otherUnit);
+
+        $response = $this
+            ->actingAs($manager)
+            ->postJson(route('reports.cash.closure.ok-close'), [
+                'cashier_id' => $cashier->id,
+                'unit_id' => $otherUnit->tb2_id,
+                'date' => '2026-04-09',
+            ]);
+
+        $response->assertForbidden();
+
+        $this->assertDatabaseMissing('cashier_closures', [
+            'user_id' => $cashier->id,
+            'unit_id' => $otherUnit->tb2_id,
+            'closed_date' => '2026-04-09',
+        ]);
+    }
+
     public function test_cash_closure_report_uses_master_review_values_when_available(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-04-04 12:00:00'));

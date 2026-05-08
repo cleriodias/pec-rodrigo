@@ -401,6 +401,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/hoje', [SalesReportController::class, 'hoje'])->name('reports.hoje');
     Route::get('/reports/cash-closure', [SalesReportController::class, 'cashClosure'])->name('reports.cash.closure');
     Route::post('/reports/cash-closure/zero-close', [SalesReportController::class, 'storeZeroCashClosure'])->name('reports.cash.closure.zero-close');
+    Route::post('/reports/cash-closure/ok-close', [SalesReportController::class, 'storeSystemCashClosure'])->name('reports.cash.closure.ok-close');
     Route::patch('/reports/cash-closure/{closure}/master-review', [SalesReportController::class, 'updateCashClosureMasterReview'])->name('reports.cash.closure.master-review');
     Route::get('/reports/cash-discrepancies', [SalesReportController::class, 'cashDiscrepancies'])->name('reports.cash.discrepancies');
     Route::get('/reports/control', [SalesReportController::class, 'control'])->name('reports.control');

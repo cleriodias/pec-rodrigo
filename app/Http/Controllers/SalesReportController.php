@@ -2346,6 +2346,67 @@ class SalesReportController extends Controller
         ]);
     }
 
+    public function storeSystemCashClosure(Request $request): JsonResponse
+    {
+        $this->ensureManager($request);
+
+        $validated = $request->validate([
+            'cashier_id' => ['required', 'integer', 'exists:users,id'],
+            'unit_id' => ['required', 'integer', 'exists:tb2_unidades,tb2_id'],
+            'date' => ['required', 'date_format:Y-m-d'],
+        ]);
+
+        $user = $request->user();
+        $availableUnits = $this->availableUnits($user);
+        $unitId = (int) $validated['unit_id'];
+
+        if (! $availableUnits->contains(fn (array $unit) => (int) ($unit['id'] ?? 0) === $unitId)) {
+            abort(403);
+        }
+
+        $cashierId = (int) $validated['cashier_id'];
+        $closureDate = $this->parseDate($validated['date'], 'Y-m-d', Carbon::today())->startOfDay();
+
+        $alreadyClosed = CashierClosure::query()
+            ->where('user_id', $cashierId)
+            ->where('unit_id', $unitId)
+            ->whereDate('closed_date', $closureDate)
+            ->exists();
+
+        if ($alreadyClosed) {
+            return response()->json([
+                'message' => 'Ja existe fechamento para este caixa na data informada.',
+            ], 422);
+        }
+
+        $systemValues = $this->calculateCashClosureSystemValues($cashierId, $unitId, $closureDate);
+
+        if ($systemValues === null) {
+            return response()->json([
+                'message' => 'Nao existem vendas para este caixa nesta data.',
+            ], 422);
+        }
+
+        $unit = $availableUnits->first(fn (array $item) => (int) ($item['id'] ?? 0) === $unitId);
+
+        CashierClosure::create([
+            'user_id' => $cashierId,
+            'unit_id' => $unitId,
+            'unit_name' => $unit['name'] ?? ('Unidade #' . $unitId),
+            'cash_amount' => $systemValues['cash_amount'],
+            'card_amount' => $systemValues['card_amount'],
+            'closed_date' => $closureDate->toDateString(),
+            'closed_at' => now(),
+        ]);
+
+        return response()->json([
+            'message' => sprintf(
+                'Fechamento OK criado para %s.',
+                $closureDate->format('d/m/y')
+            ),
+        ]);
+    }
+
     public function cashDiscrepancies(Request $request): Response
     {
         $this->ensureManager($request);
@@ -3121,6 +3182,57 @@ class SalesReportController extends Controller
         }
 
         return sprintf('unit-%d-comanda-%d-closed-row-%d', $unitId, $comandaId, (int) $sale->tb3_id);
+    }
+
+    private function calculateCashClosureSystemValues(int $cashierId, int $unitId, Carbon $closureDate): ?array
+    {
+        $start = $closureDate->copy()->startOfDay();
+        $end = $closureDate->copy()->endOfDay();
+        $payments = VendaPagamento::query()
+            ->whereBetween('created_at', [$start, $end])
+            ->whereHas('vendas', function ($query) use ($cashierId, $unitId) {
+                $query->where('id_user_caixa', $cashierId)
+                    ->where('id_unidade', $unitId);
+            })
+            ->get([
+                'tb4_id',
+                'valor_total',
+                'tipo_pagamento',
+                'valor_pago',
+                'troco',
+                'dois_pgto',
+                'created_at',
+            ]);
+
+        if ($payments->isEmpty()) {
+            return null;
+        }
+
+        $totals = [
+            'dinheiro' => 0.0,
+            'maquina' => 0.0,
+        ];
+
+        foreach ($payments as $payment) {
+            foreach ($this->breakdownPayment($payment) as $type => $amount) {
+                if (array_key_exists($type, $totals)) {
+                    $totals[$type] += $amount;
+                }
+            }
+        }
+
+        $referenceDate = $closureDate->toDateString();
+        $expenseTotal = (float) $this->groupExpensesByCashierUnit(
+            $referenceDate,
+            $unitId,
+            collect([$unitId]),
+            $cashierId
+        )->get($cashierId . '-' . $unitId, 0);
+
+        return [
+            'cash_amount' => round(max((float) $totals['dinheiro'] - $expenseTotal, 0), 2),
+            'card_amount' => round((float) $totals['maquina'], 2),
+        ];
     }
 
     private function parseReceiptIdFilter(mixed $value): ?int
