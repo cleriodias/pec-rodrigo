@@ -184,7 +184,11 @@ class ProductController extends Controller
         ]);
     }
 
-    public function updateFiscalQueueItem(Request $request, Produto $product): JsonResponse
+    public function updateFiscalQueueItem(
+        Request $request,
+        Produto $product,
+        ProductQuickLookupCache $quickLookupCache
+    ): JsonResponse
     {
         $data = $request->validate(
             [
@@ -211,6 +215,7 @@ class ProductController extends Controller
             'tb1_csosn' => $this->normalizeDigitsField($data['tb1_csosn'], 4),
             'tb1_cst' => $this->normalizeDigitsField($data['tb1_cst'], 3),
         ]);
+        $quickLookupCache->invalidateCatalog();
 
         return response()->json([
             'message' => 'Dados fiscais gravados com sucesso.',
@@ -218,7 +223,7 @@ class ProductController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, ProductQuickLookupCache $quickLookupCache)
     {
         $data = $this->validateProduct($request);
 
@@ -230,6 +235,7 @@ class ProductController extends Controller
         $data = $this->prepareProductData($data);
 
         $product = Produto::create($data);
+        $quickLookupCache->invalidateCatalog();
 
         return Redirect::route('products.show', ['product' => $product->tb1_id])
             ->with('success', 'Produto cadastrado com sucesso!');
@@ -243,27 +249,33 @@ class ProductController extends Controller
         ));
     }
 
-    public function update(Request $request, Produto $product)
+    public function update(Request $request, Produto $product, ProductQuickLookupCache $quickLookupCache)
     {
         $data = $this->validateProduct($request, $product);
         $data['tb1_vr_credit'] = (bool) ($data['tb1_vr_credit'] ?? false);
         $data = $this->prepareProductData($data, $product);
 
         $product->update($data);
+        $quickLookupCache->invalidateCatalog();
 
         return Redirect::route('products.show', ['product' => $product->tb1_id])
             ->with('success', 'Produto atualizado com sucesso!');
     }
 
-    public function destroy(Produto $product)
+    public function destroy(Produto $product, ProductQuickLookupCache $quickLookupCache)
     {
         $product->delete();
+        $quickLookupCache->invalidateCatalog();
 
         return Redirect::route('products.index')
             ->with('success', 'Produto removido com sucesso!');
     }
 
-    public function toggleFavorite(Request $request, Produto $product)
+    public function toggleFavorite(
+        Request $request,
+        Produto $product,
+        ProductQuickLookupCache $quickLookupCache
+    )
     {
         $data = $request->validate([
             'favorite' => 'required|boolean',
@@ -272,6 +284,7 @@ class ProductController extends Controller
         $product->update([
             'tb1_favorito' => $data['favorite'],
         ]);
+        $quickLookupCache->invalidateCatalog();
 
         return Redirect::back()->with('success', $data['favorite'] ? 'Produto marcado como favorito.' : 'Produto removido dos favoritos.');
     }
@@ -412,6 +425,26 @@ class ProductController extends Controller
         $quickLookupCache->rememberProductForRequest($product, $request);
 
         return response()->json($quickLookupCache->productPayload($product));
+    }
+
+    public function quickLookupSnapshot(Request $request, ProductQuickLookupCache $quickLookupCache): JsonResponse
+    {
+        $requestedVersion = max((int) $request->query('version', 0), 0);
+        $snapshot = $quickLookupCache->snapshotForRequest($request);
+        $currentVersion = (int) ($snapshot['version'] ?? 1);
+
+        if ($requestedVersion === $currentVersion) {
+            return response()->json([
+                'changed' => false,
+                'version' => $currentVersion,
+            ]);
+        }
+
+        return response()->json([
+            'changed' => true,
+            'version' => $currentVersion,
+            'products' => $snapshot['products'] ?? [],
+        ]);
     }
 
     private function buildBooleanFullTextSearchTerm(string $term): string

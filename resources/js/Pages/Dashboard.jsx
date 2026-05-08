@@ -21,6 +21,7 @@ const WEIGHTED_BARCODE_PREFIX = '2';
 const WEIGHTED_BARCODE_LENGTH = 13;
 const QUANTITY_HOLD_INITIAL_DELAY = 350;
 const QUANTITY_HOLD_REPEAT_INTERVAL = 90;
+const QUICK_LOOKUP_SYNC_INTERVAL_MS = 15000;
 const paymentLabels = {
     maquina: 'Maquina',
     cartao_credito: 'Cartao credito',
@@ -360,6 +361,7 @@ const cacheDirectProductLookup = (cache, product) => {
 
 export default function Dashboard({
     quickLookupProducts = [],
+    quickLookupProductsVersion = 1,
     masterSwitchOptions = null,
     dashboardContraChequeSummary = null,
 }) {
@@ -382,6 +384,19 @@ export default function Dashboard({
     const [lastManualSearch, setLastManualSearch] = useState(false);
     const lastTriggerConsumed = useRef(0);
     const directProductLookupCache = useRef(new Map());
+    const [quickLookupProductsState, setQuickLookupProductsState] = useState(() =>
+        Array.isArray(quickLookupProducts) ? quickLookupProducts : [],
+    );
+    const [quickLookupVersion, setQuickLookupVersion] = useState(() => {
+        const version = Number(quickLookupProductsVersion);
+
+        return Number.isFinite(version) && version > 0 ? version : 1;
+    });
+    const quickLookupVersionRef = useRef(
+        Number.isFinite(Number(quickLookupProductsVersion)) && Number(quickLookupProductsVersion) > 0
+            ? Number(quickLookupProductsVersion)
+            : 1,
+    );
 
     const [items, setItems] = useState([]);
     const [addingItem, setAddingItem] = useState(false);
@@ -423,14 +438,95 @@ export default function Dashboard({
     const quantityHoldIntervalRef = useRef(null);
 
     useEffect(() => {
-        if (!Array.isArray(quickLookupProducts) || quickLookupProducts.length === 0) {
+        setQuickLookupProductsState(Array.isArray(quickLookupProducts) ? quickLookupProducts : []);
+
+        const version = Number(quickLookupProductsVersion);
+        const normalizedVersion = Number.isFinite(version) && version > 0 ? version : 1;
+
+        setQuickLookupVersion(normalizedVersion);
+        quickLookupVersionRef.current = normalizedVersion;
+    }, [quickLookupProducts, quickLookupProductsVersion]);
+
+    useEffect(() => {
+        directProductLookupCache.current.clear();
+
+        if (!Array.isArray(quickLookupProductsState) || quickLookupProductsState.length === 0) {
             return;
         }
 
-        quickLookupProducts.forEach((product) => {
+        quickLookupProductsState.forEach((product) => {
             cacheDirectProductLookup(directProductLookupCache.current, product);
         });
-    }, [quickLookupProducts]);
+    }, [quickLookupProductsState]);
+
+    useEffect(() => {
+        quickLookupVersionRef.current = quickLookupVersion;
+    }, [quickLookupVersion]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return undefined;
+        }
+
+        let isMounted = true;
+        let isSyncing = false;
+
+        const syncQuickLookupSnapshot = () => {
+            if (isSyncing) {
+                return;
+            }
+
+            isSyncing = true;
+
+            fetch(route('products.quick-lookup.snapshot', { version: quickLookupVersionRef.current }), {
+                headers: {
+                    Accept: 'application/json',
+                },
+            })
+                .then((response) => {
+                    return response.json().then((data) => {
+                        if (!response.ok) {
+                            throw new Error(data?.message || 'Nao foi possivel sincronizar os produtos.');
+                        }
+
+                        return data;
+                    });
+                })
+                .then((data) => {
+                    if (!isMounted) {
+                        return;
+                    }
+
+                    const nextVersion = Number(data?.version);
+
+                    if (Number.isFinite(nextVersion) && nextVersion > 0) {
+                        quickLookupVersionRef.current = nextVersion;
+                        setQuickLookupVersion(nextVersion);
+                    }
+
+                    if (!data?.changed) {
+                        return;
+                    }
+
+                    setQuickLookupProductsState(Array.isArray(data?.products) ? data.products : []);
+                })
+                .catch(() => {
+                    // Mantem o cache atual quando a verificacao automatica falhar.
+                })
+                .finally(() => {
+                    isSyncing = false;
+                });
+        };
+
+        syncQuickLookupSnapshot();
+
+        const intervalId = window.setInterval(syncQuickLookupSnapshot, QUICK_LOOKUP_SYNC_INTERVAL_MS);
+
+        return () => {
+            isMounted = false;
+            window.clearInterval(intervalId);
+        };
+    }, []);
 
     useEffect(() => {
         if (typeof window === 'undefined') {
