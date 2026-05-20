@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         if (Schema::hasTable('tb1_produto')) {
             $this->addIndexIfMissing(
                 'tb1_produto',
@@ -65,6 +69,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         $this->dropIndexIfExists('tb4_vendas_pg', 'tb4_vendas_pg_created_idx');
         $this->dropIndexIfExists('tb3_vendas', 'tb3_vendas_tipo_vale_data_idx');
         $this->dropIndexIfExists('tb3_vendas', 'tb3_vendas_caixa_unit_status_data_idx');
