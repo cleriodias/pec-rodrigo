@@ -4,6 +4,7 @@
 4. Na criacao de tabelas usar o prefixo "tb" + um sequencial, e o nome, exemplo: (tb1_nome_nome), sempre verifique as tabelas para nao duplicar o sequencial.
 
 IMPORTANT:
+- NAO RESTAURAR DUMPS EM NENUHMA CIRCUNSTACIAS
 - Sempre que um campo de data for criado deve abrir o calendaria para preenchimanto.
 - Qualquer Update ou Delete na base de dados deve ser informado na primeira linha do plano detalhado cercado com asteriscos e a quantidade de registros afetada
 - SEMPRE EXPLIQUE A CAUSA DO PROBLEMA (QUANDO FOR A CORRECAO DE UM PROBLEMA) E MOSTRE O PLANO QUE PRETENDE FAZER E AGUARDE MINHA AUTORIZACAO. SOMENTE E NECESSARIO PEDIR AUTORIZACAO QUANDO ENVOLVER MODIFICACOES NO CODIGO (EXPLICACOES OU QUESTIONAMENTOS NAO E NECESSARIO AUTORIZAR).
