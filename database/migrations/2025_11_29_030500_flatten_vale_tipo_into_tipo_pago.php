@@ -11,7 +11,9 @@ return new class extends Migration {
      */
     public function up(): void
     {
-        DB::statement("ALTER TABLE tb3_vendas MODIFY tipo_pago ENUM('maquina','dinheiro','vale','refeicao','faturar') NOT NULL");
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement("ALTER TABLE tb3_vendas MODIFY tipo_pago ENUM('maquina','dinheiro','vale','refeicao','faturar') NOT NULL");
+        }
 
         DB::table('tb3_vendas')
             ->where('vale_tipo', 'refeicao')
@@ -38,6 +40,8 @@ return new class extends Migration {
                 'tipo_pago' => 'vale',
             ]);
 
-        DB::statement("ALTER TABLE tb3_vendas MODIFY tipo_pago ENUM('maquina','dinheiro','vale','faturar') NOT NULL");
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement("ALTER TABLE tb3_vendas MODIFY tipo_pago ENUM('maquina','dinheiro','vale','faturar') NOT NULL");
+        }
     }
 };

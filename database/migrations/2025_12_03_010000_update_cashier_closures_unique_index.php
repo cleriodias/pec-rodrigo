@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration {
@@ -13,7 +14,9 @@ return new class extends Migration {
         });
 
         // drop old unique (user_id, closed_date) safely
-        DB::statement('ALTER TABLE cashier_closures DROP INDEX cashier_closures_user_id_closed_date_unique');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE cashier_closures DROP INDEX cashier_closures_user_id_closed_date_unique');
+        }
 
         Schema::table('cashier_closures', function (Blueprint $table) {
             // Add unique by user/unit/date
@@ -28,7 +31,9 @@ return new class extends Migration {
         });
 
         // restore old unique
-        DB::statement('ALTER TABLE cashier_closures ADD UNIQUE cashier_closures_user_id_closed_date_unique (user_id, closed_date)');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE cashier_closures ADD UNIQUE cashier_closures_user_id_closed_date_unique (user_id, closed_date)');
+        }
 
         Schema::table('cashier_closures', function (Blueprint $table) {
             $table->dropIndex('cashier_closures_user_id_idx');

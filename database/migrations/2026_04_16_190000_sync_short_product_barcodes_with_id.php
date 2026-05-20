@@ -10,6 +10,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         DB::table('tb1_produto')
             ->whereRaw('CHAR_LENGTH(TRIM(tb1_codbar)) < 7')
             ->update([

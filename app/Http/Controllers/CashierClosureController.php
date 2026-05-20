@@ -12,6 +12,7 @@ use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -82,7 +83,8 @@ class CashierClosureController extends Controller
         $unitId = $activeUnit['id'] ?? $user->tb2_id;
         $unitName = $activeUnit['name'] ?? optional($user->primaryUnit)->tb2_nome;
 
-        $openComandas = $this->hasOpenComandas($unitId);
+        $openComandasSnapshot = $this->loadOpenComandas($unitId);
+        $openComandas = $openComandasSnapshot->isNotEmpty();
 
         if ($openComandas) {
             $openComandasObservation = trim((string) ($validated['open_comandas_observation'] ?? ''));
@@ -147,19 +149,43 @@ class CashierClosureController extends Controller
 
         $closedAt = now();
 
-        CashierClosure::create([
-            'user_id' => $user->id,
-            'unit_id' => $unitId,
-            'unit_name' => $unitName,
-            'cash_amount' => $validated['cash_amount'],
-            'card_amount' => $validated['card_amount'],
-            'open_comandas_observation' => $openComandasObservation,
-            'closed_date' => $closureDate->toDateString(),
-            'closed_at' => $closedAt,
-        ]);
+        DB::transaction(function () use (
+            $user,
+            $unitId,
+            $unitName,
+            $validated,
+            $openComandas,
+            $openComandasObservation,
+            $closureDate,
+            $closedAt,
+            &$openComandasSnapshot,
+        ) {
+            if ($openComandas) {
+                $openComandasSnapshot = $this->loadOpenComandas($unitId, true);
+                $this->closeOpenComandasAsFaturar($unitId, $user, $closedAt);
+            }
+
+            CashierClosure::create([
+                'user_id' => $user->id,
+                'unit_id' => $unitId,
+                'unit_name' => $unitName,
+                'cash_amount' => $validated['cash_amount'],
+                'card_amount' => $validated['card_amount'],
+                'open_comandas_observation' => $openComandasObservation,
+                'closed_date' => $closureDate->toDateString(),
+                'closed_at' => $closedAt,
+            ]);
+        });
 
         if ($openComandas && $openComandasObservation !== null) {
-            $this->notifyOpenComandasClosure($unitId, $unitName, $user, $openComandasObservation, $closedAt);
+            $this->notifyOpenComandasClosure(
+                $unitId,
+                $unitName,
+                $user,
+                $openComandasObservation,
+                $closedAt,
+                $openComandasSnapshot->all(),
+            );
         }
 
         if ($closureDate->isSameDay($today)) {
@@ -227,10 +253,9 @@ class CashierClosureController extends Controller
         User $executor,
         string $observation,
         Carbon $closedAt,
+        array $openComandas,
     ): void {
-        $openComandas = $this->loadOpenComandas($unitId);
-
-        if ($openComandas->isEmpty()) {
+        if ($openComandas === []) {
             return;
         }
 
@@ -260,7 +285,7 @@ class CashierClosureController extends Controller
             $executor,
             $unitName,
             $observation,
-            $openComandas->all(),
+            $openComandas,
             $closedAt,
         );
 
@@ -275,16 +300,22 @@ class CashierClosureController extends Controller
         }
     }
 
-    private function loadOpenComandas(int $unitId)
+    private function loadOpenComandas(int $unitId, bool $lockForUpdate = false)
     {
-        return Venda::query()
+        $query = Venda::query()
             ->select(['id_comanda', 'produto_nome', 'quantidade', 'valor_total', 'created_at', 'data_hora'])
             ->whereNotNull('id_comanda')
             ->whereBetween('id_comanda', [3000, 3100])
             ->where('status', 0)
             ->where('id_unidade', $unitId)
             ->orderBy('id_comanda')
-            ->orderBy('created_at')
+            ->orderBy('created_at');
+
+        if ($lockForUpdate) {
+            $query->lockForUpdate();
+        }
+
+        return $query
             ->get()
             ->groupBy(fn (Venda $sale) => (int) $sale->id_comanda)
             ->map(function ($items, $comandaId) {
@@ -309,6 +340,51 @@ class CashierClosureController extends Controller
                 ];
             })
             ->values();
+    }
+
+    private function closeOpenComandasAsFaturar(int $unitId, User $user, Carbon $closedAt): void
+    {
+        $openSales = Venda::query()
+            ->select(['tb3_id', 'id_comanda', 'valor_total'])
+            ->whereNotNull('id_comanda')
+            ->whereBetween('id_comanda', [3000, 3100])
+            ->where('status', 0)
+            ->where('id_unidade', $unitId)
+            ->orderBy('id_comanda')
+            ->orderBy('tb3_id')
+            ->lockForUpdate()
+            ->get();
+
+        if ($openSales->isEmpty()) {
+            return;
+        }
+
+        $openSales
+            ->groupBy(fn (Venda $sale) => (int) $sale->id_comanda)
+            ->each(function ($comandaSales) use ($user, $closedAt) {
+                $payment = VendaPagamento::create([
+                    'valor_total' => round((float) $comandaSales->sum('valor_total'), 2),
+                    'tipo_pagamento' => 'faturar',
+                    'valor_pago' => null,
+                    'troco' => 0,
+                    'dois_pgto' => 0,
+                    'created_at' => $closedAt,
+                    'updated_at' => $closedAt,
+                ]);
+
+                Venda::query()
+                    ->whereIn('tb3_id', $comandaSales->pluck('tb3_id')->all())
+                    ->update([
+                        'tb4_id' => $payment->tb4_id,
+                        'id_user_caixa' => $user->id,
+                        'id_user_vale' => null,
+                        'tipo_pago' => 'faturar',
+                        'status_pago' => false,
+                        'status' => 1,
+                        'data_hora' => $closedAt,
+                        'updated_at' => $closedAt,
+                    ]);
+            });
     }
 
     private function buildOpenComandasClosureMessage(
