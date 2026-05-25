@@ -19,6 +19,8 @@ const numericRegex = /^\d+$/;
 const BARCODE_MIN_LENGTH = 5;
 const WEIGHTED_BARCODE_PREFIX = '2';
 const WEIGHTED_BARCODE_LENGTH = 13;
+const COMANDA_MIN_CODE = 3000;
+const COMANDA_MAX_CODE = 3100;
 const QUANTITY_HOLD_INITIAL_DELAY = 350;
 const QUANTITY_HOLD_REPEAT_INTERVAL = 90;
 const QUICK_LOOKUP_SYNC_INTERVAL_MS = 15000;
@@ -29,6 +31,7 @@ const paymentLabels = {
     dinheiro: 'Dinheiro',
     dinheiro_cartao_credito: 'Dinheiro + Cartao credito',
     dinheiro_cartao_debito: 'Dinheiro + Cartao debito',
+    pix: 'Pix',
     vale: 'Vale',
     faturar: 'Faturar',
     refeicao: 'Refeição',
@@ -37,11 +40,15 @@ const cardTypeOptions = [
     {
         value: 'cartao_credito',
         label: paymentLabels.cartao_credito,
+        shortcutKey: 'F4',
+        shortcutLabel: 'F4',
         classes: 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-200 text-white',
     },
     {
         value: 'cartao_debito',
         label: paymentLabels.cartao_debito,
+        shortcutKey: 'F8',
+        shortcutLabel: 'F8',
         classes: 'bg-sky-600 hover:bg-sky-700 focus:ring-sky-200 text-white',
     },
 ];
@@ -58,12 +65,23 @@ const paymentOptions = [
     {
         value: 'dinheiro',
         label: paymentLabels.dinheiro,
+        shortcutKey: 'F2',
+        shortcutLabel: 'F2',
         classes: 'bg-green-600 hover:bg-green-700 focus:ring-green-200 text-white',
     },
     ...cardTypeOptions,
     {
+        value: 'pix',
+        label: paymentLabels.pix,
+        shortcutKey: 'F9',
+        shortcutLabel: 'F9',
+        classes: 'bg-cyan-600 hover:bg-cyan-700 focus:ring-cyan-200 text-white',
+    },
+    {
         value: 'vale',
         label: paymentLabels.vale,
+        shortcutKey: 'F10',
+        shortcutLabel: 'F10',
         classes: 'bg-amber-500 hover:bg-amber-600 focus:ring-amber-200 text-gray-900',
     },
     {
@@ -72,6 +90,13 @@ const paymentOptions = [
         classes: 'bg-gray-900 hover:bg-gray-800 focus:ring-gray-200 text-white',
     },
 ];
+const PAYMENT_SHORTCUTS = new Map([
+    ['f2', 'dinheiro'],
+    ['f4', 'cartao_credito'],
+    ['f8', 'cartao_debito'],
+    ['f9', 'pix'],
+    ['f10', 'vale'],
+]);
 const faturarWarningText = [
     'Aviso sobre a utilização do pagamento “Faturar”',
     'A opção de pagamento “Faturar” deve ser utilizada exclusivamente em situações excepcionais, quando o cliente deixa o estabelecimento sem efetuar o pagamento devido. Ao selecionar esta opção, o utilizador reconhece que está a justificar a ausência do valor correspondente no caixa.',
@@ -340,6 +365,18 @@ const resolveDirectProductLookup = (value) => {
         cacheKey: `id:${productId}`,
         weightedBarcodeData: null,
     };
+};
+
+const resolveComandaCode = (value) => {
+    const term = String(value ?? '').trim();
+
+    if (!numericRegex.test(term)) {
+        return null;
+    }
+
+    const code = Number.parseInt(term, 10);
+
+    return code >= COMANDA_MIN_CODE && code <= COMANDA_MAX_CODE ? code : null;
 };
 
 const cacheDirectProductLookup = (cache, product) => {
@@ -1447,7 +1484,7 @@ export default function Dashboard({
     };
 
     const handleKeyDown = (event) => {
-        if (event.key !== 'Enter' || saleLoading || addingItem) {
+        if (event.key !== 'Enter' || saleLoading || addingItem || comandaLoading) {
             return;
         }
 
@@ -1461,6 +1498,13 @@ export default function Dashboard({
 
         if (isNumericTerm) {
             event.preventDefault();
+            const comandaCode = resolveComandaCode(term);
+
+            if (comandaCode !== null) {
+                handleLoadComandaItems(comandaCode);
+                return;
+            }
+
             fetchProductAndAdd(term);
             return;
         }
@@ -1711,6 +1755,7 @@ export default function Dashboard({
     };
 
     const handleLoadComandaItems = (codigo) => {
+        clearInputIdleTimeout();
         if (isCashier && hasPendingComandas && !pendingComandas.includes(codigo)) {
             if (pendingComandaMessage) {
                 setSaleError(pendingComandaMessage);
@@ -1737,6 +1782,10 @@ export default function Dashboard({
                     : [];
                 setItems(mapped);
                 setSelectedComandaCode(codigo);
+                setTexto('');
+                setLastManualSearch(false);
+                setHideSuggestions(false);
+                setSuggestions([]);
                 setSaleError('');
                 setShowComandasButtons(false);
                 refreshDashboardStatus().catch(() => {});
@@ -2076,6 +2125,87 @@ export default function Dashboard({
     const handleCloseReceipt = () => {
         resetAfterReceipt();
     };
+
+    useEffect(() => {
+        if (!showReceipt || !receiptData || showConsumerFiscalModal || typeof window === 'undefined') {
+            return undefined;
+        }
+
+        const handleReceiptShortcut = (event) => {
+            if (event.defaultPrevented || event.isComposing) {
+                return;
+            }
+
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                handleCloseReceipt();
+                return;
+            }
+
+            if (event.key === 'Enter' && !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey) {
+                event.preventDefault();
+                event.stopPropagation();
+                handlePrintReceipt();
+            }
+        };
+
+        window.addEventListener('keydown', handleReceiptShortcut, true);
+
+        return () => {
+            window.removeEventListener('keydown', handleReceiptShortcut, true);
+        };
+    }, [showReceipt, receiptData, showConsumerFiscalModal, handleCloseReceipt, handlePrintReceipt]);
+
+    useEffect(() => {
+        if (
+            showReceipt ||
+            showConsumerFiscalModal ||
+            showFaturarWarning ||
+            valePickerVisible ||
+            cashInputVisible ||
+            typeof window === 'undefined'
+        ) {
+            return undefined;
+        }
+
+        const handlePaymentShortcut = (event) => {
+            if (
+                event.defaultPrevented ||
+                event.repeat ||
+                event.isComposing ||
+                event.ctrlKey ||
+                event.altKey ||
+                event.metaKey ||
+                event.shiftKey
+            ) {
+                return;
+            }
+
+            const paymentType = PAYMENT_SHORTCUTS.get(String(event.key ?? '').toLowerCase());
+
+            if (!paymentType) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            handlePaymentClick(paymentType);
+        };
+
+        window.addEventListener('keydown', handlePaymentShortcut, true);
+
+        return () => {
+            window.removeEventListener('keydown', handlePaymentShortcut, true);
+        };
+    }, [
+        showReceipt,
+        showConsumerFiscalModal,
+        showFaturarWarning,
+        valePickerVisible,
+        cashInputVisible,
+        handlePaymentClick,
+    ]);
 
     const handleSaveCart = () => {
         if (items.length === 0) {
@@ -2617,14 +2747,15 @@ export default function Dashboard({
                                         <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
                                         </p>
                                     </div>
-                                    <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                                    <div className="mt-3 grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
                                         {paymentOptions.map((option) => (
                                             <button
                                                 type="button"
                                                 key={option.value}
                                                 onClick={() => handlePaymentClick(option.value)}
                                                 disabled={saleLoading || items.length === 0 || isSalesBlocked}
-                                                className={`rounded-lg px-4 py-3 text-center text-base font-semibold shadow focus:outline-none focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60 ${option.classes}`}
+                                                title={option.shortcutLabel ? `${option.label} (${option.shortcutLabel})` : option.label}
+                                                className={`rounded-lg px-2 py-2 text-center text-sm font-semibold shadow focus:outline-none focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60 ${option.classes}`}
                                             >
                                                 {option.label}
                                             </button>
@@ -2914,12 +3045,12 @@ export default function Dashboard({
                                 <p key={paragraph}>{paragraph}</p>
                             ))}
                         </div>
-                        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                        <div className="mt-6 grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
                             <button
                                 type="button"
                                 onClick={() => handleFaturarWarningChoice('dinheiro')}
                                 disabled={saleLoading}
-                                className="rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white shadow hover:bg-green-700 disabled:opacity-60"
+                                className="rounded-xl bg-green-600 px-2 py-2 text-sm font-semibold text-white shadow hover:bg-green-700 disabled:opacity-60"
                             >
                                 Dinheiro
                             </button>
@@ -2927,7 +3058,7 @@ export default function Dashboard({
                                 type="button"
                                 onClick={() => handleFaturarWarningChoice('cartao_credito')}
                                 disabled={saleLoading}
-                                className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow hover:bg-blue-700 disabled:opacity-60"
+                                className="rounded-xl bg-blue-600 px-2 py-2 text-sm font-semibold text-white shadow hover:bg-blue-700 disabled:opacity-60"
                             >
                                 Credito
                             </button>
@@ -2935,15 +3066,23 @@ export default function Dashboard({
                                 type="button"
                                 onClick={() => handleFaturarWarningChoice('cartao_debito')}
                                 disabled={saleLoading}
-                                className="rounded-xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white shadow hover:bg-sky-700 disabled:opacity-60"
+                                className="rounded-xl bg-sky-600 px-2 py-2 text-sm font-semibold text-white shadow hover:bg-sky-700 disabled:opacity-60"
                             >
                                 Debito
                             </button>
                             <button
                                 type="button"
+                                onClick={() => handleFaturarWarningChoice('pix')}
+                                disabled={saleLoading}
+                                className="rounded-xl bg-cyan-600 px-2 py-2 text-sm font-semibold text-white shadow hover:bg-cyan-700 disabled:opacity-60"
+                            >
+                                Pix
+                            </button>
+                            <button
+                                type="button"
                                 onClick={() => handleFaturarWarningChoice('faturar')}
                                 disabled={saleLoading}
-                                className="rounded-xl bg-gray-900 px-4 py-3 text-sm font-semibold text-white shadow hover:bg-gray-800 disabled:opacity-60"
+                                className="rounded-xl bg-gray-900 px-2 py-2 text-sm font-semibold text-white shadow hover:bg-gray-800 disabled:opacity-60"
                             >
                                 Faturar
                             </button>
@@ -2951,7 +3090,7 @@ export default function Dashboard({
                                 type="button"
                                 onClick={closeFaturarWarning}
                                 disabled={saleLoading}
-                                className="rounded-xl border border-gray-300 px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-60 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
+                                className="rounded-xl border border-gray-300 px-2 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-60 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
                             >
                                 Cancelar
                             </button>

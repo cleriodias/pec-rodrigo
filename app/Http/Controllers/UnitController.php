@@ -150,6 +150,18 @@ class UnitController extends Controller
             ? (bool) $configuration->tb26_geracao_automatica_ativa
             : true;
 
+        if (! $currentStatus) {
+            $request->validate(
+                [
+                    'current_password' => ['required', 'current_password'],
+                ],
+                [
+                    'current_password.required' => 'Informe sua senha para ativar a geracao automatica de notas.',
+                    'current_password.current_password' => 'A senha informada nao confere.',
+                ]
+            );
+        }
+
         $configuration->tb26_geracao_automatica_ativa = ! $currentStatus;
         $configuration->save();
 

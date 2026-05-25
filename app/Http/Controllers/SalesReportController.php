@@ -220,7 +220,7 @@ class SalesReportController extends Controller
 
         return Inertia::render('Reports/PdrCache', [
             'products' => $products,
-            'cacheLimit' => $quickLookupCache->limit(),
+            'cacheScope' => 'Todos ativos',
             'cacheHours' => $quickLookupCache->ttlHours(),
         ]);
     }
@@ -1336,6 +1336,7 @@ class SalesReportController extends Controller
             'dinheiro' => 'Dinheiro',
             'cartao_credito' => 'Cartao credito',
             'cartao_debito' => 'Cartao debito',
+            'pix' => 'Pix',
             'dinheiro_cartao_credito' => 'Dinheiro + Cartao credito',
             'dinheiro_cartao_debito' => 'Dinheiro + Cartao debito',
             'maquina' => 'Cartao',
@@ -3465,7 +3466,7 @@ class SalesReportController extends Controller
                     ELSE 0
                 END), 0) as dinheiro,
                 COALESCE(SUM(CASE
-                    WHEN pagamentos.tipo_pagamento IN ('cartao_credito', 'cartao_debito', 'maquina')
+                    WHEN pagamentos.tipo_pagamento IN ('cartao_credito', 'cartao_debito', 'pix', 'maquina')
                         THEN GREATEST(pagamentos.valor_total, 0)
                     WHEN pagamentos.tipo_pagamento IN ('dinheiro', 'dinheiro_cartao_credito', 'dinheiro_cartao_debito')
                         THEN GREATEST(COALESCE(pagamentos.dois_pgto, 0), 0)
@@ -3516,7 +3517,7 @@ class SalesReportController extends Controller
     private function normalizePaymentTypeForDisplay(?string $paymentType): string
     {
         return match ((string) $paymentType) {
-            'cartao_credito', 'cartao_debito', 'maquina' => 'maquina',
+            'cartao_credito', 'cartao_debito', 'pix', 'maquina' => 'maquina',
             'dinheiro_cartao_credito', 'dinheiro_cartao_debito' => 'dinheiro',
             default => (string) $paymentType,
         };
@@ -3525,7 +3526,7 @@ class SalesReportController extends Controller
     private function normalizePaymentTypeForBucket(?string $paymentType): ?string
     {
         return match ((string) $paymentType) {
-            'cartao_credito', 'cartao_debito', 'maquina' => 'maquina',
+            'cartao_credito', 'cartao_debito', 'pix', 'maquina' => 'maquina',
             'dinheiro', 'dinheiro_cartao_credito', 'dinheiro_cartao_debito' => 'dinheiro',
             'vale', 'refeicao', 'faturar' => (string) $paymentType,
             default => null,
@@ -3547,7 +3548,7 @@ class SalesReportController extends Controller
                     ELSE 0
                 END), 0) as dinheiro,
                 COALESCE(SUM(CASE
-                    WHEN pagamentos.tipo_pagamento IN ('cartao_credito', 'cartao_debito', 'maquina')
+                    WHEN pagamentos.tipo_pagamento IN ('cartao_credito', 'cartao_debito', 'pix', 'maquina')
                         THEN GREATEST(pagamentos.valor_total, 0)
                     WHEN pagamentos.tipo_pagamento IN ('dinheiro', 'dinheiro_cartao_credito', 'dinheiro_cartao_debito')
                         THEN GREATEST(COALESCE(pagamentos.dois_pgto, 0), 0)
@@ -3892,7 +3893,7 @@ class SalesReportController extends Controller
 
         $cardExpression = "
             CASE
-                WHEN pagamentos.tipo_pagamento IN ('cartao_credito', 'cartao_debito', 'maquina')
+                    WHEN pagamentos.tipo_pagamento IN ('cartao_credito', 'cartao_debito', 'pix', 'maquina')
                     THEN GREATEST(pagamentos.valor_total, 0)
                 WHEN pagamentos.tipo_pagamento IN ('dinheiro', 'dinheiro_cartao_credito', 'dinheiro_cartao_debito')
                     THEN GREATEST(COALESCE(pagamentos.dois_pgto, 0), 0)

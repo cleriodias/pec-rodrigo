@@ -674,6 +674,7 @@ class FiscalInvoicePreparationService
             'dinheiro',
             'cartao_credito',
             'cartao_debito',
+            'pix',
             'dinheiro_cartao_credito',
             'dinheiro_cartao_debito',
             'maquina',
@@ -683,6 +684,7 @@ class FiscalInvoicePreparationService
     private function buildNonFiscalPaymentMessage(?string $paymentType): string
     {
         $label = match ((string) $paymentType) {
+            'pix' => 'Pix',
             'vale' => 'Vale',
             'refeicao' => 'Refeicao',
             'faturar' => 'Faturar',

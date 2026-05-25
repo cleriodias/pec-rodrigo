@@ -1,0 +1,141 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\ConfiguracaoFiscal;
+use App\Models\Unidade;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class UnitFiscalGenerationPasswordTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_fiscal_generation_activation_requires_current_password(): void
+    {
+        $unit = $this->makeUnit();
+        $admin = $this->makeAdmin($unit);
+
+        ConfiguracaoFiscal::create([
+            'tb2_id' => $unit->tb2_id,
+            'tb26_geracao_automatica_ativa' => false,
+        ]);
+
+        $response = $this
+            ->actingAs($admin)
+            ->from(route('units.index'))
+            ->patch(route('units.fiscal-generation.toggle', ['unit' => $unit->tb2_id]));
+
+        $response
+            ->assertRedirect(route('units.index'))
+            ->assertSessionHasErrors('current_password');
+
+        $this->assertFalse(
+            (bool) ConfiguracaoFiscal::where('tb2_id', $unit->tb2_id)
+                ->value('tb26_geracao_automatica_ativa')
+        );
+    }
+
+    public function test_fiscal_generation_activation_rejects_wrong_password(): void
+    {
+        $unit = $this->makeUnit();
+        $admin = $this->makeAdmin($unit);
+
+        ConfiguracaoFiscal::create([
+            'tb2_id' => $unit->tb2_id,
+            'tb26_geracao_automatica_ativa' => false,
+        ]);
+
+        $response = $this
+            ->actingAs($admin)
+            ->from(route('units.index'))
+            ->patch(route('units.fiscal-generation.toggle', ['unit' => $unit->tb2_id]), [
+                'current_password' => 'senha-errada',
+            ]);
+
+        $response
+            ->assertRedirect(route('units.index'))
+            ->assertSessionHasErrors('current_password');
+
+        $this->assertFalse(
+            (bool) ConfiguracaoFiscal::where('tb2_id', $unit->tb2_id)
+                ->value('tb26_geracao_automatica_ativa')
+        );
+    }
+
+    public function test_fiscal_generation_activation_accepts_current_password(): void
+    {
+        $unit = $this->makeUnit();
+        $admin = $this->makeAdmin($unit);
+
+        ConfiguracaoFiscal::create([
+            'tb2_id' => $unit->tb2_id,
+            'tb26_geracao_automatica_ativa' => false,
+        ]);
+
+        $response = $this
+            ->actingAs($admin)
+            ->from(route('units.index'))
+            ->patch(route('units.fiscal-generation.toggle', ['unit' => $unit->tb2_id]), [
+                'current_password' => 'password',
+            ]);
+
+        $response
+            ->assertRedirect(route('units.index'))
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('success', 'Geracao automatica de notas ativada com sucesso.');
+
+        $this->assertTrue(
+            (bool) ConfiguracaoFiscal::where('tb2_id', $unit->tb2_id)
+                ->value('tb26_geracao_automatica_ativa')
+        );
+    }
+
+    public function test_fiscal_generation_deactivation_does_not_require_password(): void
+    {
+        $unit = $this->makeUnit();
+        $admin = $this->makeAdmin($unit);
+
+        ConfiguracaoFiscal::create([
+            'tb2_id' => $unit->tb2_id,
+            'tb26_geracao_automatica_ativa' => true,
+        ]);
+
+        $response = $this
+            ->actingAs($admin)
+            ->from(route('units.index'))
+            ->patch(route('units.fiscal-generation.toggle', ['unit' => $unit->tb2_id]));
+
+        $response
+            ->assertRedirect(route('units.index'))
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('success', 'Geracao automatica de notas desativada com sucesso.');
+
+        $this->assertFalse(
+            (bool) ConfiguracaoFiscal::where('tb2_id', $unit->tb2_id)
+                ->value('tb26_geracao_automatica_ativa')
+        );
+    }
+
+    private function makeUnit(): Unidade
+    {
+        return Unidade::create([
+            'tb2_nome' => 'Loja Fiscal',
+            'tb2_endereco' => 'Endereco Loja Fiscal',
+            'tb2_cep' => '72900-000',
+            'tb2_fone' => '(61) 99999-9999',
+            'tb2_cnpj' => '12.345.678/0001-99',
+            'tb2_localizacao' => 'https://maps.example.com',
+            'tb2_status' => 1,
+        ]);
+    }
+
+    private function makeAdmin(Unidade $unit): User
+    {
+        return User::factory()->create([
+            'funcao' => 0,
+            'tb2_id' => $unit->tb2_id,
+        ]);
+    }
+}

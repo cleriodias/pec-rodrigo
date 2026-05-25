@@ -97,7 +97,7 @@ class SaleController extends Controller
             'tipo_pago' => [
                 'required',
                 'string',
-                Rule::in(['cartao_credito', 'cartao_debito', 'maquina', 'dinheiro', 'vale', 'refeicao', 'faturar']),
+                Rule::in(['cartao_credito', 'cartao_debito', 'pix', 'maquina', 'dinheiro', 'vale', 'refeicao', 'faturar']),
             ],
             'vale_user_id' => ['nullable', 'integer', 'exists:users,id'],
             'valor_pago' => ['nullable', 'numeric', 'min:0'],
@@ -221,6 +221,7 @@ class SaleController extends Controller
             $itemsPayload = [];
             $requiresVrEligible = $salePaymentType === 'refeicao';
             $extraItems = [];
+            $comandaItems = collect();
 
             if ($comandaCodigo) {
                 $comandaItems = Venda::query()
@@ -1591,12 +1592,17 @@ class SaleController extends Controller
 
     private function normalizeSalePaymentType(string $paymentType): string
     {
-        return $this->isCardPaymentType($paymentType) ? 'maquina' : $paymentType;
+        return $this->isMachinePaymentType($paymentType) ? 'maquina' : $paymentType;
     }
 
     private function isCardPaymentType(?string $paymentType): bool
     {
         return in_array((string) $paymentType, ['cartao_credito', 'cartao_debito'], true);
+    }
+
+    private function isMachinePaymentType(?string $paymentType): bool
+    {
+        return in_array((string) $paymentType, ['cartao_credito', 'cartao_debito', 'pix'], true);
     }
 
     private function resolveStoredPaymentType(
@@ -1611,7 +1617,7 @@ class SaleController extends Controller
                 : 'dinheiro_cartao_credito';
         }
 
-        if ($this->isCardPaymentType($requestedPaymentType)) {
+        if ($this->isMachinePaymentType($requestedPaymentType)) {
             return $requestedPaymentType;
         }
 

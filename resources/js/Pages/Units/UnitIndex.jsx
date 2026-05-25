@@ -3,14 +3,31 @@ import PrimaryButton from "@/Components/Button/PrimaryButton";
 import SuccessButton from "@/Components/Button/SuccessButton";
 import WarningButton from "@/Components/Button/WarningButton";
 import ConfirmDeleteButton from "@/Components/Delete/ConfirmDeleteButton";
+import InputError from "@/Components/InputError";
+import Modal from "@/Components/Modal";
 import Pagination from "@/Components/Pagination";
+import SecondaryButton from "@/Components/SecondaryButton";
+import TextInput from "@/Components/TextInput";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import { Head, Link, router, usePage } from "@inertiajs/react";
-import { useState } from "react";
+import { Head, Link, router, useForm, usePage } from "@inertiajs/react";
+import { useRef, useState } from "react";
 
 export default function UnitIndex({ auth, units, canCreate = false }) {
     const { flash } = usePage().props;
     const [togglingUnitId, setTogglingUnitId] = useState(null);
+    const [confirmingFiscalUnit, setConfirmingFiscalUnit] = useState(null);
+    const passwordInput = useRef(null);
+    const {
+        data: fiscalPasswordData,
+        setData: setFiscalPasswordData,
+        patch: patchFiscalGeneration,
+        processing: fiscalPasswordProcessing,
+        reset: resetFiscalPassword,
+        errors: fiscalPasswordErrors,
+        clearErrors: clearFiscalPasswordErrors,
+    } = useForm({
+        current_password: '',
+    });
 
     const formatCurrency = (value) =>
         Number(value ?? 0).toLocaleString('pt-BR', {
@@ -19,7 +36,15 @@ export default function UnitIndex({ auth, units, canCreate = false }) {
         });
 
     const handleToggleFiscalGeneration = (unit) => {
-        if (!unit?.tb2_id || togglingUnitId !== null) {
+        if (!unit?.tb2_id || togglingUnitId !== null || fiscalPasswordProcessing) {
+            return;
+        }
+
+        if (!unit.tb26_geracao_automatica_ativa) {
+            setConfirmingFiscalUnit(unit);
+            setFiscalPasswordData('current_password', '');
+            clearFiscalPasswordErrors();
+            window.requestAnimationFrame(() => passwordInput.current?.focus());
             return;
         }
 
@@ -32,6 +57,40 @@ export default function UnitIndex({ auth, units, canCreate = false }) {
                 preserveScroll: true,
                 onFinish: () => setTogglingUnitId(null),
             }
+        );
+    };
+
+    const closeFiscalPasswordModal = () => {
+        if (fiscalPasswordProcessing) {
+            return;
+        }
+
+        setConfirmingFiscalUnit(null);
+        resetFiscalPassword();
+        clearFiscalPasswordErrors();
+    };
+
+    const confirmFiscalActivation = (event) => {
+        event.preventDefault();
+
+        if (!confirmingFiscalUnit?.tb2_id || fiscalPasswordProcessing) {
+            return;
+        }
+
+        setTogglingUnitId(confirmingFiscalUnit.tb2_id);
+
+        patchFiscalGeneration(
+            route('units.fiscal-generation.toggle', { unit: confirmingFiscalUnit.tb2_id }),
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setConfirmingFiscalUnit(null);
+                    resetFiscalPassword();
+                    clearFiscalPasswordErrors();
+                },
+                onError: () => passwordInput.current?.focus(),
+                onFinish: () => setTogglingUnitId(null),
+            },
         );
     };
 
@@ -120,12 +179,12 @@ export default function UnitIndex({ auth, units, canCreate = false }) {
                                                 <button
                                                     type="button"
                                                     onClick={() => handleToggleFiscalGeneration(unit)}
-                                                    disabled={togglingUnitId !== null}
+                                                    disabled={togglingUnitId !== null || fiscalPasswordProcessing}
                                                     className={`relative inline-flex h-7 w-12 items-center rounded-full transition ${
                                                         unit.tb26_geracao_automatica_ativa
                                                             ? 'bg-blue-600'
                                                             : 'bg-slate-300'
-                                                    } ${togglingUnitId !== null ? 'cursor-not-allowed opacity-70' : ''}`}
+                                                    } ${togglingUnitId !== null || fiscalPasswordProcessing ? 'cursor-not-allowed opacity-70' : ''}`}
                                                     aria-label={`Alternar geracao automatica de notas da loja ${unit.tb2_nome}`}
                                                     aria-pressed={Boolean(unit.tb26_geracao_automatica_ativa)}
                                                     title={
@@ -202,6 +261,49 @@ export default function UnitIndex({ auth, units, canCreate = false }) {
                     <Pagination links={units.links} currentPage={units.current_page} />
                 </div>
             </div>
+
+            <Modal show={Boolean(confirmingFiscalUnit)} onClose={closeFiscalPasswordModal} maxWidth="md" tone="light">
+                <form onSubmit={confirmFiscalActivation} className="p-6">
+                    <h2 className="text-lg font-semibold text-gray-900">
+                        Confirmar ativacao da nota fiscal
+                    </h2>
+                    <p className="mt-1 text-sm text-gray-600">
+                        Informe sua senha para ativar a geracao automatica de notas fiscais desta unidade.
+                    </p>
+
+                    {confirmingFiscalUnit && (
+                        <p className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700">
+                            {confirmingFiscalUnit.tb2_nome}
+                        </p>
+                    )}
+
+                    <div className="mt-5">
+                        <label htmlFor="fiscal-current-password" className="block text-sm font-medium text-gray-700">
+                            Senha
+                        </label>
+                        <TextInput
+                            id="fiscal-current-password"
+                            ref={passwordInput}
+                            type="password"
+                            name="current_password"
+                            value={fiscalPasswordData.current_password}
+                            onChange={(event) => setFiscalPasswordData('current_password', event.target.value)}
+                            className="mt-1 block w-full"
+                            autoComplete="current-password"
+                        />
+                        <InputError message={fiscalPasswordErrors.current_password} className="mt-2" />
+                    </div>
+
+                    <div className="mt-6 flex justify-end gap-3">
+                        <SecondaryButton onClick={closeFiscalPasswordModal} disabled={fiscalPasswordProcessing}>
+                            Cancelar
+                        </SecondaryButton>
+                        <PrimaryButton type="submit" disabled={fiscalPasswordProcessing}>
+                            Ativar NF
+                        </PrimaryButton>
+                    </div>
+                </form>
+            </Modal>
         </AuthenticatedLayout>
     );
 }

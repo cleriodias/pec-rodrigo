@@ -179,7 +179,7 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         );
     }
 
-    public function test_supports_automatic_fiscal_generation_only_for_cash_and_card_payments(): void
+    public function test_supports_automatic_fiscal_generation_only_for_cash_pix_and_card_payments(): void
     {
         $service = $this->makeService();
         $reflection = new ReflectionClass($service);
@@ -189,6 +189,7 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         $this->assertTrue($supportsMethod->invoke($service, 'dinheiro'));
         $this->assertTrue($supportsMethod->invoke($service, 'cartao_credito'));
         $this->assertTrue($supportsMethod->invoke($service, 'cartao_debito'));
+        $this->assertTrue($supportsMethod->invoke($service, 'pix'));
         $this->assertTrue($supportsMethod->invoke($service, 'dinheiro_cartao_credito'));
         $this->assertTrue($supportsMethod->invoke($service, 'dinheiro_cartao_debito'));
         $this->assertTrue($supportsMethod->invoke($service, 'maquina'));
