@@ -48,7 +48,7 @@ const buildFiscalFormData = (configuration = {}, selectedUnitId = null) => ({
     tb2_id: configuration?.tb2_id ?? selectedUnitId ?? '',
     tb26_emitir_nfe: Boolean(configuration?.tb26_emitir_nfe),
     tb26_emitir_nfce: Boolean(configuration?.tb26_emitir_nfce),
-    tb26_geracao_automatica_ativa: configuration?.tb26_geracao_automatica_ativa ?? true,
+    tb26_geracao_automatica_ativa: configuration?.tb26_geracao_automatica_ativa ?? false,
     tb26_ambiente: configuration?.tb26_ambiente ?? 'homologacao',
     tb26_serie: configuration?.tb26_serie ?? '1',
     tb26_proximo_numero: configuration?.tb26_proximo_numero ?? 1,
@@ -361,6 +361,7 @@ const FiscalConfigFormSection = ({
     selectedUnitId = null,
     invoices = [],
     invoiceStatusFilter = 'error',
+    canActivateFiscalGeneration = false,
 }) => {
     const [printError, setPrintError] = useState('');
     const { data, setData, post, processing, errors } = useForm(buildFiscalFormData(configuration, selectedUnitId));
@@ -386,6 +387,14 @@ const FiscalConfigFormSection = ({
         reprocess.post(route('settings.fiscal.reprocess'), {
             preserveScroll: true,
         });
+    };
+
+    const handleToggleFiscalGeneration = () => {
+        if (!fiscalGenerationEnabled && !canActivateFiscalGeneration) {
+            return;
+        }
+
+        setData('tb26_geracao_automatica_ativa', !fiscalGenerationEnabled);
     };
 
     const handlePrintFiscalReceipt = (receipt) => {
@@ -658,9 +667,19 @@ const FiscalConfigFormSection = ({
                                 </div>
                                 <button
                                     type="button"
-                                    onClick={() => setData('tb26_geracao_automatica_ativa', !fiscalGenerationEnabled)}
+                                    onClick={handleToggleFiscalGeneration}
+                                    disabled={!fiscalGenerationEnabled && !canActivateFiscalGeneration}
+                                    title={
+                                        !fiscalGenerationEnabled && !canActivateFiscalGeneration
+                                            ? 'Somente o master pode ligar a geracao automatica'
+                                            : undefined
+                                    }
                                     className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full transition ${
                                         fiscalGenerationEnabled ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'
+                                    } ${
+                                        !fiscalGenerationEnabled && !canActivateFiscalGeneration
+                                            ? 'cursor-not-allowed opacity-70'
+                                            : ''
                                     }`}
                                     aria-pressed={fiscalGenerationEnabled}
                                 >
@@ -736,6 +755,7 @@ export default function FiscalConfig({
     fiscalUnavailableMessage = null,
     invoiceLoadWarning = null,
     invoiceStatusFilter = 'error',
+    canActivateFiscalGeneration = false,
 }) {
     const { flash = {} } = usePage().props;
     const fiscalFormKey = JSON.stringify(buildFiscalFormData(configuration, selectedUnitId));
@@ -861,6 +881,7 @@ export default function FiscalConfig({
                                 selectedUnitId={selectedUnitId}
                                 invoices={invoices}
                                 invoiceStatusFilter={invoiceStatusFilter}
+                                canActivateFiscalGeneration={canActivateFiscalGeneration}
                             />
                         </>
                     )}

@@ -56,7 +56,7 @@ class UnitController extends Controller
 
         $units = $unitsQuery->paginate(10)->through(function (Unidade $unit) {
             $unit->tb2_nf_total = round((float) ($unit->tb2_nf_total ?? 0), 2);
-            $unit->tb26_geracao_automatica_ativa = (bool) (optional($unit->configuracaoFiscal)->tb26_geracao_automatica_ativa ?? true);
+            $unit->tb26_geracao_automatica_ativa = (bool) (optional($unit->configuracaoFiscal)->tb26_geracao_automatica_ativa ?? false);
 
             return $unit;
         });
@@ -64,6 +64,7 @@ class UnitController extends Controller
         return Inertia::render('Units/UnitIndex', [
             'units' => $units,
             'canCreate' => ManagementScope::isMaster($user),
+            'canActivateFiscalGeneration' => ManagementScope::isMaster($user),
         ]);
     }
 
@@ -148,9 +149,13 @@ class UnitController extends Controller
 
         $currentStatus = $configuration->exists
             ? (bool) $configuration->tb26_geracao_automatica_ativa
-            : true;
+            : false;
 
         if (! $currentStatus) {
+            if (! ManagementScope::isMaster($request->user())) {
+                abort(403, 'Somente o master pode ativar a geracao automatica de notas.');
+            }
+
             $request->validate(
                 [
                     'current_password' => ['required', 'current_password'],

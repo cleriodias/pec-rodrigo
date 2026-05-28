@@ -371,6 +371,23 @@ class FiscalConfigurationController extends Controller
                 'tb2_id' => $unitId,
             ]);
 
+            $currentFiscalGenerationStatus = $configuration->exists
+                ? (bool) $configuration->tb26_geracao_automatica_ativa
+                : false;
+            $requestedFiscalGenerationStatus = $request->has('tb26_geracao_automatica_ativa')
+                ? (bool) ($data['tb26_geracao_automatica_ativa'] ?? false)
+                : $currentFiscalGenerationStatus;
+
+            if (
+                $requestedFiscalGenerationStatus
+                && ! $currentFiscalGenerationStatus
+                && ! ManagementScope::isMaster($user)
+            ) {
+                throw ValidationException::withMessages([
+                    'tb26_geracao_automatica_ativa' => 'Somente o master pode ativar a geracao automatica de notas.',
+                ]);
+            }
+
             if ($request->boolean('remover_certificado') && filled($configuration->tb26_certificado_arquivo)) {
                 Storage::delete($configuration->tb26_certificado_arquivo);
                 $configuration->tb26_certificado_arquivo = null;
@@ -423,7 +440,7 @@ class FiscalConfigurationController extends Controller
             $configuration->fill([
                 'tb26_emitir_nfe' => (bool) ($data['tb26_emitir_nfe'] ?? false),
                 'tb26_emitir_nfce' => (bool) ($data['tb26_emitir_nfce'] ?? false),
-                'tb26_geracao_automatica_ativa' => (bool) ($data['tb26_geracao_automatica_ativa'] ?? true),
+                'tb26_geracao_automatica_ativa' => $requestedFiscalGenerationStatus,
                 'tb26_ambiente' => $data['tb26_ambiente'],
                 'tb26_serie' => trim((string) $data['tb26_serie']),
                 'tb26_proximo_numero' => (int) $data['tb26_proximo_numero'],
@@ -1225,6 +1242,7 @@ class FiscalConfigurationController extends Controller
             'fiscalUnavailableMessage' => $fiscalUnavailableMessage,
             'invoiceLoadWarning' => $invoiceLoadWarning,
             'invoiceStatusFilter' => $invoiceStatusFilter,
+            'canActivateFiscalGeneration' => ManagementScope::isMaster(request()->user()),
         ]);
     }
 
@@ -1264,7 +1282,7 @@ class FiscalConfigurationController extends Controller
             'tb2_id' => $selectedUnitId > 0 ? $selectedUnitId : null,
             'tb26_emitir_nfe' => false,
             'tb26_emitir_nfce' => false,
-            'tb26_geracao_automatica_ativa' => true,
+            'tb26_geracao_automatica_ativa' => false,
             'tb26_ambiente' => 'homologacao',
             'tb26_serie' => '1',
             'tb26_proximo_numero' => 1,
@@ -1305,7 +1323,7 @@ class FiscalConfigurationController extends Controller
             'tb2_id' => $selectedUnitId > 0 ? $selectedUnitId : null,
             'tb26_emitir_nfe' => (bool) ($configuration?->tb26_emitir_nfe ?? false),
             'tb26_emitir_nfce' => (bool) ($configuration?->tb26_emitir_nfce ?? false),
-            'tb26_geracao_automatica_ativa' => (bool) ($configuration?->tb26_geracao_automatica_ativa ?? true),
+            'tb26_geracao_automatica_ativa' => (bool) ($configuration?->tb26_geracao_automatica_ativa ?? false),
             'tb26_ambiente' => $configuration?->tb26_ambiente ?? 'homologacao',
             'tb26_serie' => $configuration?->tb26_serie ?? '1',
             'tb26_proximo_numero' => (int) ($configuration?->tb26_proximo_numero ?? 1),

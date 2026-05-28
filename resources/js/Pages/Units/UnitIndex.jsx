@@ -12,7 +12,7 @@ import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, Link, router, useForm, usePage } from "@inertiajs/react";
 import { useRef, useState } from "react";
 
-export default function UnitIndex({ auth, units, canCreate = false }) {
+export default function UnitIndex({ auth, units, canCreate = false, canActivateFiscalGeneration = false }) {
     const { flash } = usePage().props;
     const [togglingUnitId, setTogglingUnitId] = useState(null);
     const [confirmingFiscalUnit, setConfirmingFiscalUnit] = useState(null);
@@ -41,6 +41,10 @@ export default function UnitIndex({ auth, units, canCreate = false }) {
         }
 
         if (!unit.tb26_geracao_automatica_ativa) {
+            if (!canActivateFiscalGeneration) {
+                return;
+            }
+
             setConfirmingFiscalUnit(unit);
             setFiscalPasswordData('current_password', '');
             clearFiscalPasswordErrors();
@@ -179,18 +183,30 @@ export default function UnitIndex({ auth, units, canCreate = false }) {
                                                 <button
                                                     type="button"
                                                     onClick={() => handleToggleFiscalGeneration(unit)}
-                                                    disabled={togglingUnitId !== null || fiscalPasswordProcessing}
+                                                    disabled={
+                                                        togglingUnitId !== null
+                                                        || fiscalPasswordProcessing
+                                                        || (!unit.tb26_geracao_automatica_ativa && !canActivateFiscalGeneration)
+                                                    }
                                                     className={`relative inline-flex h-7 w-12 items-center rounded-full transition ${
                                                         unit.tb26_geracao_automatica_ativa
                                                             ? 'bg-blue-600'
                                                             : 'bg-slate-300'
-                                                    } ${togglingUnitId !== null || fiscalPasswordProcessing ? 'cursor-not-allowed opacity-70' : ''}`}
+                                                    } ${
+                                                        togglingUnitId !== null
+                                                        || fiscalPasswordProcessing
+                                                        || (!unit.tb26_geracao_automatica_ativa && !canActivateFiscalGeneration)
+                                                            ? 'cursor-not-allowed opacity-70'
+                                                            : ''
+                                                    }`}
                                                     aria-label={`Alternar geracao automatica de notas da loja ${unit.tb2_nome}`}
                                                     aria-pressed={Boolean(unit.tb26_geracao_automatica_ativa)}
                                                     title={
                                                         unit.tb26_geracao_automatica_ativa
                                                             ? 'Clique para desligar a geracao automatica'
-                                                            : 'Clique para ligar a geracao automatica'
+                                                            : canActivateFiscalGeneration
+                                                              ? 'Clique para ligar a geracao automatica'
+                                                              : 'Somente o master pode ligar a geracao automatica'
                                                     }
                                                 >
                                                     <span className="sr-only">Alternar geracao automatica de notas fiscais</span>

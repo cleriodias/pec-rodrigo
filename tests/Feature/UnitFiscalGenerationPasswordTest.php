@@ -15,7 +15,7 @@ class UnitFiscalGenerationPasswordTest extends TestCase
     public function test_fiscal_generation_activation_requires_current_password(): void
     {
         $unit = $this->makeUnit();
-        $admin = $this->makeAdmin($unit);
+        $admin = $this->makeMaster($unit);
 
         ConfiguracaoFiscal::create([
             'tb2_id' => $unit->tb2_id,
@@ -40,7 +40,7 @@ class UnitFiscalGenerationPasswordTest extends TestCase
     public function test_fiscal_generation_activation_rejects_wrong_password(): void
     {
         $unit = $this->makeUnit();
-        $admin = $this->makeAdmin($unit);
+        $admin = $this->makeMaster($unit);
 
         ConfiguracaoFiscal::create([
             'tb2_id' => $unit->tb2_id,
@@ -67,7 +67,7 @@ class UnitFiscalGenerationPasswordTest extends TestCase
     public function test_fiscal_generation_activation_accepts_current_password(): void
     {
         $unit = $this->makeUnit();
-        $admin = $this->makeAdmin($unit);
+        $admin = $this->makeMaster($unit);
 
         ConfiguracaoFiscal::create([
             'tb2_id' => $unit->tb2_id,
@@ -95,7 +95,7 @@ class UnitFiscalGenerationPasswordTest extends TestCase
     public function test_fiscal_generation_deactivation_does_not_require_password(): void
     {
         $unit = $this->makeUnit();
-        $admin = $this->makeAdmin($unit);
+        $admin = $this->makeMaster($unit);
 
         ConfiguracaoFiscal::create([
             'tb2_id' => $unit->tb2_id,
@@ -118,6 +118,103 @@ class UnitFiscalGenerationPasswordTest extends TestCase
         );
     }
 
+    public function test_manager_cannot_activate_fiscal_generation_from_units_toggle(): void
+    {
+        $unit = $this->makeUnit();
+        $manager = $this->makeManager($unit);
+
+        ConfiguracaoFiscal::create([
+            'tb2_id' => $unit->tb2_id,
+            'tb26_geracao_automatica_ativa' => false,
+        ]);
+
+        $response = $this
+            ->actingAs($manager)
+            ->from(route('units.index'))
+            ->patch(route('units.fiscal-generation.toggle', ['unit' => $unit->tb2_id]), [
+                'current_password' => 'password',
+            ]);
+
+        $response->assertForbidden();
+
+        $this->assertFalse(
+            (bool) ConfiguracaoFiscal::where('tb2_id', $unit->tb2_id)
+                ->value('tb26_geracao_automatica_ativa')
+        );
+    }
+
+    public function test_manager_fiscal_configuration_save_does_not_activate_generation(): void
+    {
+        $unit = $this->makeUnit();
+        $manager = $this->makeManager($unit);
+
+        ConfiguracaoFiscal::create([
+            'tb2_id' => $unit->tb2_id,
+            'tb26_geracao_automatica_ativa' => false,
+            'tb26_ambiente' => 'homologacao',
+            'tb26_serie' => '1',
+            'tb26_proximo_numero' => 1,
+        ]);
+
+        $response = $this
+            ->actingAs($manager)
+            ->from(route('settings.fiscal', ['unit_id' => $unit->tb2_id]))
+            ->post(route('settings.fiscal.update'), [
+                'tb2_id' => $unit->tb2_id,
+                'tb26_emitir_nfe' => false,
+                'tb26_emitir_nfce' => false,
+                'tb26_ambiente' => 'homologacao',
+                'tb26_serie' => '1',
+                'tb26_proximo_numero' => 2,
+            ]);
+
+        $response
+            ->assertRedirect(route('settings.fiscal', ['unit_id' => $unit->tb2_id]))
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('success', 'Configuracao fiscal atualizada com sucesso.');
+
+        $this->assertFalse(
+            (bool) ConfiguracaoFiscal::where('tb2_id', $unit->tb2_id)
+                ->value('tb26_geracao_automatica_ativa')
+        );
+    }
+
+    public function test_manager_cannot_activate_fiscal_generation_from_fiscal_configuration(): void
+    {
+        $unit = $this->makeUnit();
+        $manager = $this->makeManager($unit);
+
+        ConfiguracaoFiscal::create([
+            'tb2_id' => $unit->tb2_id,
+            'tb26_geracao_automatica_ativa' => false,
+            'tb26_ambiente' => 'homologacao',
+            'tb26_serie' => '1',
+            'tb26_proximo_numero' => 1,
+        ]);
+
+        $response = $this
+            ->actingAs($manager)
+            ->from(route('settings.fiscal', ['unit_id' => $unit->tb2_id]))
+            ->post(route('settings.fiscal.update'), [
+                'tb2_id' => $unit->tb2_id,
+                'tb26_emitir_nfe' => false,
+                'tb26_emitir_nfce' => false,
+                'tb26_geracao_automatica_ativa' => true,
+                'tb26_ambiente' => 'homologacao',
+                'tb26_serie' => '1',
+                'tb26_proximo_numero' => 2,
+            ]);
+
+        $response
+            ->assertRedirect(route('settings.fiscal', ['unit_id' => $unit->tb2_id]))
+            ->assertSessionHasErrors('tb26_geracao_automatica_ativa');
+
+        $this->assertFalse(
+            (bool) ConfiguracaoFiscal::where('tb2_id', $unit->tb2_id)
+                ->value('tb26_geracao_automatica_ativa')
+        );
+    }
+
     private function makeUnit(): Unidade
     {
         return Unidade::create([
@@ -131,10 +228,21 @@ class UnitFiscalGenerationPasswordTest extends TestCase
         ]);
     }
 
-    private function makeAdmin(Unidade $unit): User
+    private function makeMaster(Unidade $unit): User
+    {
+        return $this->makeUser($unit, 0);
+    }
+
+    private function makeManager(Unidade $unit): User
+    {
+        return $this->makeUser($unit, 1);
+    }
+
+    private function makeUser(Unidade $unit, int $role): User
     {
         return User::factory()->create([
-            'funcao' => 0,
+            'funcao' => $role,
+            'funcao_original' => $role,
             'tb2_id' => $unit->tb2_id,
         ]);
     }
