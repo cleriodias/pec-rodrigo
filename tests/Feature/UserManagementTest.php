@@ -11,7 +11,7 @@ class UserManagementTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_edit_user_updates_funcao_original_with_new_role(): void
+    public function test_edit_user_updates_funcao_and_funcao_original_and_phone(): void
     {
         $unit = $this->makeUnit('Loja Gestao');
 
@@ -42,11 +42,13 @@ class UserManagementTest extends TestCase
             ->put(route('users.update', ['user' => $targetUser->id]), [
                 'name' => 'Usuario Ajustado',
                 'email' => 'usuario.ajustado@example.com',
+                'phone' => '(62) 99999-8888',
                 'funcao' => 3,
                 'hr_ini' => '09:00',
                 'hr_fim' => '18:00',
                 'salario' => 2100.50,
                 'vr_cred' => 420.75,
+                'payment_day' => 10,
                 'tb2_id' => [$unit->tb2_id],
             ]);
 
@@ -56,6 +58,7 @@ class UserManagementTest extends TestCase
             'id' => $targetUser->id,
             'name' => 'Usuario Ajustado',
             'email' => 'usuario.ajustado@example.com',
+            'phone' => '62999998888',
             'funcao' => 3,
             'funcao_original' => 3,
             'tb2_id' => $unit->tb2_id,
