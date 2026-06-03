@@ -160,6 +160,13 @@ jobs:
             --exclude "artifacts" \
             --exclude "node_modules" \
             --exclude ".env" \
+            --exclude ".vite" \
+            --exclude "bkp" \
+            --exclude "mobile-faturamento" \
+            --exclude "tests" \
+            --exclude "storage/framework/cache/*" \
+            --exclude "storage/framework/sessions/*" \
+            --exclude "storage/framework/views/*" \
             --exclude "storage/logs" \
             --exclude "vendor/bin"
           rm -rf artifacts/staging/public/storage
@@ -169,16 +176,74 @@ jobs:
 
       - name: Deploy package (Zip Deploy)
         run: |
+          latest_deployment_url="https://${AZURE_WEBAPP_NAME}.scm.azurewebsites.net/api/deployments/latest"
+
+          get_latest_deployment_id() {
+            curl -fsS \
+              -H "Authorization: Bearer $(az account get-access-token --query accessToken -o tsv)" \
+              "$latest_deployment_url" | jq -r '.id // empty'
+          }
+
+          wait_for_latest_deployment() {
+            baseline_id="$1"
+            timeout_seconds=600
+            poll_interval=15
+            elapsed=0
+
+            while [ "$elapsed" -lt "$timeout_seconds" ]; do
+              response="$(curl -fsS \
+                -H "Authorization: Bearer $(az account get-access-token --query accessToken -o tsv)" \
+                "$latest_deployment_url" 2>/dev/null || true)"
+
+              if [ -n "$response" ]; then
+                deployment_id="$(printf '%s' "$response" | jq -r '.id // empty')"
+                deployment_status="$(printf '%s' "$response" | jq -r '.status // empty')"
+                deployment_complete="$(printf '%s' "$response" | jq -r '.complete // empty')"
+                deployment_message="$(printf '%s' "$response" | jq -r '.message // empty')"
+
+                if [ -n "$deployment_id" ] && [ "$deployment_id" != "$baseline_id" ]; then
+                  echo "Latest deployment: id=$deployment_id status=$deployment_status complete=$deployment_complete"
+                  if [ -n "$deployment_message" ]; then
+                    echo "Latest deployment message: $deployment_message"
+                  fi
+
+                  if [ "$deployment_status" = "4" ]; then
+                    return 0
+                  fi
+
+                  if [ "$deployment_status" = "3" ]; then
+                    return 1
+                  fi
+                else
+                  echo "Waiting for a new deployment record after baseline id ${baseline_id:-<none>}..."
+                fi
+              else
+                echo "Could not read deployments/latest yet; retrying in ${poll_interval}s..."
+              fi
+
+              sleep "$poll_interval"
+              elapsed=$((elapsed + poll_interval))
+            done
+
+            return 1
+          }
+
           max_attempts=5
           delay=20
           for attempt in $(seq 1 $max_attempts); do
             echo "Deploy attempt $attempt of $max_attempts"
+            baseline_id="$(get_latest_deployment_id || true)"
             if az webapp deploy \
               --resource-group "$AZURE_RESOURCE_GROUP" \
               --name "$AZURE_WEBAPP_NAME" \
               --type zip \
               --src-path artifacts/app.zip; then
               echo "Deploy succeeded"
+              exit 0
+            fi
+            echo "Deploy command failed. Checking Kudu latest deployment status..."
+            if wait_for_latest_deployment "$baseline_id"; then
+              echo "Deployment completed successfully after the CLI timeout."
               exit 0
             fi
             if [ "$attempt" -lt "$max_attempts" ]; then
