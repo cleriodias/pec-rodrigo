@@ -14,6 +14,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $middleware->trustProxies(at: '*');
 
         $middleware->web(append: [
+            \App\Http\Middleware\EnsureActiveUser::class,
             \App\Http\Middleware\EnsureActiveUnit::class,
             \App\Http\Middleware\ApplyActiveRole::class,
             \App\Http\Middleware\HandleInertiaRequests::class,

@@ -1,4 +1,5 @@
 import InfoButton from "@/Components/Button/InfoButton";
+import SuccessButton from "@/Components/Button/SuccessButton";
 import WarningButton from "@/Components/Button/WarningButton";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, Link, useForm, router, usePage } from "@inertiajs/react";
@@ -87,6 +88,20 @@ export default function UserEdit({ auth, user, units = [] }) {
 
     const selectedUnits = data.tb2_id ?? [];
 
+    const handleToggleActive = () => {
+        const confirmationMessage = user.is_active
+            ? `Tem certeza que deseja inativar o usuario ${user.name}?`
+            : `Tem certeza que deseja reativar o usuario ${user.name}?`;
+
+        if (!window.confirm(confirmationMessage)) {
+            return;
+        }
+
+        router.patch(route('users.toggle-active', { user: data.id }), {}, {
+            preserveScroll: true,
+        });
+    };
+
     const handleUnitToggle = (unitId) => {
         if (selectedUnits.includes(unitId)) {
             setData('tb2_id', selectedUnits.filter((value) => value !== unitId));
@@ -107,10 +122,39 @@ export default function UserEdit({ auth, user, units = [] }) {
                     <div className="flex flex-wrap items-center justify-between gap-3 m-4">
                         <h3 className="text-lg">Editar</h3>
                         <div className="flex flex-wrap gap-3">
+                            <span
+                                className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
+                                    user.is_active
+                                        ? 'bg-green-100 text-green-800'
+                                        : 'bg-red-100 text-red-800'
+                                }`}
+                            >
+                                {user.is_active ? 'Ativo' : 'Inativo'}
+                            </span>
                             {passwordResetMessage && (
                                 <span className="rounded-lg bg-green-50 px-4 py-2 text-sm font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-200">
                                     {passwordResetMessage}
                                 </span>
+                            )}
+                            {user.is_active ? (
+                                <WarningButton
+                                    type="button"
+                                    onClick={handleToggleActive}
+                                    disabled={user.id === auth.user.id}
+                                    aria-label="Inativar"
+                                    title="Inativar"
+                                >
+                                    <i className="bi bi-pause-circle text-lg" aria-hidden="true"></i>
+                                </WarningButton>
+                            ) : (
+                                <SuccessButton
+                                    type="button"
+                                    onClick={handleToggleActive}
+                                    aria-label="Reativar"
+                                    title="Reativar"
+                                >
+                                    <i className="bi bi-play-circle text-lg" aria-hidden="true"></i>
+                                </SuccessButton>
                             )}
                             <button
                                 type="button"

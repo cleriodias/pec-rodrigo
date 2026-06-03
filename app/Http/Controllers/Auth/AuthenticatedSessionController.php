@@ -52,6 +52,16 @@ class AuthenticatedSessionController extends Controller
         $user = $request->user();
         $funcaoOriginal = $user->funcao_original ?? $user->funcao;
 
+        if (! (bool) ($user->is_active ?? true)) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            throw ValidationException::withMessages([
+                'username' => 'Este usuario esta inativo.',
+            ]);
+        }
+
         if (in_array((int) $funcaoOriginal, [5, 6], true)) {
             Auth::logout();
             $request->session()->invalidate();

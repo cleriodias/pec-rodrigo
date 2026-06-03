@@ -38,11 +38,13 @@ export default function UserIndex({ auth, users, units = [], filters = {}, permi
     const currentUnit = filters.unit ?? '';
     const currentRole = filters.funcao ?? '';
     const currentSearch = filters.search ?? '';
+    const currentStatus = filters.status ?? 'active';
     const [search, setSearch] = useState(currentSearch);
     const canCreate = Boolean(permissions.canCreate);
     const canView = Boolean(permissions.canView);
     const canEdit = Boolean(permissions.canEdit);
     const canDelete = Boolean(permissions.canDelete);
+    const canToggleActive = Boolean(permissions.canToggleActive);
     const canManageSalaryAdvances = Boolean(permissions.canManageSalaryAdvances);
 
     useEffect(() => {
@@ -80,6 +82,7 @@ export default function UserIndex({ auth, users, units = [], filters = {}, permi
                 unit: currentUnit || undefined,
                 funcao: currentRole || undefined,
                 search: nextSearch || undefined,
+                status: currentStatus,
             }, {
                 preserveState: true,
                 preserveScroll: true,
@@ -88,7 +91,21 @@ export default function UserIndex({ auth, users, units = [], filters = {}, permi
         }, 300);
 
         return () => clearTimeout(timeoutId);
-    }, [search, currentSearch, currentUnit, currentRole]);
+    }, [search, currentSearch, currentUnit, currentRole, currentStatus]);
+
+    const handleToggleActive = (user) => {
+        const confirmationMessage = user.is_active
+            ? `Tem certeza que deseja inativar o usuario ${user.name}?`
+            : `Tem certeza que deseja reativar o usuario ${user.name}?`;
+
+        if (!window.confirm(confirmationMessage)) {
+            return;
+        }
+
+        router.patch(route('users.toggle-active', { user: user.id }), {}, {
+            preserveScroll: true,
+        });
+    };
 
     return (
         <AuthenticatedLayout
@@ -99,23 +116,25 @@ export default function UserIndex({ auth, users, units = [], filters = {}, permi
 
             <div className="py-4 max-w-7xl mx-auto sm:px-6 lg:px-8">
                 <div className="overflow-hidden bg-white shadow-lg sm:rounded-lg dark:bg-gray-800">
-                    <div className="flex justify-between items-center m-4">
+                    <div className="flex items-center justify-between px-4 pt-4">
                         <h3 className="text-lg">Listar</h3>
-                        <div className="flex space-x-4">
-                            {canCreate && (
-                                <Link href={route('users.create')}>
-                                    <SuccessButton aria-label="Cadastrar" title="Cadastrar">
-                                        <i className="bi bi-plus-lg text-lg" aria-hidden="true"></i>
-                                    </SuccessButton>
-                                </Link>
-                            )}
-                        </div>
+                        {canCreate && (
+                            <Link href={route('users.create')}>
+                                <SuccessButton
+                                    className="rounded-xl px-4 py-3"
+                                    aria-label="Cadastrar"
+                                    title="Cadastrar"
+                                >
+                                    <i className="bi bi-plus-lg text-lg" aria-hidden="true"></i>
+                                </SuccessButton>
+                            </Link>
+                        )}
                     </div>
 
                     <AlertMessage message={flash} />
 
-                    <div className="px-4 pb-3">
-                        <div className="grid gap-3 md:grid-cols-3 md:items-end">
+                    <div className="px-4 pb-3 pt-4">
+                        <div className="grid gap-3 md:grid-cols-4 md:items-end">
                             <div className="flex flex-col gap-1">
                                 <label className="text-sm font-medium text-gray-700">Pesquisar usuario</label>
                                 <TextInput
@@ -153,6 +172,18 @@ export default function UserIndex({ auth, users, units = [], filters = {}, permi
                                             {label}
                                         </option>
                                     ))}
+                                </select>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="text-sm font-medium text-gray-700">Status</label>
+                                <select
+                                    value={currentStatus}
+                                    onChange={(e) => handleFilterChange('status', e.target.value)}
+                                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                >
+                                    <option value="active">Ativos</option>
+                                    <option value="inactive">Inativos</option>
+                                    <option value="all">Todos</option>
                                 </select>
                             </div>
                         </div>
@@ -233,7 +264,24 @@ export default function UserIndex({ auth, users, units = [], filters = {}, permi
                                             {canDelete && (
                                                 <ConfirmDeleteButton id={user.id} routeName="users.destroy" />
                                             )}
-                                            {!canManageSalaryAdvances && !canView && !canEdit && !canDelete && (
+                                            {canToggleActive && (
+                                                <button
+                                                    type="button"
+                                                    className={`ms-1 inline-flex items-center rounded-md border border-transparent bg-slate-700 px-2 py-1 text-md tracking-widest text-white transition duration-150 ease-in-out hover:bg-slate-800 focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-700 focus:ring-offset-2 ${
+                                                        user.id === auth.user.id ? 'cursor-not-allowed opacity-25' : ''
+                                                    }`}
+                                                    aria-label={user.is_active ? 'Inativar' : 'Reativar'}
+                                                    title={user.is_active ? 'Inativar' : 'Reativar'}
+                                                    disabled={user.id === auth.user.id}
+                                                    onClick={() => handleToggleActive(user)}
+                                                >
+                                                    <i
+                                                        className={`bi ${user.is_active ? 'bi-person-dash' : 'bi-person-check'} text-lg`}
+                                                        aria-hidden="true"
+                                                    ></i>
+                                                </button>
+                                            )}
+                                            {!canManageSalaryAdvances && !canView && !canEdit && !canDelete && !canToggleActive && (
                                                 <span className="text-xs text-gray-400">--</span>
                                             )}
                                         </div>
