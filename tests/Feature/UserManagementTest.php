@@ -65,6 +65,77 @@ class UserManagementTest extends TestCase
         ]);
     }
 
+    public function test_manager_can_inactivate_and_reactivate_user(): void
+    {
+        $unit = $this->makeUnit('Loja Ativacao');
+
+        $manager = User::factory()->create([
+            'name' => 'Master Ativacao',
+            'email' => 'master.ativacao@example.com',
+            'funcao' => 0,
+            'funcao_original' => 0,
+            'tb2_id' => $unit->tb2_id,
+            'is_active' => true,
+        ]);
+        $manager->units()->sync([$unit->tb2_id]);
+
+        $targetUser = User::factory()->create([
+            'name' => 'Usuario Ativo',
+            'email' => 'usuario.ativo@example.com',
+            'funcao' => 4,
+            'funcao_original' => 4,
+            'tb2_id' => $unit->tb2_id,
+            'is_active' => true,
+        ]);
+        $targetUser->units()->sync([$unit->tb2_id]);
+
+        $this->actingAs($manager)
+            ->from(route('users.index'))
+            ->patch(route('users.toggle-active', ['user' => $targetUser->id]))
+            ->assertRedirect(route('users.index'));
+
+        $this->assertDatabaseHas('users', [
+            'id' => $targetUser->id,
+            'is_active' => false,
+        ]);
+
+        $this->actingAs($manager)
+            ->from(route('users.index'))
+            ->patch(route('users.toggle-active', ['user' => $targetUser->id]))
+            ->assertRedirect(route('users.index'));
+
+        $this->assertDatabaseHas('users', [
+            'id' => $targetUser->id,
+            'is_active' => true,
+        ]);
+    }
+
+    public function test_manager_cannot_inactivate_own_user(): void
+    {
+        $unit = $this->makeUnit('Loja Propria');
+
+        $manager = User::factory()->create([
+            'name' => 'Master Proprio',
+            'email' => 'master.proprio@example.com',
+            'funcao' => 0,
+            'funcao_original' => 0,
+            'tb2_id' => $unit->tb2_id,
+            'is_active' => true,
+        ]);
+        $manager->units()->sync([$unit->tb2_id]);
+
+        $this->actingAs($manager)
+            ->from(route('users.edit', ['user' => $manager->id]))
+            ->patch(route('users.toggle-active', ['user' => $manager->id]))
+            ->assertRedirect(route('users.edit', ['user' => $manager->id]))
+            ->assertSessionHas('error', 'Nao e possivel inativar o proprio usuario.');
+
+        $this->assertDatabaseHas('users', [
+            'id' => $manager->id,
+            'is_active' => true,
+        ]);
+    }
+
     private function makeUnit(string $name): Unidade
     {
         return Unidade::create([
@@ -74,6 +145,7 @@ class UserManagementTest extends TestCase
             'tb2_fone' => '(61) 99999-9999',
             'tb2_cnpj' => fake()->unique()->numerify('##.###.###/####-##'),
             'tb2_localizacao' => 'https://maps.example.com/' . fake()->slug(),
+            'tb2_status' => 1,
         ]);
     }
 }

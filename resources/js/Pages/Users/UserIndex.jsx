@@ -83,6 +83,7 @@ export default function UserIndex({ auth, users, units = [], filters = {}, permi
                 funcao: currentRole || undefined,
                 status: currentStatus || undefined,
                 search: nextSearch || undefined,
+                status: currentStatus,
             }, {
                 preserveState: true,
                 preserveScroll: true,
@@ -94,6 +95,7 @@ export default function UserIndex({ auth, users, units = [], filters = {}, permi
     }, [search, currentSearch, currentUnit, currentRole, currentStatus]);
 
     const handleToggleActive = (user) => {
+<<<<<<< HEAD
         if (!user?.id || !canToggleActive) {
             return;
         }
@@ -102,6 +104,13 @@ export default function UserIndex({ auth, users, units = [], filters = {}, permi
         const actionLabel = isActive ? 'inativar' : 'reativar';
 
         if (!window.confirm(`Tem certeza que deseja ${actionLabel} este usuário?`)) {
+=======
+        const confirmationMessage = user.is_active
+            ? `Tem certeza que deseja inativar o usuario ${user.name}?`
+            : `Tem certeza que deseja reativar o usuario ${user.name}?`;
+
+        if (!window.confirm(confirmationMessage)) {
+>>>>>>> new-main
             return;
         }
 
@@ -119,22 +128,28 @@ export default function UserIndex({ auth, users, units = [], filters = {}, permi
 
             <div className="py-4 max-w-7xl mx-auto sm:px-6 lg:px-8">
                 <div className="overflow-hidden bg-white shadow-lg sm:rounded-lg dark:bg-gray-800">
-                    <div className="flex justify-between items-center m-4">
+                    <div className="flex items-center justify-between px-4 pt-4">
                         <h3 className="text-lg">Listar</h3>
-                        <div className="flex space-x-4">
-                            {canCreate && (
-                                <Link href={route('users.create')}>
-                                    <SuccessButton aria-label="Cadastrar" title="Cadastrar">
-                                        <i className="bi bi-plus-lg text-lg" aria-hidden="true"></i>
-                                    </SuccessButton>
-                                </Link>
-                            )}
-                        </div>
+                        {canCreate && (
+                            <Link href={route('users.create')}>
+                                <SuccessButton
+                                    className="rounded-xl px-4 py-3"
+                                    aria-label="Cadastrar"
+                                    title="Cadastrar"
+                                >
+                                    <i className="bi bi-plus-lg text-lg" aria-hidden="true"></i>
+                                </SuccessButton>
+                            </Link>
+                        )}
                     </div>
 
                     <AlertMessage message={flash} />
 
+<<<<<<< HEAD
                     <div className="px-4 pb-3">
+=======
+                    <div className="px-4 pb-3 pt-4">
+>>>>>>> new-main
                         <div className="grid gap-3 md:grid-cols-4 md:items-end">
                             <div className="flex flex-col gap-1">
                                 <label className="text-sm font-medium text-gray-700">Pesquisar usuario</label>
@@ -184,6 +199,10 @@ export default function UserIndex({ auth, users, units = [], filters = {}, permi
                                 >
                                     <option value="active">Ativos</option>
                                     <option value="inactive">Inativos</option>
+<<<<<<< HEAD
+=======
+                                    <option value="all">Todos</option>
+>>>>>>> new-main
                                 </select>
                             </div>
                         </div>
@@ -265,6 +284,7 @@ export default function UserIndex({ auth, users, units = [], filters = {}, permi
                                                 <ConfirmDeleteButton id={user.id} routeName="users.destroy" />
                                             )}
                                             {canToggleActive && (
+<<<<<<< HEAD
                                                 <WarningButton
                                                     type="button"
                                                     className="ms-1 bg-slate-700 hover:bg-slate-800 focus:bg-slate-800 focus:ring-slate-600 active:bg-slate-700 dark:bg-slate-700 dark:text-white dark:hover:bg-slate-600 dark:focus:bg-slate-600 dark:focus:ring-offset-slate-900 dark:active:bg-slate-700"
@@ -277,6 +297,23 @@ export default function UserIndex({ auth, users, units = [], filters = {}, permi
                                                         aria-hidden="true"
                                                     ></i>
                                                 </WarningButton>
+=======
+                                                <button
+                                                    type="button"
+                                                    className={`ms-1 inline-flex items-center rounded-md border border-transparent bg-slate-700 px-2 py-1 text-md tracking-widest text-white transition duration-150 ease-in-out hover:bg-slate-800 focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-700 focus:ring-offset-2 ${
+                                                        user.id === auth.user.id ? 'cursor-not-allowed opacity-25' : ''
+                                                    }`}
+                                                    aria-label={user.is_active ? 'Inativar' : 'Reativar'}
+                                                    title={user.is_active ? 'Inativar' : 'Reativar'}
+                                                    disabled={user.id === auth.user.id}
+                                                    onClick={() => handleToggleActive(user)}
+                                                >
+                                                    <i
+                                                        className={`bi ${user.is_active ? 'bi-person-dash' : 'bi-person-check'} text-lg`}
+                                                        aria-hidden="true"
+                                                    ></i>
+                                                </button>
+>>>>>>> new-main
                                             )}
                                             {!canManageSalaryAdvances && !canView && !canEdit && !canDelete && !canToggleActive && (
                                                 <span className="text-xs text-gray-400">--</span>

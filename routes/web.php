@@ -346,6 +346,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/edit-user/{user}', [UserController::class, 'edit'])->name('users.edit');
     route::put('/update-user/{user}', [UserController::class, 'update'])->name('users.update');
     route::delete('/destroy-user/{user}', [UserController::class, 'destroy'])->name('users.destroy');
+    Route::patch('/users/{user}/toggle-active', [UserController::class, 'toggleActive'])->name('users.toggle-active');
     Route::get('/users/search', [UserController::class, 'search'])->name('users.search');
     Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword'])->name('users.reset-password');
 

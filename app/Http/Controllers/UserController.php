@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\Unidade;
 use App\Models\Venda;
 use App\Models\SalaryAdvance;
+use App\Models\OnlineUser;
 use App\Support\ManagementScope;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -49,8 +50,18 @@ class UserController extends Controller
     public function index(Request $request): Response
     {
         $authUser = $request->user();
+<<<<<<< HEAD
         $filters = $request->only(['unit', 'funcao', 'search', 'status']);
         $statusFilter = $this->normalizeStatusFilter($request->input('status'));
+=======
+        $statusFilter = $this->resolveStatusFilter($request->input('status'));
+        $filters = [
+            'unit' => $request->input('unit'),
+            'funcao' => $request->input('funcao'),
+            'search' => $request->input('search'),
+            'status' => $statusFilter,
+        ];
+>>>>>>> new-main
 
         $users = User::with('units:tb2_id,tb2_nome');
         ManagementScope::applyManagedUserScope($users, $authUser);
@@ -81,6 +92,12 @@ class UserController extends Controller
                         });
                 });
             })
+            ->when($statusFilter === 'active', function ($query) {
+                $query->where('is_active', true);
+            })
+            ->when($statusFilter === 'inactive', function ($query) {
+                $query->where('is_active', false);
+            })
             ->orderByDesc('id')
             ->paginate(10)
             ->withQueryString();
@@ -103,6 +120,15 @@ class UserController extends Controller
                 'canManageSalaryAdvances' => in_array((int) $authUser->funcao, [0, 1, 2], true),
             ],
         ]);
+    }
+
+    private function resolveStatusFilter(mixed $status): string
+    {
+        return match ((string) $status) {
+            'inactive' => 'inactive',
+            'all' => 'all',
+            default => 'active',
+        };
     }
 
     public function show(User $user): Response
@@ -256,7 +282,11 @@ class UserController extends Controller
             'hr_fim' => $request->hr_fim,
             'salario' => $request->salario,
             'vr_cred' => $request->vr_cred,
+<<<<<<< HEAD
             'payment_day' => $request->payment_day,
+=======
+            'is_active' => true,
+>>>>>>> new-main
             'tb2_id' => $primaryUnit,
         ]);
 
@@ -394,7 +424,11 @@ class UserController extends Controller
         }
 
         $users = $users
+<<<<<<< HEAD
             ->where('is_active', true)
+=======
+            ->active()
+>>>>>>> new-main
             ->where('name', 'like', '%' . $safeTerm . '%')
             ->orderBy('name')
             ->limit(10)
@@ -502,6 +536,34 @@ class UserController extends Controller
         ])->save();
 
         return Redirect::back()->with('success', "Nova senha temporária: {$newPassword}");
+    }
+
+    public function toggleActive(Request $request, User $user)
+    {
+        $actingUser = $request->user();
+
+        $this->ensureCanManageUser($actingUser, $user);
+
+        $nextStatus = ! (bool) ($user->is_active ?? true);
+
+        if ($actingUser && (int) $actingUser->id === (int) $user->id && $nextStatus === false) {
+            return Redirect::back()->with('error', 'Nao e possivel inativar o proprio usuario.');
+        }
+
+        $user->forceFill([
+            'is_active' => $nextStatus,
+        ])->save();
+
+        if (! $nextStatus) {
+            OnlineUser::query()
+                ->where('user_id', $user->id)
+                ->delete();
+        }
+
+        return Redirect::back()->with(
+            'success',
+            $nextStatus ? 'Usuario reativado com sucesso!' : 'Usuario inativado com sucesso!'
+        );
     }
 
     private function groupSalesByPeriod(Collection $sales): array

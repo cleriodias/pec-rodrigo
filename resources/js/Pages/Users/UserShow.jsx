@@ -120,6 +120,7 @@ export default function UserShow({
         { label: 'NOME', value: user.name ?? '---' },
         { label: 'E-MAIL', value: user.email ?? '---' },
         { label: 'FUN\u00c7\u00c3O', value: funcaoLabels[user.funcao] ?? '---' },
+        { label: 'STATUS', value: user.is_active ? 'ATIVO' : 'INATIVO' },
         { label: 'JORNADA', value: `${formatTime(user.hr_ini)} - ${formatTime(user.hr_fim)}` },
         { label: 'SAL\u00c1RIO', value: formatCurrency(user.salario) },
         { label: 'CR\u00c9DITO VR', value: formatCurrency(user.vr_cred) },

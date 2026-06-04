@@ -23,6 +23,8 @@ class UserFactory extends Factory
      */
     public function definition(): array
     {
+        $funcao = fake()->numberBetween(0, 6);
+
         return [
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
@@ -30,11 +32,13 @@ class UserFactory extends Factory
             'chave_pix' => null,
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
-            'funcao' => fake()->numberBetween(0, 6),
+            'funcao' => $funcao,
+            'funcao_original' => $funcao,
             'hr_ini' => fake()->time('H:i'),
             'hr_fim' => fake()->time('H:i'),
             'salario' => fake()->randomFloat(2, 1518, 8000),
             'vr_cred' => fake()->randomFloat(2, 350, 1500),
+            'is_active' => true,
             'tb2_id' => 1,
         ];
     }
