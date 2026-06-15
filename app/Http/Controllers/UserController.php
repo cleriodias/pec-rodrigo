@@ -35,7 +35,7 @@ class UserController extends Controller
                 return $next($request);
             }
 
-            if ($funcao === 2 && $routeName === 'users.index') {
+            if ($funcao === 2 && in_array($routeName, ['users.index', 'users.search'], true)) {
                 return $next($request);
             }
 

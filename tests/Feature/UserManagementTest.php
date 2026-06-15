@@ -136,6 +136,57 @@ class UserManagementTest extends TestCase
         ]);
     }
 
+    public function test_submanager_can_search_active_users_from_managed_units(): void
+    {
+        $managedUnit = $this->makeUnit('Loja Busca');
+        $otherUnit = $this->makeUnit('Loja Fora');
+
+        $submanager = User::factory()->create([
+            'name' => 'Subgerente Busca',
+            'email' => 'subgerente.busca@example.com',
+            'funcao' => 2,
+            'funcao_original' => 2,
+            'tb2_id' => $managedUnit->tb2_id,
+        ]);
+        $submanager->units()->sync([$managedUnit->tb2_id]);
+
+        $managedUser = User::factory()->create([
+            'name' => 'Clerio Gerenciado',
+            'email' => 'clerio.gerenciado@example.com',
+            'funcao' => 4,
+            'funcao_original' => 4,
+            'tb2_id' => $managedUnit->tb2_id,
+            'is_active' => true,
+            'vr_cred' => 120.00,
+        ]);
+        $managedUser->units()->sync([$managedUnit->tb2_id]);
+
+        $outsideUser = User::factory()->create([
+            'name' => 'Clerio Fora',
+            'email' => 'clerio.fora@example.com',
+            'funcao' => 4,
+            'funcao_original' => 4,
+            'tb2_id' => $otherUnit->tb2_id,
+            'is_active' => true,
+        ]);
+        $outsideUser->units()->sync([$otherUnit->tb2_id]);
+
+        $response = $this
+            ->actingAs($submanager)
+            ->getJson(route('users.search', ['q' => 'clerio']));
+
+        $response
+            ->assertOk()
+            ->assertJsonFragment([
+                'id' => $managedUser->id,
+                'name' => 'Clerio Gerenciado',
+            ])
+            ->assertJsonMissing([
+                'id' => $outsideUser->id,
+                'name' => 'Clerio Fora',
+            ]);
+    }
+
     private function makeUnit(string $name): Unidade
     {
         return Unidade::create([
