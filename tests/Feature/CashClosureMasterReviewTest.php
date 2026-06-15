@@ -188,6 +188,50 @@ class CashClosureMasterReviewTest extends TestCase
         ]);
     }
 
+    public function test_master_can_reopen_cash_closure_and_release_cashier_login_block(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-14 10:00:00'));
+
+        $unit = $this->makeUnit('Setor-9');
+        $master = $this->makeUser('Master', 0, $unit);
+        $cashier = $this->makeUser('Mary', 3, $unit);
+
+        $closure = CashierClosure::create([
+            'user_id' => $cashier->id,
+            'unit_id' => $unit->tb2_id,
+            'unit_name' => $unit->tb2_nome,
+            'cash_amount' => 300,
+            'card_amount' => 120,
+            'closed_date' => '2026-06-14',
+            'closed_at' => now(),
+        ]);
+
+        $this->post(route('login'), [
+            'username' => 'mary',
+            'password' => 'password',
+            'unit_id' => $unit->tb2_id,
+        ])->assertSessionHasErrors(['username']);
+
+        $response = $this
+            ->actingAs($master)
+            ->deleteJson(route('reports.cash.closure.destroy', $closure));
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('message', 'Fechamento de Mary em 14/06/26 reaberto com sucesso.');
+
+        $this->assertDatabaseMissing('cashier_closures', [
+            'id' => $closure->id,
+        ]);
+
+        $this->post(route('login'), [
+            'username' => 'mary',
+            'password' => 'password',
+            'unit_id' => $unit->tb2_id,
+        ])->assertRedirect(route('dashboard', absolute: false))
+            ->assertSessionHasNoErrors();
+    }
+
     public function test_cash_closure_report_uses_master_review_values_when_available(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-04-04 12:00:00'));

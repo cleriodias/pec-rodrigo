@@ -177,6 +177,7 @@ export default function CashClosure({
     const [unitFilter, setUnitFilter] = useState(normalizedSelectedUnit);
     const [zeroCloseRowKey, setZeroCloseRowKey] = useState(null);
     const [okCloseRowKey, setOkCloseRowKey] = useState(null);
+    const [reopenCloseRowKey, setReopenCloseRowKey] = useState(null);
     const [masterReviewModal, setMasterReviewModal] = useState({
         open: false,
         record: null,
@@ -572,6 +573,50 @@ export default function CashClosure({
         }
     };
 
+    const reopenClosure = async (record) => {
+        const closureId = record?.closure?.id;
+        const rowKey = record?.row_key ?? `${record?.cashier_id}-${record?.unit_id ?? 'none'}`;
+        const closureDate = formatShortDate(record?.closure?.closed_at);
+
+        if (!closureId || reopenCloseRowKey === rowKey) {
+            return;
+        }
+
+        const confirmed = window.confirm(
+            `Confirma a reabertura do caixa ${record.cashier_name} em ${closureDate}?`,
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        setReopenCloseRowKey(rowKey);
+
+        try {
+            await axios.delete(route('reports.cash.closure.destroy', closureId));
+
+            router.reload({
+                only: ['records', 'dateValue', 'dateInputValue', 'filterUnits', 'selectedUnitId', 'selectedUnit', 'discardDetails', 'meta'],
+                preserveScroll: true,
+            });
+        } catch (error) {
+            let message = 'Nao foi possivel reabrir o caixa.';
+
+            if (error.response?.data?.errors) {
+                const firstError = Object.values(error.response.data.errors).flat()[0];
+                if (firstError) {
+                    message = String(firstError);
+                }
+            } else if (error.response?.data?.message) {
+                message = String(error.response.data.message);
+            }
+
+            window.alert(message);
+        } finally {
+            setReopenCloseRowKey(null);
+        }
+    };
+
     const renderSystemAlignedCell = (label, value) => (
         <div className="space-y-1 text-right">
             <div>
@@ -913,6 +958,16 @@ export default function CashClosure({
                                                         className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100"
                                                     >
                                                         Master Confere
+                                                    </button>
+                                                )}
+                                                {isMaster && closed && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => reopenClosure(record)}
+                                                        disabled={reopenCloseRowKey === rowKey}
+                                                        className="inline-flex items-center rounded-full border border-red-300 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                                    >
+                                                        {reopenCloseRowKey === rowKey ? 'Reabrindo...' : 'Reabrir caixa'}
                                                     </button>
                                                 )}
                                             </div>

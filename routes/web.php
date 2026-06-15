@@ -404,6 +404,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/reports/cash-closure/zero-close', [SalesReportController::class, 'storeZeroCashClosure'])->name('reports.cash.closure.zero-close');
     Route::post('/reports/cash-closure/ok-close', [SalesReportController::class, 'storeSystemCashClosure'])->name('reports.cash.closure.ok-close');
     Route::patch('/reports/cash-closure/{closure}/master-review', [SalesReportController::class, 'updateCashClosureMasterReview'])->name('reports.cash.closure.master-review');
+    Route::delete('/reports/cash-closure/{closure}', [SalesReportController::class, 'destroyCashClosure'])->name('reports.cash.closure.destroy');
     Route::get('/reports/cash-discrepancies', [SalesReportController::class, 'cashDiscrepancies'])->name('reports.cash.discrepancies');
     Route::get('/reports/control', [SalesReportController::class, 'control'])->name('reports.control');
     Route::get('/reports/switch-unit', [UnitSwitchController::class, 'index'])->name('reports.switch-unit');

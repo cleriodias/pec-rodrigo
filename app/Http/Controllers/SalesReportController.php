@@ -2273,6 +2273,32 @@ class SalesReportController extends Controller
         ]);
     }
 
+    public function destroyCashClosure(Request $request, CashierClosure $closure): JsonResponse
+    {
+        $this->ensureMaster($request);
+
+        $availableUnits = $this->availableUnits($request->user());
+        $closureUnitId = $closure->unit_id !== null ? (int) $closure->unit_id : null;
+
+        if ($closureUnitId !== null && ! $availableUnits->contains(fn (array $unit) => (int) ($unit['id'] ?? 0) === $closureUnitId)) {
+            abort(403);
+        }
+
+        $closure->loadMissing('user:id,name');
+        $cashierName = $closure->user?->name ?? ('Caixa #' . $closure->user_id);
+        $closureDate = optional($closure->closed_date)->format('d/m/y') ?? '--';
+
+        $closure->delete();
+
+        return response()->json([
+            'message' => sprintf(
+                'Fechamento de %s em %s reaberto com sucesso.',
+                $cashierName,
+                $closureDate
+            ),
+        ]);
+    }
+
     public function storeZeroCashClosure(Request $request): JsonResponse
     {
         $this->ensureMaster($request);
