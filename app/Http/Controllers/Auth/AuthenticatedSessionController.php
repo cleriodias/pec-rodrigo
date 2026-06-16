@@ -27,9 +27,7 @@ class AuthenticatedSessionController extends Controller
     public function create(Request $request): Response
     {
         $requestedUnitId = (int) $request->query('l', 0);
-        $unitsQuery = Unidade::active()
-            ->with('matriz:tb30_id,tb30_nome,tb30_status')
-            ->orderBy('tb2_nome');
+        $unitsQuery = Unidade::active()->orderBy('tb2_nome');
 
         if ($requestedUnitId > 0) {
             $unitsQuery->where('tb2_id', $requestedUnitId);
@@ -39,7 +37,7 @@ class AuthenticatedSessionController extends Controller
             'canResetPassword' => Route::has('password.request'),
             'status' => session('status'),
             'selectedUnitId' => $requestedUnitId > 0 ? $requestedUnitId : null,
-            'units' => $unitsQuery->get(['tb2_id', 'tb2_nome', 'matriz_id']),
+            'units' => $unitsQuery->get(['tb2_id', 'tb2_nome']),
         ]);
     }
 
@@ -111,8 +109,7 @@ class AuthenticatedSessionController extends Controller
         }
 
         $selectedUnit = Unidade::active()
-            ->with('matriz:tb30_id,tb30_nome,tb30_status')
-            ->select('tb2_id', 'tb2_nome', 'tb2_endereco', 'tb2_cnpj', 'matriz_id')
+            ->select('tb2_id', 'tb2_nome', 'tb2_endereco', 'tb2_cnpj')
             ->find($unitId);
 
         if (! $selectedUnit) {
@@ -128,7 +125,6 @@ class AuthenticatedSessionController extends Controller
             'name' => $selectedUnit->tb2_nome,
             'address' => $selectedUnit->tb2_endereco,
             'cnpj' => $selectedUnit->tb2_cnpj,
-            'matriz_name' => $selectedUnit->matriz->tb30_nome ?? null,
         ]);
 
         if ($user->funcao_original === null) {
