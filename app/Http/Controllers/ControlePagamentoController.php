@@ -35,7 +35,9 @@ class ControlePagamentoController extends Controller
 
     public function printAll(Request $request): Response
     {
-        $this->ensureAdmin($request->user());
+        if (! $request->user()) {
+            abort(403);
+        }
         $today = Carbon::today();
 
         $paymentControls = ControlePagamento::query()
