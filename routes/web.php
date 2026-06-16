@@ -272,6 +272,8 @@ Route::middleware('auth')->group(function () {
         ->name('settings.discard-config.update');
     Route::get('/settings/controle-pagamentos', [ControlePagamentoController::class, 'index'])
         ->name('settings.payment-control');
+    Route::get('/settings/controle-pagamentos/imprimir-todos', [ControlePagamentoController::class, 'printAll'])
+        ->name('settings.payment-control.print-all');
     Route::post('/settings/controle-pagamentos', [ControlePagamentoController::class, 'store'])
         ->name('settings.payment-control.store');
     Route::delete('/settings/controle-pagamentos/{controlePagamento}', [ControlePagamentoController::class, 'destroy'])

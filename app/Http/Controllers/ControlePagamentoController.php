@@ -20,6 +20,7 @@ class ControlePagamentoController extends Controller
         $today = Carbon::today();
 
         $paymentControls = ControlePagamento::query()
+            ->with('user:id,name')
             ->where('user_id', $request->user()->id)
             ->orderByDesc('id')
             ->get()
@@ -29,6 +30,24 @@ class ControlePagamentoController extends Controller
         return Inertia::render('Settings/ControlePagamentos', [
             'paymentControls' => $paymentControls,
             'timelineReferenceDate' => $today->toDateString(),
+        ]);
+    }
+
+    public function printAll(Request $request): Response
+    {
+        $this->ensureAdmin($request->user());
+        $today = Carbon::today();
+
+        $paymentControls = ControlePagamento::query()
+            ->with('user:id,name')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (ControlePagamento $item) => $this->mapPaymentControl($item, $today))
+            ->values();
+
+        return Inertia::render('Settings/ControlePagamentosImpressao', [
+            'paymentControls' => $paymentControls,
+            'generatedAt' => $today->format('Y-m-d'),
         ]);
     }
 
@@ -190,6 +209,7 @@ class ControlePagamentoController extends Controller
             'valor_parcela' => round((float) $item->valor_parcela, 2),
             'data_inicio' => $item->data_inicio?->toDateString(),
             'data_fim' => $item->data_fim?->toDateString(),
+            'user_name' => $item->user?->name,
             'timeline' => $timeline,
         ];
     }

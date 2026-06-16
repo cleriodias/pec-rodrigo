@@ -9,7 +9,7 @@ import {
     isoToBrazilShortDateInput,
     shortBrazilDateInputToIso,
 } from '@/Utils/date';
-import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 
 const WEEKDAY_OPTIONS = [
@@ -176,15 +176,26 @@ export default function ControlePagamentos({ paymentControls = [], timelineRefer
     const closeTimelineModal = () => setSelectedTimeline(null);
 
     return (
-        <AuthenticatedLayout
+            <AuthenticatedLayout
             header={
-                <div className="flex flex-col gap-1">
-                    <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100">
-                        Controle de Pagamentos
-                    </h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-300">
-                        Cadastre recorrencias de pagamento com parcelas, valor unitario e data fim calculada. Cada usuario ve e gerencia apenas os proprios controles.
-                    </p>
+                <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                    <div className="flex flex-col gap-1">
+                        <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100">
+                            Controle de Pagamentos
+                        </h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-300">
+                            Cadastre recorrencias de pagamento com parcelas, valor unitario e data fim calculada. Cada usuario ve e gerencia apenas os proprios controles.
+                        </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                        <Link
+                            href={route('settings.payment-control.print-all')}
+                            className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+                        >
+                            Imprimir todos
+                        </Link>
+                    </div>
                 </div>
             }
         >
