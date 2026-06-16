@@ -397,6 +397,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/adiantamentos', [SalesReportController::class, 'adiantamentos'])->name('reports.adiantamentos');
     Route::get('/reports/fornecedores', [SalesReportController::class, 'fornecedores'])->name('reports.fornecedores');
     Route::get('/reports/gastos', [SalesReportController::class, 'gastos'])->name('reports.gastos');
+    Route::get('/reports/gastos-categorias', [SalesReportController::class, 'gastosCategorias'])->name('reports.gastos.categorias');
     Route::get('/reports/descarte', [SalesReportController::class, 'descarte'])->name('reports.descarte');
     Route::get('/reports/descarte-consolidado', [SalesReportController::class, 'descarteConsolidado'])->name('reports.descarte.consolidado');
     Route::get('/reports/pdr-cache', [SalesReportController::class, 'pdrCache'])->name('reports.pdr-cache');

@@ -183,6 +183,13 @@ class SalesReportController extends Controller
                 'route' => 'reports.gastos',
             ],
             [
+                'key' => 'gastos-categorias',
+                'label' => 'Gastos por categoria',
+                'description' => 'Gastos agrupados por categoria com detalhamento.',
+                'icon' => 'bi-tags',
+                'route' => 'reports.gastos.categorias',
+            ],
+            [
                 'key' => 'descarte',
                 'label' => 'Descarte',
                 'description' => 'Descartes registrados no periodo.',
@@ -1093,6 +1100,78 @@ class SalesReportController extends Controller
             'unit' => $selectedUnit,
             'filterUnits' => $filterUnits,
             'selectedUnitId' => $filterUnitId,
+        ]);
+    }
+
+    public function gastosCategorias(Request $request): Response
+    {
+        $this->ensureManager($request);
+        [$filterUnitId, $filterUnits, $selectedUnit] = $this->resolveReportUnit($request);
+        $allowedUnitIds = $this->reportUnitIds($filterUnits);
+        [$start, $end, $startDate, $endDate] = $this->resolveDateRange($request);
+
+        $rowsQuery = Expense::query()
+            ->with(['supplier:id,name', 'unit:tb2_id,tb2_nome', 'user:id,name'])
+            ->whereBetween('expense_date', [$startDate, $endDate])
+            ->when($filterUnitId, function ($query) use ($filterUnitId) {
+                $query->where('unit_id', $filterUnitId);
+            }, function ($query) use ($allowedUnitIds) {
+                if ($allowedUnitIds->isNotEmpty()) {
+                    $query->whereIn('unit_id', $allowedUnitIds);
+                } else {
+                    $query->whereRaw('1 = 0');
+                }
+            })
+            ->orderByDesc('expense_date')
+            ->orderByDesc('id');
+
+        $rows = $rowsQuery->get([
+            'id',
+            'supplier_id',
+            'unit_id',
+            'user_id',
+            'expense_date',
+            'amount',
+            'notes',
+        ]);
+
+        $categories = $rows
+            ->groupBy(function (Expense $expense) {
+                return $this->normalizeExpenseCategory((string) ($expense->notes ?? ''));
+            })
+            ->map(function (Collection $group, string $categoryName) {
+                return [
+                    'id' => $this->buildExpenseCategoryKey($categoryName),
+                    'category_name' => $categoryName,
+                    'records_count' => $group->count(),
+                    'total_amount' => round((float) $group->sum('amount'), 2),
+                    'records' => $group
+                        ->map(function (Expense $expense) {
+                            return [
+                                'id' => $expense->id,
+                                'expense_date' => $expense->expense_date?->toDateString(),
+                                'supplier' => $expense->supplier?->name ?? '---',
+                                'unit' => $expense->unit?->tb2_nome ?? '---',
+                                'user_name' => $expense->user?->name ?? '---',
+                                'amount' => round((float) $expense->amount, 2),
+                                'notes' => $expense->notes,
+                            ];
+                        })
+                        ->values()
+                        ->all(),
+                ];
+            })
+            ->sortByDesc('total_amount')
+            ->values();
+
+        return Inertia::render('Reports/ExpenseCategories', [
+            'categories' => $categories,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'unit' => $selectedUnit,
+            'filterUnits' => $filterUnits,
+            'selectedUnitId' => $filterUnitId,
+            'totalPersonal' => round((float) $categories->sum('total_amount'), 2),
         ]);
     }
 
@@ -3209,6 +3288,20 @@ class SalesReportController extends Controller
         }
 
         return sprintf('unit-%d-comanda-%d-closed-row-%d', $unitId, $comandaId, (int) $sale->tb3_id);
+    }
+
+    private function normalizeExpenseCategory(string $value): string
+    {
+        $normalized = preg_replace('/\s+/u', ' ', trim($value));
+
+        return $normalized !== '' ? $normalized : 'Sem categoria';
+    }
+
+    private function buildExpenseCategoryKey(string $categoryName): string
+    {
+        $slug = Str::slug($categoryName);
+
+        return $slug !== '' ? $slug : 'sem-categoria';
     }
 
     private function calculateCashClosureSystemValues(int $cashierId, int $unitId, Carbon $closureDate): ?array
