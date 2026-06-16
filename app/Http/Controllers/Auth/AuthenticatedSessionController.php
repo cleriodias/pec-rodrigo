@@ -7,6 +7,8 @@ use App\Http\Requests\Auth\LoginRequest;
 use App\Models\CashierClosure;
 use App\Models\OnlineUser;
 use App\Models\Unidade;
+use App\Models\VendaPagamento;
+use App\Models\User;
 use App\Support\PaymentControlNotificationService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -25,7 +27,9 @@ class AuthenticatedSessionController extends Controller
     public function create(Request $request): Response
     {
         $requestedUnitId = (int) $request->query('l', 0);
-        $unitsQuery = Unidade::active()->orderBy('tb2_nome');
+        $unitsQuery = Unidade::active()
+            ->with('matriz:tb30_id,tb30_nome,tb30_status')
+            ->orderBy('tb2_nome');
 
         if ($requestedUnitId > 0) {
             $unitsQuery->where('tb2_id', $requestedUnitId);
@@ -35,7 +39,7 @@ class AuthenticatedSessionController extends Controller
             'canResetPassword' => Route::has('password.request'),
             'status' => session('status'),
             'selectedUnitId' => $requestedUnitId > 0 ? $requestedUnitId : null,
-            'units' => $unitsQuery->get(['tb2_id', 'tb2_nome']),
+            'units' => $unitsQuery->get(['tb2_id', 'tb2_nome', 'matriz_id']),
         ]);
     }
 
@@ -73,13 +77,19 @@ class AuthenticatedSessionController extends Controller
         }
 
         if ((int) $funcaoOriginal === 3) {
-            $closedToday = CashierClosure::where('user_id', $user->id)
-                ->whereDate('closed_date', Carbon::today())
-                ->where(function ($query) use ($unitId) {
-                    $query->whereNull('unit_id')
-                        ->orWhere('unit_id', $unitId);
-                })
-                ->exists();
+            $pendingClosureDate = $this->resolvePendingClosureDate($user, $unitId, Carbon::today());
+
+            if ($pendingClosureDate === null) {
+                $closedToday = CashierClosure::where('user_id', $user->id)
+                    ->whereDate('closed_date', Carbon::today())
+                    ->where(function ($query) use ($unitId) {
+                        $query->whereNull('unit_id')
+                            ->orWhere('unit_id', $unitId);
+                    })
+                    ->exists();
+            } else {
+                $closedToday = false;
+            }
 
             if ($closedToday) {
                 Auth::logout();
@@ -101,7 +111,8 @@ class AuthenticatedSessionController extends Controller
         }
 
         $selectedUnit = Unidade::active()
-            ->select('tb2_id', 'tb2_nome', 'tb2_endereco', 'tb2_cnpj')
+            ->with('matriz:tb30_id,tb30_nome,tb30_status')
+            ->select('tb2_id', 'tb2_nome', 'tb2_endereco', 'tb2_cnpj', 'matriz_id')
             ->find($unitId);
 
         if (! $selectedUnit) {
@@ -117,6 +128,7 @@ class AuthenticatedSessionController extends Controller
             'name' => $selectedUnit->tb2_nome,
             'address' => $selectedUnit->tb2_endereco,
             'cnpj' => $selectedUnit->tb2_cnpj,
+            'matriz_name' => $selectedUnit->matriz->tb30_nome ?? null,
         ]);
 
         if ($user->funcao_original === null) {
@@ -145,5 +157,32 @@ class AuthenticatedSessionController extends Controller
         $request->session()->regenerateToken();
 
         return redirect('/');
+    }
+
+    private function resolvePendingClosureDate(User $user, int $unitId, Carbon $today): ?Carbon
+    {
+        $lastSaleDate = VendaPagamento::query()
+            ->whereHas('vendas', function ($query) use ($user, $unitId) {
+                $query->where('id_user_caixa', $user->id)
+                    ->where('id_unidade', $unitId)
+                    ->where('status', 1);
+            })
+            ->whereDate('created_at', '<', $today)
+            ->latest('created_at')
+            ->value('created_at');
+
+        if (! $lastSaleDate) {
+            return null;
+        }
+
+        $lastSaleDay = Carbon::parse($lastSaleDate)->startOfDay();
+        $hasClosure = CashierClosure::where('user_id', $user->id)
+            ->whereDate('closed_date', $lastSaleDay)
+            ->where(function ($query) use ($unitId) {
+                $query->whereNull('unit_id')->orWhere('unit_id', $unitId);
+            })
+            ->exists();
+
+        return $hasClosure ? null : $lastSaleDay;
     }
 }
