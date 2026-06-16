@@ -36,11 +36,12 @@ export default function CashierClose({ activeUnit, todayClosure, lastClosure, pe
 
     const hasClosedToday = Boolean(todayClosure);
     const hasPendingClosure = Boolean(pendingClosureDate);
+    const canSubmitPendingClosure = hasPendingClosure || !hasClosedToday;
     const pendingLabel = formatDate(pendingClosureDate);
 
     const handleSubmit = (event) => {
         event.preventDefault();
-        if (hasClosedToday) {
+        if (!canSubmitPendingClosure) {
             return;
         }
 
@@ -74,7 +75,7 @@ export default function CashierClose({ activeUnit, todayClosure, lastClosure, pe
                                 {activeUnit?.name ?? 'Unidade não definida'}
                             </p>
                         </div>
-                        {hasClosedToday ? (
+                        {hasClosedToday && !hasPendingClosure ? (
                             <div className="mt-6 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-900 dark:border-green-400/50 dark:bg-green-900/10 dark:text-green-200">
                                 <p className="font-semibold">
                                     Caixa já fechado em {formatDateTime(todayClosure.closed_at)}.
@@ -89,6 +90,17 @@ export default function CashierClose({ activeUnit, todayClosure, lastClosure, pe
                             </div>
                         ) : (
                             <form onSubmit={handleSubmit} className="mt-6 space-y-6">
+                                {hasClosedToday && hasPendingClosure && (
+                                    <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 dark:border-blue-400/50 dark:bg-blue-900/10 dark:text-blue-100">
+                                        <p className="font-semibold">
+                                            Existe um fechamento registrado hoje em {formatDateTime(todayClosure.closed_at)}.
+                                        </p>
+                                        <p className="mt-1">
+                                            Mesmo assim, ainda existe um fechamento pendente de {pendingLabel} que pode ser concluído abaixo.
+                                        </p>
+                                    </div>
+                                )}
+
                                 {hasPendingClosure && (
                                     <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-400/50 dark:bg-amber-900/10 dark:text-amber-100">
                                         <p className="font-semibold">
