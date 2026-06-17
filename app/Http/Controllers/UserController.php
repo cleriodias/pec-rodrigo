@@ -449,7 +449,9 @@ class UserController extends Controller
 
     private function normalizePhone(string $value): string
     {
-        return preg_replace('/\D/', '', $value) ?? '';
+        $digits = preg_replace('/\D/', '', $value) ?? '';
+
+        return in_array(strlen($digits), [10, 11], true) ? $digits : '';
     }
 
     private function normalizeStatusFilter(mixed $value): string
