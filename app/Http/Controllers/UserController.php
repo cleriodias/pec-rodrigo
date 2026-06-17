@@ -267,7 +267,7 @@ class UserController extends Controller
 
         $user->units()->sync($unitIds);
 
-        return Redirect::route('users.show', ['user' => $user->id])->with('success', 'Usuário cadastrado com sucesso!');
+        return Redirect::route('users.index')->with('success', 'Usuário cadastrado com sucesso!');
     }
 
     public function edit(User $user): Response
@@ -369,7 +369,7 @@ class UserController extends Controller
 
         $user->units()->sync($unitIds);
 
-        return Redirect::route('users.show', ['user' => $user->id])->with('success', 'Usuário editado com sucesso!');
+        return Redirect::route('users.index')->with('success', 'Usuário editado com sucesso!');
     }
 
     public function search(Request $request): JsonResponse
