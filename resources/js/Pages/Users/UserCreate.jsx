@@ -1,7 +1,8 @@
 import InfoButton from "@/Components/Button/InfoButton";
 import SuccessButton from "@/Components/Button/SuccessButton";
+import AlertMessage from "@/Components/Alert/AlertMessage";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import { Head, Link, useForm } from "@inertiajs/react";
+import { Head, Link, useForm, usePage } from "@inertiajs/react";
 
 const roleOptions = [
     { value: 0, label: 'Master' },
@@ -50,6 +51,7 @@ const formatPhoneInput = (value) => {
 };
 
 export default function UserCreate({ auth, units = [] }) {
+    const { flash } = usePage().props;
     const now = new Date();
     const generatedPassword = `${String(now.getHours()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
 
@@ -109,6 +111,7 @@ export default function UserCreate({ auth, units = [] }) {
                     </div>
 
                     <div className="bg-gray-50 text-sm dark:bg-gray-700 p-4 rounded-lg shadow-m">
+                        <AlertMessage message={flash} />
                         <form onSubmit={handleSubmit}>
 
                             <div className="mb-4 grid grid-cols-2 gap-4">

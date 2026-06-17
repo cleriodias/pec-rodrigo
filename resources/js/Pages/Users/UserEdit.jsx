@@ -1,6 +1,7 @@
 import InfoButton from "@/Components/Button/InfoButton";
 import SuccessButton from "@/Components/Button/SuccessButton";
 import WarningButton from "@/Components/Button/WarningButton";
+import AlertMessage from "@/Components/Alert/AlertMessage";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, Link, useForm, router, usePage } from "@inertiajs/react";
 import { useState } from "react";
@@ -173,6 +174,7 @@ export default function UserEdit({ auth, user, units = [] }) {
                     </div>
 
                     <div className="bg-gray-50 text-sm dark:bg-gray-700 p-4 rounded-lg shadow-m">
+                        <AlertMessage message={pageProps.flash ?? {}} />
                         <form onSubmit={handleSubmit}>
 
                             <div className="mb-4">
