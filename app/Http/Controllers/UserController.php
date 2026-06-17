@@ -260,7 +260,6 @@ class UserController extends Controller
             'hr_fim' => $request->hr_fim,
             'salario' => $request->salario,
             'vr_cred' => $request->vr_cred,
-            'payment_day' => 1,
             'is_active' => true,
             'tb2_id' => $primaryUnit,
         ]);
@@ -361,7 +360,6 @@ class UserController extends Controller
             'hr_fim' => $request->hr_fim,
             'salario' => $request->salario,
             'vr_cred' => $request->vr_cred,
-            'payment_day' => 1,
             'tb2_id' => $primaryUnit,
         ];
 

@@ -68,7 +68,6 @@ export default function UserCreate({ auth, units = [] }) {
         hr_fim: '23:00',
         salario: '1518',
         vr_cred: '350',
-        payment_day: '1',
         tb2_id: initialUnits,
     });
 

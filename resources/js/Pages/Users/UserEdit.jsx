@@ -58,7 +58,6 @@ export default function UserEdit({ auth, user, units = [] }) {
         hr_fim: formatTime(user.hr_fim) || '17:00',
         salario: user.salario !== undefined && user.salario !== null ? String(user.salario) : '1518',
         vr_cred: user.vr_cred !== undefined && user.vr_cred !== null ? String(user.vr_cred) : '350',
-        payment_day: '1',
         tb2_id: initialUnits,
     });
 
