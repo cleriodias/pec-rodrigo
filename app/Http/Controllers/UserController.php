@@ -254,7 +254,7 @@ class UserController extends Controller
             'email' => $request->email,
             'phone' => $request->phone ?: null,
             'password' => $request->password,
-            'cod_acesso' => $request->password,
+            'cod_acesso' => Str::upper(Str::random(6)),
             'funcao' => $request->funcao,
             'hr_ini' => $request->hr_ini,
             'hr_fim' => $request->hr_fim,
