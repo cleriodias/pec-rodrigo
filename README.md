@@ -1,4 +1,4 @@
-Código-fonte das lives sobre [Laravel e React](https://www.youtube.com/watch?v=OsH8sZb8x1k&list=PLmY5AEiqDWwAKFymn4450k9XGLt8v3Xgd&index=1).<br>
+﻿CÃ³digo-fonte das lives sobre [Laravel e React](https://www.youtube.com/watch?v=OsH8sZb8x1k&list=PLmY5AEiqDWwAKFymn4450k9XGLt8v3Xgd&index=1).<br>
 
 ## Requisitos
 
@@ -44,10 +44,10 @@ npm install nome-da-dependencia@latest
 Duplicar o arquivo ".env.example" e renomear para ".env".<br>
 Alterar no arquivo ".env" as credencias do banco de dados.<br>
 
-Para a funcionalidade recuperar senha funcionar, necessário alterar as credenciais do servidor de envio de e-mail no arquivo .env.<br>
+Para a funcionalidade recuperar senha funcionar, necessÃ¡rio alterar as credenciais do servidor de envio de e-mail no arquivo .env.<br>
 Utilizar o servidor fake durante o desenvolvimento: https://mailtrap.io<br>
 Servidor Iagente: https://login.iagente.com.br/solicitacao-conta-smtp/origin/celke<br>
-Configurar DNS da Iagente: https://celke.com.br/artigo/como-configurar-o-dns-da-iagente-na-vps-da-hostinger
+Configurar DNS da Iagente conforme a documentacao do provedor de e-mail.
 
 # Instalation (`https://king.host/wiki/artigo/como-instalar-o-laravel-em-seu-site`)
 1. install composer:
@@ -61,13 +61,13 @@ Configurar DNS da Iagente: https://celke.com.br/artigo/como-configurar-o-dns-da-
   - export PATH="$PATH:$HOME/.composer/vendor/bin"
 
 
-Instalar as dependências do PHP.
+Instalar as dependÃªncias do PHP.
 ```
 php composer.phar install - kinghost
 composer install - local
 ```
 
-Instalar as dependências do Node.js.
+Instalar as dependÃªncias do Node.js.
 ```
 npm install
 ```
@@ -84,7 +84,7 @@ php artisan migrate
 esse comando esta retirando o acesso a pasta www (para recuperar o acesso execute o comando abaixo via ssh na pasta rai)
 chmod 777 www
 ```
-//Psy Shell v0.12.4 (PHP 8.2.29 — cli) by Justin Hileman
+//Psy Shell v0.12.4 (PHP 8.2.29 â€” cli) by Justin Hileman
 
 find /www -type d -exec chmod 755 {} \;
 find /www -type f -exec chmod 644 {} \;
@@ -126,7 +126,7 @@ Instalar o Breeze.
 composer require laravel/breeze --dev
 ```
 
-Publicar a atutenticação, rotas, controladores e outros recursos para a aplicação
+Publicar a atutenticaÃ§Ã£o, rotas, controladores e outros recursos para a aplicaÃ§Ã£o
 ```
 php artisan breeze:install
 ```
@@ -140,7 +140,7 @@ Executar as migration para criar a base de dados e os tabela,
 php artisan migrate
 ```
 
-Instalar as dependências no Node.js.
+Instalar as dependÃªncias no Node.js.
 ```
 npm install
 ```
@@ -172,7 +172,7 @@ php artisan db:seed
 
 ## Como usar o GitHub
 
-Verificar a versão do GIT.
+Verificar a versÃ£o do GIT.
 ```
 git -v
 ```
@@ -188,310 +188,77 @@ Verificar a branch.
 git branch
 ```
 
-Baixar as atualizações do projeto.
+Baixar as atualizaÃ§Ãµes do projeto.
 ```
 git pull
 ```
 
-Adicionar todos os arquivos modificados no staging area - área de preparação.
+Adicionar todos os arquivos modificados no staging area - Ã¡rea de preparaÃ§Ã£o.
 ```
 git add .
 ```
 
-commit representa um conjunto de alterações em um ponto específico da história do seu projeto, registra apenas as alterações adicionadas ao índice de preparação.
+commit representa um conjunto de alteraÃ§Ãµes em um ponto especÃ­fico da histÃ³ria do seu projeto, registra apenas as alteraÃ§Ãµes adicionadas ao Ã­ndice de preparaÃ§Ã£o.
 O comando -m permite que insira a mensagem de commit diretamente na linha de comando.
 ```
-git commit -m "Descrição do commit"
+git commit -m "DescriÃ§Ã£o do commit"
 ```
 
-Enviar os commits locais, para um repositório remoto.
+Enviar os commits locais, para um repositÃ³rio remoto.
 ```
 git push <remote> <branch>
 git push origin main
 ```
 
-## Deploy da aplicação
-## Conectar o PC ao servidor com SSH
+## Deploy na KingHost
 
-Endereço da hospedagem. Ganhe 20% de desconto adicional na 
-[Hostinger](https://bit.ly/47QbjSZ).
+### Ambiente de producao
 
+No servidor da KingHost, use estas variaveis no `.env` de producao:
 
-Criar chave SSH (chave pública e privada).
-```
-ssh-keygen -t rsa -b 4096 -C "cleriodias@gmail.com"
-```
-```
-ssh-keygen -t rsa -b 4096 -C "cleriodias@gmail.com"
-```
-
-Local que é criado a chave pública.
-```
-C:\Users\SeuUsuario\.ssh\
-```
-```
-C:\Users\pec/.ssh/
-```
-
-Exibir o conteúdo da chave pública.
-```
-cat ~/.ssh/id_rsa.pub
-```
-
-Acessar o servidor com SSH.
-```
-ssh root@93.127.210.72
-```
-
-Usar o terminal conectado ao servidor para listar os arquivo.
-```
-cd /home/user/htdocs/srv566492.hstgr.cloud
-```
-
-Listar os arquivo.
-```
-ls
-```
-
-Remover os arquivos do servidor.
-```
-rm -rf /home/user/htdocs/endereco-do-servidor/{*,.*}
-```
-```
-rm -rf /home/user/htdocs/srv566492.hstgr.cloud/{*,.*}
-```
-
-## Conectar Servidor ao GitHub
-
-Gerar a chave SSH no servidor.
-```
-ssh-keygen -t rsa -b 4096 -C "cleriodias@gmail.com"
-```
-
-Imprimir a chave pública gerada.
-```
-cat ~/.ssh/id_rsa.pub
-```
-
-No GitHub, vá para Settings (Configurações) do seu repositório ou da sua conta, em seguida, vá para SSH and GPG keys e clique em New SSH key.<br>
-Cole a chave pública no campo fornecido e salve.<br>
-
-Verificar a conexão com o GitHub.
-```
-ssh -T git@github.com
-```
-
-Se gerar o erro "The authenticity of host 'github.com (xx.xxx.xx.xxx)' can't be established.".<br>
-Isso é uma medida de segurança para evitar ataques de "man-in-the-middle".<br>
-Necessário adicionar a chave do host do GitHub ao arquivo de known_hosts do seu servidor.<br>
-
-Digite yes quando for solicitado.
-```
-Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
-```
-
-Verificar a conexão novamente.
-```
-ssh -T git@github.com
-```
-
-Mensagem de conexão realizada com sucesso.<br>
-Hi nome-usuario! You've successfully authenticated, but GitHub does not provide shell access.<br>
-
-Usar o terminal conectado ao servidor. Primeiro acessar o diretório do projeto no servidor.
-```
-cd /home/user/htdocs/srv566492.hstgr.cloud
-```
-
-Baixar os arquivos do Git.
-```
-git clone --branch <branch_name> <repository_url> .
-```
-
-Duplicar o arquivo ".env.example" e renomear para ".env".
-```
-cp .env.example .env
-```
-
-Abrir o arquivo ".env" e alterar as variaveis de ambiente.
-```
-nano .env
-```
-
-Ctrl + O e enter para salvar.<br>
-Ctrl + X para sair.<br>
-
-Alterar o valor das variaveis de ambiente.
-```
-APP_NAME=pec
+```env
+APP_NAME=PEC
 APP_ENV=production
-APP_KEY=
+APP_KEY=gerar_com_php_artisan_key_generate
 APP_DEBUG=false
 APP_TIMEZONE=America/Sao_Paulo
-APP_URL=https://srv566492.hstgr.cloud 
-```
+APP_URL=https://paoecafe83.com.br
 
-Comentar as variaveis de conexão.
-```
-# DB_CONNECTION=mysql
-# DB_HOST=127.0.0.1
-# DB_PORT=3306
-# DB_DATABASE=paoecafe83
-# DB_USERNAME=paoecafe83
-# DB_PASSWORD=1qaz2ws3e
-```
-
-Alterar para armazenar as sessões no arquivo "file".
-```
-SESSION_DRIVER=file
-```
-
-Limpar cache de configuração.
-```
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
-```
-
-Instalar as dependências do PHP.
-```
-composer install
-```
-
-Gerar a build. Compilar o código-fonte do projeto.
-```
-npm run build
-```
-
-Gerar a chave.
-```
-php artisan key:generate
-```
-
-Alterar a propriedade do diretório.
-```
-sudo chown -R user:user /home/user/htdocs/srv566492.hstgr.cloud
-```
-
-Reiniciar Nginx.
-```
-sudo systemctl restart nginx
-```
-
-Limpar cache.
-```
-php artisan config:clear
-```
-
-Quando gerar o erro "", necessário instalar o Vite. Executar e Etapa 1, Etapa 2 e Etapa 3.
-```
-npm install
-```
-
-Etapa 1 - Verificar se o Vite está instalado.
-```
-npx vite --version
-```
-
-Etapa 2 - Gerar a build. Compilar o código-fonte do projeto.
-```
-npm run build
-```
-
-Etapa 3 - Remover o diretório "node_modules".
-
-Verificar as vulnerabilidades.
-```
-npm audit
-```
-
-Corrigir automaticamente todas as vulnerabilidades.
-```
-npm audit fix
-```
-
-Atualizar manualmente a dependência.
-```
-npm install nome-da-dependencia@latest
-```
-
-Criar a base de dados.<br>
-Alterar no arquivo .env as credenciais do banco de dados.<br>
-```
 DB_CONNECTION=mysql
-DB_HOST=127.0.0.1
+DB_HOST=mysql.paoecafe83.com.br
 DB_PORT=3306
 DB_DATABASE=paoecafe83
 DB_USERNAME=paoecafe83
-DB_PASSWORD=1qaz2ws3e
+DB_PASSWORD=sua_senha_de_banco
+
+SESSION_DRIVER=file
+SESSION_LIFETIME=120
+SESSION_ENCRYPT=false
+SESSION_PATH=/
+SESSION_DOMAIN=null
+
+CACHE_STORE=file
+QUEUE_CONNECTION=sync
+FILESYSTEM_DISK=local
+APP_STORAGE=/home/paoecafe83/storage
 ```
 
-Alterar para armazenar as sessões no arquivo "file".
-```
-SESSION_DRIVER=database
-```
+### Publicacao
 
-Executar as migration para criar a base de dados e as tabela.
-```
-php artisan migrate
-```
+- O deploy principal acontece pelo workflow `.github/workflows/deploy.yml`.
+- O pipeline faz build do PHP e do front-end, gera os assets e envia o conteudo para a KingHost por FTP.
+- Como a KingHost trabalha com a pasta `www/`, o upload deve ser publicado nela para que o dominio encontre o `index.php` do projeto.
+- Configure no GitHub Actions o segredo `KINGHOST_FTP_PASSWORD` com a senha do FTP.
 
-Cadastrar registro de teste.
-```
-php artisan db:seed
-```
+### Passos iniciais no servidor
 
-Para usar um domínio próprio, é necessário adicionar o DNS da Hostinger no gerenciador de domínios, como, por exemplo, no "registro.br".<br>
-Adicione o domínio na hospedagem.<br>
-Alterar o arquivo "vhost" da hospedagem o domínio, por exemplo:
-```
-server_name celkeprime.com.br;
-```
+1. Criar o banco `paoecafe83` na KingHost.
+2. Ajustar o `.env` de producao com os dados acima.
+3. Executar `php artisan key:generate` uma unica vez no servidor, se a chave ainda nao existir.
+4. Executar `php artisan migrate --force` para criar as tabelas no banco de producao.
+5. Conferir permissao de escrita para `storage` e `bootstrap/cache`.
 
-## Instalar o Node.js no servidor.
+### Observacoes
 
-Atualizar a lista de pacotes disponíveis nos repositórios do sistema.
-```
-sudo apt update
-```
-
-Adicionar no repositório o Node.js 20.x.
-```
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-```
-
-Instalar o Node.js. -y automatizar a instalação de pacotes sem solicitar a confirmação manual do usuário.
-```
-sudo apt install -y nodejs
-```
-
-Reiniciar Nginx.
-```
-sudo systemctl restart nginx
-```
-
-Limpar cache.
-```
-php artisan config:clear
-```
-
-Remover o Node.js.
-```
-sudo apt remove nodejs
-```
-
-
-# Install azure CLI
-https://learn.microsoft.com/en-us/cli/azure/install-azure-cli-windows?view=azure-cli-latest&pivots=msi
-# deploy
-https://learn.microsoft.com/en-us/azure/app-service/quickstart-php?tabs=cli&pivots=platform-linux
-
-# GitHub action deploy
-1. to Enable authentication to to `Configuration`→ `SCM Basic Auth Publishing Credentials` and enable it.
-2. Restart app
-3. Refresh the page
-4. Download publish profile in application `Overview` menu
-5. Go to `GitHub` → `Settings` → `Secrets and variables` → `Actions` → `New repository secret`
-  Name: AZURE_WEBAPP_PUBLISH_PROFILE
-  Value: cole o conteúdo inteiro do arquivo PublishSettings.
-6. Run the workflow again.
+- Os arquivos de deploy agora devem seguir o fluxo de FTP da KingHost.
+- O banco de producao deve ser consultado diretamente na KingHost quando houver necessidade de validacao operacional.

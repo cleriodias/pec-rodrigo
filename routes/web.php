@@ -13,6 +13,7 @@ use App\Http\Controllers\ProductDiscardController;
 use App\Http\Controllers\ProductStockController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\LanchoneteTerminalController;
+use App\Http\Controllers\MatrizController;
 use App\Http\Controllers\NoticeController;
 use App\Http\Controllers\OnlineController;
 use App\Http\Controllers\NewsletterSubscriptionController;
@@ -50,13 +51,17 @@ Route::get('/', function (Request $request) {
         'laravelVersion' => Application::VERSION,
         'phpVersion' => PHP_VERSION,
         'selectedUnitId' => $requestedUnitId > 0 ? $requestedUnitId : null,
-        'units' => Unidade::active()->orderBy('tb2_nome')->get([
+        'units' => Unidade::active()
+            ->with('matriz:tb30_id,tb30_nome,tb30_status')
+            ->orderBy('tb2_nome')
+            ->get([
             'tb2_id',
             'tb2_nome',
             'tb2_endereco',
             'tb2_cep',
             'tb2_fone',
             'tb2_localizacao',
+            'matriz_id',
         ]),
     ]);
 });
@@ -262,6 +267,8 @@ Route::middleware('auth')->group(function () {
 
         return Inertia::render('Settings/MenuOrder');
     })->name('settings.menu-order');
+    Route::get('/settings/matrizes', [MatrizController::class, 'index'])
+        ->name('settings.matrizes');
     Route::get('/settings/database', [DatabaseToolsController::class, 'index'])
         ->name('settings.database');
     Route::post('/settings/database', [DatabaseToolsController::class, 'run'])
@@ -352,6 +359,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/users/search', [UserController::class, 'search'])->name('users.search');
     Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword'])->name('users.reset-password');
 
+    Route::get('/matrizes', [MatrizController::class, 'index'])->name('matrizes.index');
     Route::get('/units', [UnitController::class, 'index'])->name('units.index');
     Route::get('/units/create', [UnitController::class, 'create'])->name('units.create');
     Route::post('/units', [UnitController::class, 'store'])->name('units.store');

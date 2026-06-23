@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
@@ -17,6 +18,7 @@ class Unidade extends Model
     protected $primaryKey = 'tb2_id';
 
     protected $fillable = [
+        'tb2_id_origem',
         'tb2_nome',
         'tb2_endereco',
         'tb2_cep',
@@ -43,5 +45,10 @@ class Unidade extends Model
     public function configuracaoFiscal(): HasOne
     {
         return $this->hasOne(ConfiguracaoFiscal::class, 'tb2_id', 'tb2_id');
+    }
+
+    public function matriz(): BelongsTo
+    {
+        return $this->belongsTo(Matriz::class, 'matriz_id', 'tb30_id');
     }
 }
