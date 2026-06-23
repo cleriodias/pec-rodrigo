@@ -13,7 +13,7 @@ env:
   FTP_SERVER: ftp.paoecafe83.com.br
   FTP_USERNAME: paoecafe83
   FTP_PORT: 21
-  FTP_SERVER_DIR: /www/
+  FTP_SERVER_DIR: /
   PHP_VERSION: '8.2'
   NODE_VERSION: '20'
 
