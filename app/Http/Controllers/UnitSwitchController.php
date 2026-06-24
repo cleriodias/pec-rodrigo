@@ -54,7 +54,6 @@ class UnitSwitchController extends Controller
             'name' => $unit->tb2_nome,
             'address' => $unit->tb2_endereco,
             'cnpj' => $unit->tb2_cnpj,
-            'matriz_name' => $unit->matriz->tb30_nome ?? null,
         ]);
         $request->session()->put('active_role', $role);
 
@@ -120,10 +119,9 @@ class UnitSwitchController extends Controller
     private function allowedUnits($user)
     {
         return Unidade::query()
-            ->with('matriz:tb30_id,tb30_nome,tb30_status')
             ->orderByDesc('tb2_status')
             ->orderBy('tb2_nome')
-            ->get(['tb2_id', 'tb2_nome', 'tb2_endereco', 'tb2_cnpj', 'tb2_status', 'matriz_id']);
+            ->get(['tb2_id', 'tb2_nome', 'tb2_endereco', 'tb2_cnpj', 'tb2_status']);
     }
 
     private function ensureCanSwitchUnit($user): void
