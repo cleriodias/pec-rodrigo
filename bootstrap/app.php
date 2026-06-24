@@ -1,5 +1,80 @@
 <?php
 
+require_once __DIR__.'/compat.php';
+
+if (! function_exists('array_first')) {
+    /**
+     * Return the first item from an array.
+     *
+     * @param  array  $array
+     * @param  callable|null  $callback
+     * @param  mixed  $default
+     * @return mixed
+     */
+    function array_first(array $array, ?callable $callback = null, $default = null)
+    {
+        if ($callback === null) {
+            return empty($array) ? $default : reset($array);
+        }
+
+        foreach ($array as $key => $value) {
+            if ($callback($value, $key)) {
+                return $value;
+            }
+        }
+
+        return $default;
+    }
+}
+
+if (! function_exists('array_last')) {
+    /**
+     * Return the last item from an array.
+     *
+     * @param  array  $array
+     * @param  callable|null  $callback
+     * @param  mixed  $default
+     * @return mixed
+     */
+    function array_last(array $array, ?callable $callback = null, $default = null)
+    {
+        if ($callback === null) {
+            return empty($array) ? $default : end($array);
+        }
+
+        $reversed = array_reverse($array, true);
+
+        foreach ($reversed as $key => $value) {
+            if ($callback($value, $key)) {
+                return $value;
+            }
+        }
+
+        return $default;
+    }
+}
+
+if (! function_exists('array_find_key')) {
+    /**
+     * Return the first key in an array matching a callback.
+     *
+     * @param  array  $array
+     * @param  callable  $callback
+     * @param  mixed  $default
+     * @return mixed
+     */
+    function array_find_key(array $array, callable $callback, $default = null)
+    {
+        foreach ($array as $key => $value) {
+            if ($callback($value, $key)) {
+                return $key;
+            }
+        }
+
+        return $default;
+    }
+}
+
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;

@@ -52,7 +52,6 @@ Route::get('/', function (Request $request) {
         'phpVersion' => PHP_VERSION,
         'selectedUnitId' => $requestedUnitId > 0 ? $requestedUnitId : null,
         'units' => Unidade::active()
-            ->with('matriz:tb30_id,tb30_nome,tb30_status')
             ->orderBy('tb2_nome')
             ->get([
             'tb2_id',
@@ -61,7 +60,6 @@ Route::get('/', function (Request $request) {
             'tb2_cep',
             'tb2_fone',
             'tb2_localizacao',
-            'matriz_id',
         ]),
     ]);
 });

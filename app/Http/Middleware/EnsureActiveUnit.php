@@ -17,8 +17,7 @@ class EnsureActiveUnit
 
             if ($unitId > 0) {
                 $unit = Unidade::active()
-                    ->with('matriz:tb30_id,tb30_nome,tb30_status')
-                    ->select('tb2_id', 'tb2_nome', 'tb2_endereco', 'tb2_cnpj', 'matriz_id')
+                    ->select('tb2_id', 'tb2_nome', 'tb2_endereco', 'tb2_cnpj')
                     ->find($unitId);
 
                 if ($unit) {
@@ -27,7 +26,6 @@ class EnsureActiveUnit
                         'name' => $unit->tb2_nome,
                         'address' => $unit->tb2_endereco,
                         'cnpj' => $unit->tb2_cnpj,
-                        'matriz_name' => $unit->matriz->tb30_nome ?? null,
                     ]);
                 }
             }
