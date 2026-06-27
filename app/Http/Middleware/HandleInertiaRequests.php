@@ -8,6 +8,7 @@ use App\Support\DiscardAlertService;
 use App\Support\ManagementScope;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Log;
 use Inertia\Middleware;
 use Throwable;
 
@@ -50,8 +51,8 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
             ],
-            'discardAlert' => fn () => app(DiscardAlertService::class)->forRequest($request),
-            'supportTicketsMenu' => fn () => SupportTicket::menuSummaryFor($request->user()),
+            'discardAlert' => fn () => $this->safeDiscardAlert($request),
+            'supportTicketsMenu' => fn () => $this->safeSupportTicketsMenu($request),
             'pendingFiscalTransmissions' => fn () => $this->sharePendingFiscalTransmissions($request),
             'csrf_token' => csrf_token(),
         ];
@@ -149,6 +150,41 @@ class HandleInertiaRequests extends Middleware
                 && Schema::hasTable('tb27_notas_fiscais');
         } catch (Throwable) {
             return false;
+        }
+    }
+
+    private function safeDiscardAlert(Request $request): ?array
+    {
+        try {
+            return app(DiscardAlertService::class)->forRequest($request);
+        } catch (Throwable $exception) {
+            Log::warning('Falha ao montar alerta de descarte do dashboard.', [
+                'user_id' => $request->user()?->id,
+                'exception' => $exception,
+            ]);
+
+            return null;
+        }
+    }
+
+    private function safeSupportTicketsMenu(Request $request): array
+    {
+        try {
+            return SupportTicket::menuSummaryFor($request->user());
+        } catch (Throwable $exception) {
+            Log::warning('Falha ao montar menu de chamados do dashboard.', [
+                'user_id' => $request->user()?->id,
+                'exception' => $exception,
+            ]);
+
+            return [
+                'can_view' => false,
+                'counts' => [
+                    'aberto' => 0,
+                    'em_analise' => 0,
+                    'aguardando_usuario' => 0,
+                ],
+            ];
         }
     }
 }
