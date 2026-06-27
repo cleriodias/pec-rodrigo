@@ -164,10 +164,11 @@ const normalizeMenuAccessConfig = (config, allowedKeys) => {
 };
 
 export default function AuthenticatedLayout({ header, headerClassName = '', children }) {
-    const pageProps = usePage().props;
-    const user = pageProps.auth.user;
-    const activeUnitName = pageProps.auth.unit?.name ?? 'Dashboard';
-    const activeUnitMatrizName = pageProps.auth.unit?.matriz_name ?? null;
+    const pageProps = usePage().props ?? {};
+    const auth = pageProps.auth ?? {};
+    const user = auth.user ?? null;
+    const activeUnitName = auth.unit?.name ?? 'Dashboard';
+    const activeUnitMatrizName = auth.unit?.matriz_name ?? null;
     const discardAlert = pageProps.discardAlert ?? null;
     const supportTicketsMenu = pageProps.supportTicketsMenu ?? null;
     const pendingFiscalTransmissions = pageProps.pendingFiscalTransmissions ?? {
