@@ -18,26 +18,5 @@ bye
 EOF
 }
 
-USER_CANDIDATES=(
-  "$FTP_USERNAME"
-  "${FTP_USERNAME}@paoecafe83.com.br"
-  "ftp.${FTP_USERNAME}"
-)
-
-TARGETS=(
-  "ftps://$FTP_SERVER:990"
-  "ftp://$FTP_SERVER:21"
-)
-
-for username in "${USER_CANDIDATES[@]}"; do
-  for target in "${TARGETS[@]}"; do
-    echo "Tentando deploy como $username em $target"
-    if deploy_lftp "$target" "$username"; then
-      echo "Deploy concluído com sucesso"
-      exit 0
-    fi
-  done
-done
-
-echo "Falha ao publicar na KingHost com todos os usuários e protocolos testados"
-exit 1
+deploy_lftp "ftp://$FTP_SERVER:21" "$FTP_USERNAME"
+echo "Deploy concluído com sucesso"
