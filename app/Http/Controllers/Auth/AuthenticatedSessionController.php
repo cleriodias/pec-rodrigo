@@ -14,6 +14,7 @@ use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -132,7 +133,15 @@ class AuthenticatedSessionController extends Controller
         }
 
         $request->session()->put('active_role', (int) ($user->funcao_original ?? $user->funcao));
-        app(PaymentControlNotificationService::class)->notifyUserOnLogin($user, (int) $selectedUnit->tb2_id);
+        try {
+            app(PaymentControlNotificationService::class)->notifyUserOnLogin($user, (int) $selectedUnit->tb2_id);
+        } catch (\Throwable $exception) {
+            Log::warning('Falha ao enviar notificacao de login.', [
+                'user_id' => $user->id,
+                'unit_id' => $selectedUnit->tb2_id,
+                'exception' => $exception,
+            ]);
+        }
 
         return redirect()->intended(route('dashboard', absolute: false));
     }
