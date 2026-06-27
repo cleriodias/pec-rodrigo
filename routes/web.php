@@ -38,7 +38,6 @@ use App\Models\Venda;
 use App\Support\ManagementScope;
 use App\Support\ProductQuickLookupCache;
 use Carbon\Carbon;
-use Illuminate\Foundation\Application;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -48,8 +47,6 @@ Route::get('/', function (Request $request) {
     return Inertia::render('Welcome', [
         'canLogin' => Route::has('login'),
         'canRegister' => Route::has('register'),
-        'laravelVersion' => Application::VERSION,
-        'phpVersion' => PHP_VERSION,
         'selectedUnitId' => $requestedUnitId > 0 ? $requestedUnitId : null,
         'units' => Unidade::active()
             ->orderBy('tb2_nome')

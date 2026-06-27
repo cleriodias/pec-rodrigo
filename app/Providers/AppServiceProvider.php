@@ -72,6 +72,10 @@ class AppServiceProvider extends ServiceProvider
             Paginator::currentPathResolver(fn () => url($request->path()));
         }
 
+        if (! $this->app->environment(['local', 'testing'])) {
+            Vite::useHotFile(storage_path('framework/vite.hot'));
+        }
+
         Vite::prefetch(concurrency: 3);
     }
 }
