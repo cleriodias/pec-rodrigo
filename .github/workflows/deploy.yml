@@ -66,9 +66,18 @@ jobs:
             --exclude "node_modules" \
             --exclude ".env" \
             --exclude ".vite" \
+            --exclude "public/hot" \
             --exclude "bkp" \
             --exclude "mobile-faturamento" \
             --exclude "tests" \
+            --exclude "*.md" \
+            --exclude "*.zip" \
+            --exclude "*.pfx" \
+            --exclude "*.sql" \
+            --exclude "tmp_*" \
+            --exclude "dashboard_lines.txt" \
+            --exclude "temp.txt" \
+            --exclude "_.ssh_" \
             --exclude "storage/framework/cache/*" \
             --exclude "storage/framework/sessions/*" \
             --exclude "storage/framework/views/*" \
