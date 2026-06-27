@@ -11,8 +11,6 @@ set net:max-retries 2
 set net:timeout 30
 set ftp:passive-mode on
 set ssl:verify-certificate no
-mkdir -p "$FTP_SERVER_DIR" || true
-cd "$FTP_SERVER_DIR"
 mirror -R --verbose --parallel=2 artifacts/staging .
 bye
 EOF
