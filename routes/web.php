@@ -39,6 +39,7 @@ use App\Support\ManagementScope;
 use App\Support\ProductQuickLookupCache;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -75,130 +76,145 @@ if (class_exists(\App\Http\Controllers\MobileRevenueController::class)) {
 
 
 Route::get('/dashboard', function (Request $request, ProductQuickLookupCache $quickLookupCache) {
-    $dashboardContraChequeSummary = function () use ($request) {
-        $user = $request->user();
+    try {
+        $dashboardContraChequeSummary = function () use ($request) {
+            $user = $request->user();
 
-        if (! $user || ! ManagementScope::isAdmin($user)) {
-            return null;
-        }
+            if (! $user || ! ManagementScope::isAdmin($user)) {
+                return null;
+            }
 
-        $startDate = Carbon::today()->startOfMonth()->toDateString();
-        $endDate = Carbon::today()->endOfMonth()->toDateString();
-        $start = Carbon::parse($startDate)->startOfDay();
-        $end = Carbon::parse($endDate)->endOfDay();
+            $startDate = Carbon::today()->startOfMonth()->toDateString();
+            $endDate = Carbon::today()->endOfMonth()->toDateString();
+            $start = Carbon::parse($startDate)->startOfDay();
+            $end = Carbon::parse($endDate)->endOfDay();
 
-        $usersQuery = User::query()
-            ->with([
-                'units:tb2_id,tb2_nome',
-                'primaryUnit:tb2_id,tb2_nome',
-            ])
-            ->where('funcao', '!=', 6)
-            ->where('salario', '>', 0)
-            ->orderBy('name');
+            $usersQuery = User::query()
+                ->with([
+                    'units:tb2_id,tb2_nome',
+                    'primaryUnit:tb2_id,tb2_nome',
+                ])
+                ->where('funcao', '!=', 6)
+                ->where('salario', '>', 0)
+                ->orderBy('name');
 
-        ManagementScope::applyManagedUserScope($usersQuery, $user);
+            ManagementScope::applyManagedUserScope($usersQuery, $user);
 
-        $users = $usersQuery->get(['id', 'salario', 'tb2_id']);
-        $userIds = $users->pluck('id')->map(fn ($value) => (int) $value)->values();
+            $users = $usersQuery->get(['id', 'salario', 'tb2_id']);
+            $userIds = $users->pluck('id')->map(fn ($value) => (int) $value)->values();
 
-        if ($userIds->isEmpty()) {
-            return [
-                'employees_count' => 0,
-                'pending_total' => 0,
-            ];
-        }
-
-        $paymentsByUser = ContraChequePagamento::query()
-            ->whereIn('user_id', $userIds)
-            ->whereDate('tb29_periodo_inicio', $startDate)
-            ->whereDate('tb29_periodo_fim', $endDate)
-            ->get(['user_id'])
-            ->pluck('user_id')
-            ->map(fn ($value) => (int) $value)
-            ->flip();
-
-        $allowedUnitIds = ManagementScope::managedUnits($user, ['tb2_id'])
-            ->pluck('tb2_id')
-            ->map(fn ($value) => (int) $value)
-            ->filter(fn (int $value) => $value > 0)
-            ->unique()
-            ->values();
-
-        $advancesQuery = SalaryAdvance::query()
-            ->whereIn('user_id', $userIds)
-            ->whereBetween('advance_date', [$startDate, $endDate]);
-
-        if ($allowedUnitIds->isEmpty()) {
-            $advancesQuery->whereRaw('1 = 0');
-        } else {
-            $advancesQuery->where(function ($query) use ($allowedUnitIds) {
-                $query->whereIn('unit_id', $allowedUnitIds)
-                    ->orWhere(function ($legacy) use ($allowedUnitIds) {
-                        $legacy->whereNull('unit_id')
-                            ->where(function ($legacyUnit) use ($allowedUnitIds) {
-                                $legacyUnit->whereHas('user', function ($userQuery) use ($allowedUnitIds) {
-                                    $userQuery->whereIn('tb2_id', $allowedUnitIds);
-                                })->orWhereHas('user.units', function ($unitQuery) use ($allowedUnitIds) {
-                                    $unitQuery->whereIn('tb2_unidades.tb2_id', $allowedUnitIds);
-                                });
-                            });
-                    });
-            });
-        }
-
-        $advancesByUser = $advancesQuery
-            ->get(['user_id', 'amount'])
-            ->groupBy('user_id');
-
-        $valeQuery = Venda::query()
-            ->whereIn('id_user_vale', $userIds)
-            ->where('tipo_pago', 'vale')
-            ->whereBetween('data_hora', [$start, $end]);
-
-        if ($allowedUnitIds->isEmpty()) {
-            $valeQuery->whereRaw('1 = 0');
-        } else {
-            $valeQuery->whereIn('id_unidade', $allowedUnitIds);
-        }
-
-        $valesByUser = $valeQuery
-            ->get(['id_user_vale', 'valor_total'])
-            ->groupBy('id_user_vale');
-
-        $extraCreditsByUser = ContraChequeCredito::query()
-            ->whereIn('user_id', $userIds)
-            ->whereDate('tb28_periodo_inicio', $startDate)
-            ->whereDate('tb28_periodo_fim', $endDate)
-            ->get(['user_id', 'tb28_valor'])
-            ->groupBy('user_id');
-
-        $pendingRows = $users
-            ->reject(fn (User $managedUser) => $paymentsByUser->has((int) $managedUser->id))
-            ->map(function (User $managedUser) use ($advancesByUser, $valesByUser, $extraCreditsByUser) {
-                $salary = round((float) ($managedUser->salario ?? 0), 2);
-                $advancesTotal = round((float) $advancesByUser->get($managedUser->id, collect())->sum('amount'), 2);
-                $valesTotal = round((float) $valesByUser->get($managedUser->id, collect())->sum('valor_total'), 2);
-                $extraCreditsTotal = round((float) $extraCreditsByUser->get($managedUser->id, collect())->sum('tb28_valor'), 2);
-
+            if ($userIds->isEmpty()) {
                 return [
-                    'balance' => round($salary + $extraCreditsTotal - $advancesTotal - $valesTotal, 2),
+                    'employees_count' => 0,
+                    'pending_total' => 0,
                 ];
-            });
+            }
 
-        return [
-            'employees_count' => $pendingRows->count(),
-            'pending_total' => round((float) $pendingRows->sum('balance'), 2),
-        ];
-    };
+            $paymentsByUser = ContraChequePagamento::query()
+                ->whereIn('user_id', $userIds)
+                ->whereDate('tb29_periodo_inicio', $startDate)
+                ->whereDate('tb29_periodo_fim', $endDate)
+                ->get(['user_id'])
+                ->pluck('user_id')
+                ->map(fn ($value) => (int) $value)
+                ->flip();
 
-    $quickLookupSnapshot = fn () => $quickLookupCache->snapshotForRequest($request);
+            $allowedUnitIds = ManagementScope::managedUnits($user, ['tb2_id'])
+                ->pluck('tb2_id')
+                ->map(fn ($value) => (int) $value)
+                ->filter(fn (int $value) => $value > 0)
+                ->unique()
+                ->values();
 
-    return Inertia::render('Dashboard', [
-        'quickLookupProducts' => fn () => ($quickLookupSnapshot())['products'] ?? [],
-        'quickLookupProductsVersion' => fn () => (int) (($quickLookupSnapshot())['version'] ?? 1),
-        'masterSwitchOptions' => fn () => app(UnitSwitchController::class)->dashboardOptions($request),
-        'dashboardContraChequeSummary' => $dashboardContraChequeSummary,
-    ]);
+            $advancesQuery = SalaryAdvance::query()
+                ->whereIn('user_id', $userIds)
+                ->whereBetween('advance_date', [$startDate, $endDate]);
+
+            if ($allowedUnitIds->isEmpty()) {
+                $advancesQuery->whereRaw('1 = 0');
+            } else {
+                $advancesQuery->where(function ($query) use ($allowedUnitIds) {
+                    $query->whereIn('unit_id', $allowedUnitIds)
+                        ->orWhere(function ($legacy) use ($allowedUnitIds) {
+                            $legacy->whereNull('unit_id')
+                                ->where(function ($legacyUnit) use ($allowedUnitIds) {
+                                    $legacyUnit->whereHas('user', function ($userQuery) use ($allowedUnitIds) {
+                                        $userQuery->whereIn('tb2_id', $allowedUnitIds);
+                                    })->orWhereHas('user.units', function ($unitQuery) use ($allowedUnitIds) {
+                                        $unitQuery->whereIn('tb2_unidades.tb2_id', $allowedUnitIds);
+                                    });
+                                });
+                        });
+                });
+            }
+
+            $advancesByUser = $advancesQuery
+                ->get(['user_id', 'amount'])
+                ->groupBy('user_id');
+
+            $valeQuery = Venda::query()
+                ->whereIn('id_user_vale', $userIds)
+                ->where('tipo_pago', 'vale')
+                ->whereBetween('data_hora', [$start, $end]);
+
+            if ($allowedUnitIds->isEmpty()) {
+                $valeQuery->whereRaw('1 = 0');
+            } else {
+                $valeQuery->whereIn('id_unidade', $allowedUnitIds);
+            }
+
+            $valesByUser = $valeQuery
+                ->get(['id_user_vale', 'valor_total'])
+                ->groupBy('id_user_vale');
+
+            $extraCreditsByUser = ContraChequeCredito::query()
+                ->whereIn('user_id', $userIds)
+                ->whereDate('tb28_periodo_inicio', $startDate)
+                ->whereDate('tb28_periodo_fim', $endDate)
+                ->get(['user_id', 'tb28_valor'])
+                ->groupBy('user_id');
+
+            $pendingRows = $users
+                ->reject(fn (User $managedUser) => $paymentsByUser->has((int) $managedUser->id))
+                ->map(function (User $managedUser) use ($advancesByUser, $valesByUser, $extraCreditsByUser) {
+                    $salary = round((float) ($managedUser->salario ?? 0), 2);
+                    $advancesTotal = round((float) $advancesByUser->get($managedUser->id, collect())->sum('amount'), 2);
+                    $valesTotal = round((float) $valesByUser->get($managedUser->id, collect())->sum('valor_total'), 2);
+                    $extraCreditsTotal = round((float) $extraCreditsByUser->get($managedUser->id, collect())->sum('tb28_valor'), 2);
+
+                    return [
+                        'balance' => round($salary + $extraCreditsTotal - $advancesTotal - $valesTotal, 2),
+                    ];
+                });
+
+            return [
+                'employees_count' => $pendingRows->count(),
+                'pending_total' => round((float) $pendingRows->sum('balance'), 2),
+            ];
+        };
+
+        $quickLookupSnapshot = fn () => $quickLookupCache->snapshotForRequest($request);
+
+        return Inertia::render('Dashboard', [
+            'quickLookupProducts' => fn () => ($quickLookupSnapshot())['products'] ?? [],
+            'quickLookupProductsVersion' => fn () => (int) (($quickLookupSnapshot())['version'] ?? 1),
+            'masterSwitchOptions' => fn () => app(UnitSwitchController::class)->dashboardOptions($request),
+            'dashboardContraChequeSummary' => $dashboardContraChequeSummary,
+        ]);
+    } catch (\Throwable $exception) {
+        Log::error('Falha ao montar dashboard.', [
+            'user_id' => $request->user()?->id,
+            'unit_id' => $request->session()->get('active_unit.id'),
+            'exception' => $exception,
+        ]);
+
+        return Inertia::render('Dashboard', [
+            'quickLookupProducts' => [],
+            'quickLookupProductsVersion' => 1,
+            'masterSwitchOptions' => null,
+            'dashboardContraChequeSummary' => null,
+        ]);
+    }
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::get('/supplier/access', [SupplierPortalController::class, 'access'])->name('supplier.access');
