@@ -408,6 +408,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword'])->name('users.reset-password');
 
     Route::get('/matrizes', [MatrizController::class, 'index'])->name('matrizes.index');
+    Route::get('/matrizes/{matriz}/edit', [MatrizController::class, 'edit'])->name('matrizes.edit');
+    Route::put('/matrizes/{matriz}', [MatrizController::class, 'update'])->name('matrizes.update');
     Route::get('/units', [UnitController::class, 'index'])->name('units.index');
     Route::get('/units/create', [UnitController::class, 'create'])->name('units.create');
     Route::post('/units', [UnitController::class, 'store'])->name('units.store');

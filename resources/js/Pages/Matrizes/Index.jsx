@@ -1,6 +1,6 @@
 import Pagination from '@/Components/Pagination';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 
 const normalizeText = (value) =>
     String(value ?? '')
@@ -80,6 +80,14 @@ export default function MatrizesIndex({ auth, matrizes }) {
                                             <span className="font-semibold">Matriz principal:</span>{' '}
                                             {matriz.tb30_nome}
                                         </div>
+                                    </div>
+                                    <div className="mt-4 flex justify-end">
+                                        <Link
+                                            href={route('matrizes.edit', { matriz: matriz.tb30_id })}
+                                            className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-700 transition hover:bg-indigo-100"
+                                        >
+                                            Editar matriz
+                                        </Link>
                                     </div>
                                 </div>
 
