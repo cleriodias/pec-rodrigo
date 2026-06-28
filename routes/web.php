@@ -78,6 +78,7 @@ if (class_exists(\App\Http\Controllers\MobileRevenueController::class)) {
 Route::get('/dashboard', function (Request $request, ProductQuickLookupCache $quickLookupCache) {
     try {
         $dashboardContraChequeSummary = function () use ($request) {
+            try {
             $user = $request->user();
 
             if (! $user || ! ManagementScope::isAdmin($user)) {
@@ -191,14 +192,50 @@ Route::get('/dashboard', function (Request $request, ProductQuickLookupCache $qu
                 'employees_count' => $pendingRows->count(),
                 'pending_total' => round((float) $pendingRows->sum('balance'), 2),
             ];
+            } catch (\Throwable $exception) {
+                Log::error('Falha ao calcular resumo de contra-cheque do dashboard.', [
+                    'user_id' => $request->user()?->id,
+                    'unit_id' => $request->session()->get('active_unit.id'),
+                    'exception' => $exception,
+                ]);
+
+                return null;
+            }
         };
 
-        $quickLookupSnapshot = fn () => $quickLookupCache->snapshotForRequest($request);
+        $quickLookupSnapshot = function () use ($quickLookupCache, $request) {
+            try {
+                return $quickLookupCache->snapshotForRequest($request);
+            } catch (\Throwable $exception) {
+                Log::error('Falha ao montar snapshot de consulta rapida do dashboard.', [
+                    'user_id' => $request->user()?->id,
+                    'unit_id' => $request->session()->get('active_unit.id'),
+                    'exception' => $exception,
+                ]);
+
+                return [
+                    'products' => [],
+                    'version' => 1,
+                ];
+            }
+        };
 
         return Inertia::render('Dashboard', [
-            'quickLookupProducts' => fn () => ($quickLookupSnapshot())['products'] ?? [],
-            'quickLookupProductsVersion' => fn () => (int) (($quickLookupSnapshot())['version'] ?? 1),
-            'masterSwitchOptions' => fn () => app(UnitSwitchController::class)->dashboardOptions($request),
+            'quickLookupProducts' => fn () => $quickLookupSnapshot()['products'] ?? [],
+            'quickLookupProductsVersion' => fn () => (int) ($quickLookupSnapshot()['version'] ?? 1),
+            'masterSwitchOptions' => function () use ($request) {
+                try {
+                    return app(UnitSwitchController::class)->dashboardOptions($request);
+                } catch (\Throwable $exception) {
+                    Log::error('Falha ao montar opcoes de troca do dashboard.', [
+                        'user_id' => $request->user()?->id,
+                        'unit_id' => $request->session()->get('active_unit.id'),
+                        'exception' => $exception,
+                    ]);
+
+                    return null;
+                }
+            },
             'dashboardContraChequeSummary' => $dashboardContraChequeSummary,
         ]);
     } catch (\Throwable $exception) {
