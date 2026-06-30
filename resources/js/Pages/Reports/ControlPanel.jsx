@@ -70,7 +70,7 @@ export default function ControlPanel({
     };
 
     const selectedPaymentLabel =
-        paymentOptions.find((option) => option.value === data.payment_type)?.label ?? 'Tudo (Dinheiro e Cartao)';
+        paymentOptions.find((option) => option.value === data.payment_type)?.label ?? 'Tudo (Dinheiro + Cartao + Vale)';
 
     const topStoreName = summary?.top_store?.name ?? 'Nenhuma loja com movimento';
 

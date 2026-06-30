@@ -234,7 +234,7 @@ class SalesReportController extends Controller
 
     public function vale(Request $request): Response
     {
-        $this->ensureManager($request);
+        $this->ensureManagementViewer($request);
         [$filterUnitId, $filterUnits, $selectedUnit] = $this->resolveReportUnit($request);
         $allowedUnitIds = $this->reportUnitIds($filterUnits);
         [$start, $end, $startDate, $endDate] = $this->resolveDateRange($request);
@@ -392,7 +392,7 @@ class SalesReportController extends Controller
 
     public function comandasEmAberto(Request $request): Response
     {
-        $this->ensureManager($request);
+        $this->ensureManagementViewer($request);
         [$filterUnitId, $filterUnits, $selectedUnit] = $this->resolveReportUnit($request);
         $allowedUnitIds = $this->reportUnitIds($filterUnits);
         [$start, $end, $startDate, $endDate] = $this->resolveDateRange($request);
@@ -550,7 +550,7 @@ class SalesReportController extends Controller
 
     public function refeicao(Request $request): Response
     {
-        $this->ensureManager($request);
+        $this->ensureManagementViewer($request);
         [$filterUnitId, $filterUnits, $selectedUnit] = $this->resolveReportUnit($request);
         $allowedUnitIds = $this->reportUnitIds($filterUnits);
         [$start, $end, $startDate, $endDate] = $this->resolveDateRange($request);
@@ -3020,7 +3020,7 @@ class SalesReportController extends Controller
             ],
             'paymentType' => $paymentType,
             'paymentOptions' => [
-                ['value' => 'all', 'label' => 'Tudo (Dinheiro e Cartao)'],
+                ['value' => 'all', 'label' => 'Tudo (Dinheiro + Cartao + Vale)'],
                 ['value' => 'dinheiro', 'label' => 'Dinheiro'],
                 ['value' => 'cartao', 'label' => 'Cartao'],
                 ['value' => 'vale', 'label' => 'Vale'],
@@ -3041,6 +3041,15 @@ class SalesReportController extends Controller
         $user = $request->user();
 
         if (!$user || !in_array((int) $user->funcao, [0, 1], true)) {
+            abort(403);
+        }
+    }
+
+    private function ensureManagementViewer(Request $request): void
+    {
+        $user = $request->user();
+
+        if (!$user || !in_array((int) $user->funcao, [0, 1, 2], true)) {
             abort(403);
         }
     }
@@ -4022,10 +4031,18 @@ class SalesReportController extends Controller
             END
         ";
 
+        $valeExpression = "
+            CASE
+                WHEN pagamentos.tipo_pagamento = 'vale'
+                    THEN GREATEST(pagamentos.valor_total, 0)
+                ELSE 0
+            END
+        ";
+
         $totalExpression = match ($paymentType) {
             'dinheiro' => $cashExpression,
             'cartao' => $cardExpression,
-            default => "({$cashExpression}) + ({$cardExpression})",
+            default => "({$cashExpression}) + ({$cardExpression}) + ({$valeExpression})",
         };
 
         return DB::table('tb4_vendas_pg as pagamentos')
