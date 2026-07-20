@@ -30,6 +30,8 @@ class DatabaseToolsController extends Controller
 
     private const SINGLE_SEED_ACTION = 'seed-single';
 
+    private const SINGLE_MIGRATION_ACTION = 'migrate-single';
+
     private const SEEDER_STATUS_PATH = 'seeders-status.json';
 
     private function ensureMaster($user): void
@@ -58,19 +60,21 @@ class DatabaseToolsController extends Controller
         $this->ensureMaster($request->user());
 
         $data = $request->validate([
-            'action' => ['required', 'string', Rule::in(array_merge(array_keys(self::ACTIONS), [self::SINGLE_SEED_ACTION]))],
+            'action' => ['required', 'string', Rule::in(array_merge(array_keys(self::ACTIONS), [self::SINGLE_SEED_ACTION, self::SINGLE_MIGRATION_ACTION]))],
             'seeder' => ['required_if:action,' . self::SINGLE_SEED_ACTION, 'nullable', 'string'],
+            'migration' => ['required_if:action,' . self::SINGLE_MIGRATION_ACTION, 'nullable', 'string'],
         ]);
 
         $action = $data['action'];
         $selectedSeeder = $data['seeder'] ?? null;
+        $selectedMigration = $data['migration'] ?? null;
         $commands = [];
         $outputBlocks = [];
         $hasFailure = false;
         $commandResults = [];
 
         try {
-            $commands = $this->commandsForAction($action, $data['seeder'] ?? null);
+            $commands = $this->commandsForAction($action, $data['seeder'] ?? null, $data['migration'] ?? null);
 
             foreach ($commands as [$command, $params]) {
                 $exitCode = Artisan::call($command, $params);
@@ -93,6 +97,7 @@ class DatabaseToolsController extends Controller
                 'user_id' => $request->user()?->id,
                 'action' => $action,
                 'seeder' => $selectedSeeder,
+                'migration' => $selectedMigration,
             ];
 
             if ($hasFailure) {
@@ -119,12 +124,14 @@ class DatabaseToolsController extends Controller
                 $errorDetail,
                 'Arquivo: ' . $e->getFile() . ':' . $e->getLine(),
                 $selectedSeeder ? 'Seeder: ' . $selectedSeeder : null,
+                $selectedMigration ? 'Migration: ' . $selectedMigration : null,
             ]));
 
             Log::error('Database tools failed', [
                 'user_id' => $request->user()?->id,
                 'action' => $action,
                 'seeder' => $selectedSeeder,
+                'migration' => $selectedMigration,
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -138,8 +145,20 @@ class DatabaseToolsController extends Controller
         }
     }
 
-    private function commandsForAction(string $action, ?string $seederName): array
+    private function commandsForAction(string $action, ?string $seederName, ?string $migrationName): array
     {
+        if ($action === self::SINGLE_MIGRATION_ACTION) {
+            $migration = $this->resolvePendingMigrationByName((string) $migrationName);
+
+            return [
+                ['migrate', [
+                    '--path' => $migration['path'],
+                    '--realpath' => true,
+                    '--force' => true,
+                ]],
+            ];
+        }
+
         if ($action !== self::SINGLE_SEED_ACTION) {
             return self::ACTIONS[$action] ?? [];
         }
@@ -167,16 +186,32 @@ class DatabaseToolsController extends Controller
         abort(422, 'Seeder nao encontrado.');
     }
 
+    private function resolvePendingMigrationByName(string $migrationName): array
+    {
+        $normalized = pathinfo(basename($migrationName), PATHINFO_FILENAME);
+        $migrationStatus = $this->resolveMigrationStatus();
+
+        foreach ($migrationStatus['pending'] as $migration) {
+            if ($migration['name'] === $normalized) {
+                return $migration;
+            }
+        }
+
+        abort(422, 'Migration pendente nao encontrada.');
+    }
+
     private function resolveMigrationStatus(): array
     {
         try {
             $migrator = app('migrator');
-            $files = $migrator->getMigrationFiles([database_path('migrations')]);
+            $files = $this->listMigrationFiles();
             $repository = $migrator->getRepository();
             $ran = $repository->repositoryExists() ? $repository->getRan() : [];
 
-            $pending = array_values(array_diff(array_keys($files), $ran));
-            sort($pending);
+            $pending = array_values(array_filter(
+                $files,
+                fn (array $migration) => ! in_array($migration['name'], $ran, true),
+            ));
 
             return [
                 'total' => count($files),
@@ -198,6 +233,21 @@ class DatabaseToolsController extends Controller
                 'error' => 'Nao foi possivel ler o status das migrations.',
             ];
         }
+    }
+
+    private function listMigrationFiles(): array
+    {
+        $files = app('migrator')->getMigrationFiles([database_path('migrations')]);
+
+        return array_map(
+            fn (string $path, string $name) => [
+                'name' => $name,
+                'label' => $name,
+                'path' => $path,
+            ],
+            $files,
+            array_keys($files),
+        );
     }
 
     private function resolveSeederStatus(): array

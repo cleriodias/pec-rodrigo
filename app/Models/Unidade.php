@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Unidade extends Model
@@ -47,8 +48,14 @@ class Unidade extends Model
         return $this->hasOne(ConfiguracaoFiscal::class, 'tb2_id', 'tb2_id');
     }
 
+<<<<<<< HEAD
     public function matriz(): BelongsTo
     {
         return $this->belongsTo(Matriz::class, 'matriz_id', 'tb30_id');
+=======
+    public function tributacoesFiscaisProduto(): HasMany
+    {
+        return $this->hasMany(ProdutoTributacaoFiscalUnidade::class, 'tb2_id', 'tb2_id');
+>>>>>>> codex/azure-pec83-2026-06-17
     }
 }

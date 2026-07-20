@@ -395,6 +395,13 @@ export default function ProductIndex({
                                                 <i className="bi bi-eye text-lg" aria-hidden="true"></i>
                                             </PrimaryButton>
                                         </Link>
+                                        {Number(auth?.user?.funcao) === 0 && (
+                                            <Link href={route("products.fiscal-rule.index", { product: product.tb1_id })}>
+                                                <InfoButton className="ms-1" aria-label="Tributacao por loja" title="Tributacao fiscal por loja">
+                                                    <i className="bi bi-receipt-cutoff text-lg" aria-hidden="true"></i>
+                                                </InfoButton>
+                                            </Link>
+                                        )}
                                         <Link href={route("products.edit", { product: product.tb1_id })}>
                                             <WarningButton className="ms-1" aria-label="Editar" title="Editar">
                                                 <i className="bi bi-pencil-square text-lg" aria-hidden="true"></i>

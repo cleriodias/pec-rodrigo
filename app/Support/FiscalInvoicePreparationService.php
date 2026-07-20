@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\ConfiguracaoFiscal;
 use App\Models\NotaFiscal;
 use App\Models\Produto;
+use App\Models\ProdutoTributacaoFiscalUnidade;
 use App\Models\VendaPagamento;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -105,6 +106,7 @@ class FiscalInvoicePreparationService
                 }
 
                 [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment);
+                $rtcTaxSnapshots = $this->resolveRtcTaxSnapshots($invoice, $eligibleSales, $config, $unitId);
                 $consumerPayload = $this->resolveConsumerPayload($invoice, $consumer);
                 $payload = $this->buildPayload(
                     $payment,
@@ -116,8 +118,9 @@ class FiscalInvoicePreparationService
                     $consumerPayload,
                     $eligibleSales,
                     $excludedItems,
+                    $rtcTaxSnapshots,
                 );
-                $errors = $this->validatePayload($payment, $config, $modelo, $consumerPayload, $eligibleSales, $excludedItems);
+                $errors = $this->validatePayload($payment, $config, $modelo, $consumerPayload, $eligibleSales, $excludedItems, $rtcTaxSnapshots);
                 $status = $this->resolveStatus($config, $errors);
                 $signedXml = null;
                 $accessKey = null;
@@ -136,6 +139,7 @@ class FiscalInvoicePreparationService
                             $consumerPayload,
                             $config,
                             $certificateData,
+                            $rtcTaxSnapshots,
                         );
 
                         $signedXml = $xmlPayload['xml'];
@@ -217,6 +221,7 @@ class FiscalInvoicePreparationService
         ?array $consumer,
         $eligibleSales,
         array $excludedItems,
+        array $rtcTaxSnapshots,
     ): array {
         $sales = $payment->vendas;
         $unit = $sales->first()?->unidade;
@@ -277,6 +282,7 @@ class FiscalInvoicePreparationService
                 ];
             })->values()->all(),
             'itens_excluidos' => $excludedItems,
+            'tributacao_rtc_2026' => $rtcTaxSnapshots,
         ];
     }
 
@@ -287,6 +293,7 @@ class FiscalInvoicePreparationService
         ?array $consumer,
         $eligibleSales,
         array $excludedItems,
+        array $rtcTaxSnapshots,
     ): array
     {
         $errors = [];
@@ -325,6 +332,17 @@ class FiscalInvoicePreparationService
 
         if (! $config->tb26_emitir_nfe && ! $config->tb26_emitir_nfce) {
             $errors[] = 'Selecione se a unidade vai emitir NF-e, NFC-e ou ambas.';
+        }
+
+        if ($config->tb26_rtc_2026_ativa) {
+            $regime = (string) $config->tb26_regime_tributario;
+            $expectedCrt = $regime === 'simples_nacional' ? 1 : 3;
+
+            if (! in_array($regime, ['simples_nacional', 'lucro_presumido', 'lucro_real'], true)) {
+                $errors[] = 'Regime tributario RTC 2026 nao configurado na loja.';
+            } elseif ((int) $config->tb26_crt !== $expectedCrt) {
+                $errors[] = sprintf('O regime %s exige CRT %d na configuracao fiscal desta loja.', str_replace('_', ' ', $regime), $expectedCrt);
+            }
         }
 
         if ($config->tb26_certificado_valido_ate && $config->tb26_certificado_valido_ate->isPast()) {
@@ -476,8 +494,43 @@ class FiscalInvoicePreparationService
                 }
             }
 
-            if (blank($product->tb1_csosn) && blank($product->tb1_cst)) {
+            if (! $config->tb26_rtc_2026_ativa && blank($product->tb1_csosn) && blank($product->tb1_cst)) {
                 $missingFields[] = 'CSOSN/CST';
+            }
+
+            if ($config->tb26_rtc_2026_ativa) {
+                $tax = $rtcTaxSnapshots[(string) $productId] ?? null;
+                if (! is_array($tax)) {
+                    $missingFields[] = 'tributacao RTC 2026 por loja';
+                } else {
+                    foreach (['cst_ibs_cbs' => 'CST IBS/CBS', 'cclass_trib' => 'cClassTrib', 'aliquota_ibs_uf' => 'aliquota IBS UF', 'aliquota_ibs_mun' => 'aliquota IBS municipio', 'aliquota_cbs' => 'aliquota CBS'] as $field => $label) {
+                        if (! array_key_exists($field, $tax) || $tax[$field] === null || $tax[$field] === '') {
+                            $missingFields[] = $label;
+                        }
+                    }
+
+                    if ((string) $config->tb26_regime_tributario === 'simples_nacional' && blank($tax['csosn'] ?? null)) {
+                        $missingFields[] = 'CSOSN';
+                    }
+
+                    if (now()->year === 2026 && (float) ($tax['aliquota_ibs_mun'] ?? 0) !== 0.0) {
+                        $missingFields[] = 'aliquota IBS municipio deve ser 0,0000 em 2026';
+                    }
+
+                    if (in_array((string) $config->tb26_regime_tributario, ['lucro_presumido', 'lucro_real'], true)) {
+                        if (($tax['cst_icms'] ?? null) !== '00') {
+                            $missingFields[] = 'CST ICMS 00';
+                        }
+                        if (($tax['cst_pis'] ?? null) !== '01' || ($tax['cst_cofins'] ?? null) !== '01') {
+                            $missingFields[] = 'CST PIS/COFINS 01';
+                        }
+                        foreach (['aliquota_icms' => 'aliquota ICMS', 'aliquota_pis' => 'aliquota PIS', 'aliquota_cofins' => 'aliquota COFINS'] as $field => $label) {
+                            if (! array_key_exists($field, $tax) || $tax[$field] === null || $tax[$field] === '') {
+                                $missingFields[] = $label;
+                            }
+                        }
+                    }
+                }
             }
 
             if ($missingFields !== []) {
@@ -491,6 +544,58 @@ class FiscalInvoicePreparationService
         }
 
         return array_values(array_unique($errors));
+    }
+
+    private function resolveRtcTaxSnapshots(?NotaFiscal $invoice, $sales, ?ConfiguracaoFiscal $config, int $unitId): array
+    {
+        if (! $config?->tb26_rtc_2026_ativa) {
+            return [];
+        }
+
+        $storedSnapshot = is_array($invoice?->tb27_payload)
+            ? ($invoice->tb27_payload['tributacao_rtc_2026'] ?? null)
+            : null;
+
+        if (is_array($storedSnapshot) && $storedSnapshot !== []) {
+            return $storedSnapshot;
+        }
+
+        $productIds = $sales->pluck('tb1_id')->map(fn ($id) => (int) $id)->unique()->values();
+        $rules = ProdutoTributacaoFiscalUnidade::query()
+            ->where('tb2_id', $unitId)
+            ->where('tb28_ativo', true)
+            ->whereIn('tb1_id', $productIds)
+            ->get()
+            ->keyBy('tb1_id');
+
+        $snapshots = [];
+        foreach ($productIds as $productId) {
+            $rule = $rules->get($productId);
+            if (! $rule) {
+                continue;
+            }
+
+            $snapshots[(string) $productId] = [
+                'regime_tributario' => $config->tb26_regime_tributario,
+                'csosn' => $rule->tb28_csosn,
+                'cst_icms' => $rule->tb28_cst_icms,
+                'aliquota_icms' => $rule->tb28_aliquota_icms,
+                'cst_pis' => $rule->tb28_cst_pis,
+                'aliquota_pis' => $rule->tb28_aliquota_pis,
+                'cst_cofins' => $rule->tb28_cst_cofins,
+                'aliquota_cofins' => $rule->tb28_aliquota_cofins,
+                'cst_ibs_cbs' => $rule->tb28_cst_ibs_cbs,
+                'cclass_trib' => $rule->tb28_cclass_trib,
+                'aliquota_ibs_uf' => $rule->tb28_aliquota_ibs_uf,
+                'aliquota_ibs_mun' => $rule->tb28_aliquota_ibs_mun,
+                'aliquota_cbs' => $rule->tb28_aliquota_cbs,
+                'reducao_ibs_uf' => $rule->tb28_reducao_ibs_uf,
+                'reducao_ibs_mun' => $rule->tb28_reducao_ibs_mun,
+                'reducao_cbs' => $rule->tb28_reducao_cbs,
+            ];
+        }
+
+        return $snapshots;
     }
 
     private function resolveConsumerPayload(?NotaFiscal $invoice, ?array $consumer): ?array
