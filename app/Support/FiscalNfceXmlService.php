@@ -83,7 +83,7 @@ class FiscalNfceXmlService
         $this->appendItems($document, $infNfe, $sales, (int) $configuration->tb26_crt, $configuration, $rtcTaxSnapshots);
         $documentTotal = $this->documentTotal($sales, $rtcTaxSnapshots, (bool) $configuration->tb26_rtc_2026_ativa);
 
-        $this->appendTotals($document, $infNfe, $sales, $rtcTaxSnapshots, (bool) $configuration->tb26_rtc_2026_ativa);
+        $this->appendTotals($document, $infNfe, $sales, (int) $configuration->tb26_crt, $rtcTaxSnapshots, (bool) $configuration->tb26_rtc_2026_ativa);
         $this->appendTransport($document, $infNfe);
         $this->appendPayment($document, $infNfe, $payment, $documentTotal);
         $this->appendAdditionalInfo($document, $infNfe, $payment, $unit->tb2_nome);
@@ -458,9 +458,10 @@ class FiscalNfceXmlService
         return max(0, (float) $rate * (1 - max(0, min(100, (float) $reduction)) / 100));
     }
 
-    private function appendTotals(DOMDocument $document, DOMElement $infNfe, $sales, array $rtcTaxSnapshots, bool $rtcEnabled): void
+    private function appendTotals(DOMDocument $document, DOMElement $infNfe, $sales, int $crt, array $rtcTaxSnapshots, bool $rtcEnabled): void
     {
         $totals = $this->calculateIbsCbsTotals($sales, $rtcTaxSnapshots, $rtcEnabled);
+        $icmsTotals = $this->calculateIcmsTotals($sales, $rtcTaxSnapshots, $crt === 3 && $rtcEnabled);
         $sumProducts = number_format($totals['base'], 2, '.', '');
         $documentTotal = number_format($totals['base'] + $totals['ibs_uf'] + $totals['ibs_mun'] + $totals['cbs'], 2, '.', '');
 
@@ -470,7 +471,7 @@ class FiscalNfceXmlService
         $icmsTot = $document->createElement('ICMSTot');
         $total->appendChild($icmsTot);
         foreach ([
-            'vBC' => '0.00', 'vICMS' => '0.00', 'vICMSDeson' => '0.00', 'vFCP' => '0.00',
+            'vBC' => number_format($icmsTotals['base'], 2, '.', ''), 'vICMS' => number_format($icmsTotals['value'], 2, '.', ''), 'vICMSDeson' => '0.00', 'vFCP' => '0.00',
             'vBCST' => '0.00', 'vST' => '0.00', 'vFCPST' => '0.00', 'vFCPSTRet' => '0.00',
             'vProd' => $sumProducts, 'vFrete' => '0.00', 'vSeg' => '0.00', 'vDesc' => '0.00',
             'vII' => '0.00', 'vIPI' => '0.00', 'vIPIDevol' => '0.00', 'vPIS' => '0.00',
@@ -534,6 +535,25 @@ class FiscalNfceXmlService
             $totals['ibs_uf'] += round($base * $this->effectiveRate($tax['aliquota_ibs_uf'] ?? 0, $tax['reducao_ibs_uf'] ?? 0) / 100, 2);
             $totals['ibs_mun'] += round($base * $this->effectiveRate($tax['aliquota_ibs_mun'] ?? 0, $tax['reducao_ibs_mun'] ?? 0) / 100, 2);
             $totals['cbs'] += round($base * $this->effectiveRate($tax['aliquota_cbs'] ?? 0, $tax['reducao_cbs'] ?? 0) / 100, 2);
+        }
+
+        return $totals;
+    }
+
+    private function calculateIcmsTotals($sales, array $rtcTaxSnapshots, bool $hasIcms00): array
+    {
+        $totals = ['base' => 0.0, 'value' => 0.0];
+
+        if (! $hasIcms00) {
+            return $totals;
+        }
+
+        foreach ($sales as $sale) {
+            $base = (float) $sale->valor_total;
+            $rate = (float) ($rtcTaxSnapshots[(string) $sale->tb1_id]['aliquota_icms'] ?? 0);
+
+            $totals['base'] += $base;
+            $totals['value'] += round($base * $rate / 100, 2);
         }
 
         return $totals;
