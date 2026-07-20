@@ -505,11 +505,11 @@ class FiscalNfceXmlService
 
         $cbs = $document->createElement('gCBS');
         $ibsCbsTot->appendChild($cbs);
-        $this->appendTextElement($document, $cbs, 'vCredPres', '0.00');
-        $this->appendTextElement($document, $cbs, 'vCredPresCondSus', '0.00');
         $this->appendTextElement($document, $cbs, 'vDif', '0.00');
         $this->appendTextElement($document, $cbs, 'vDevTrib', '0.00');
         $this->appendTextElement($document, $cbs, 'vCBS', number_format($totals['cbs'], 2, '.', ''));
+        $this->appendTextElement($document, $cbs, 'vCredPres', '0.00');
+        $this->appendTextElement($document, $cbs, 'vCredPresCondSus', '0.00');
     }
 
     private function documentTotal($sales, array $rtcTaxSnapshots, bool $rtcEnabled): float
