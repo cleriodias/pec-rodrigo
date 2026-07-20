@@ -1,4 +1,5 @@
 import { formatBrazilDateTime } from '@/Utils/date';
+import qrcode from 'qrcode-generator';
 
 export const RECEIPT_PAYMENT_LABELS = {
     dinheiro: 'Dinheiro',
@@ -14,6 +15,24 @@ export const RECEIPT_PAYMENT_LABELS = {
 
 const hasReceiptValue = (value) =>
     value !== null && value !== undefined && String(value).trim() !== '';
+
+const buildFiscalQrCodeDataUrl = (value) => {
+    const data = String(value ?? '').trim();
+
+    if (data === '') {
+        return '';
+    }
+
+    try {
+        const qrCode = qrcode(0, 'M');
+        qrCode.addData(data, 'Byte');
+        qrCode.make();
+
+        return qrCode.createDataURL(4, 4);
+    } catch {
+        return '';
+    }
+};
 
 export const formatReceiptCurrency = (value) =>
     Number(value ?? 0).toLocaleString('pt-BR', {
@@ -186,9 +205,7 @@ export const buildFiscalReceiptHtml = (receipt) => {
     const accessKey = receipt?.access_key ? escapeReceiptHtml(receipt.access_key) : '';
     const consultationUrl = receipt?.consulta_url ? escapeReceiptHtml(receipt.consulta_url) : '';
     const qrCodeData = String(receipt?.qr_code_data ?? '').trim();
-    const qrCodeImageUrl = qrCodeData !== ''
-        ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrCodeData)}`
-        : '';
+    const qrCodeImageUrl = buildFiscalQrCodeDataUrl(qrCodeData);
     const previewWarning = receipt?.is_preview
         ? `
             <div class="warning-box">

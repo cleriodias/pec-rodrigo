@@ -1578,7 +1578,7 @@ class SaleController extends Controller
         ];
     }
 
-    private function extractIbsCbsTaxSummary(DOMXPath $xpath): ?array
+    private function extractIbsCbsTaxSummary(\DOMXPath $xpath): ?array
     {
         if ((int) $xpath->evaluate('count(//nfe:total/nfe:IBSCBSTot)') === 0) {
             return null;
