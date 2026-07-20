@@ -1359,6 +1359,7 @@ class SalesReportController extends Controller
             'receipt' => $invoice->tb27_recibo,
             'consulta_url' => $xmlData['consulta_url'] ?? null,
             'qr_code_data' => $xmlData['qr_code_data'] ?? null,
+            'tax_summary' => $xmlData['tax_summary'] ?? null,
             'is_preview' => $invoice->tb27_status !== 'emitida',
             'items' => $fiscalItems->isNotEmpty()
                 ? $fiscalItems
@@ -1447,6 +1448,20 @@ class SalesReportController extends Controller
             'access_key' => $accessKey !== '' ? preg_replace('/^NFe/', '', $accessKey) : null,
             'qr_code_data' => $this->reportStringOrNull($xpath->evaluate('string(//nfe:infNFeSupl/nfe:qrCode)')),
             'consulta_url' => $this->reportStringOrNull($xpath->evaluate('string(//nfe:infNFeSupl/nfe:urlChave)')),
+            'tax_summary' => $this->extractReportIbsCbsTaxSummary($xpath),
+        ];
+    }
+
+    private function extractReportIbsCbsTaxSummary(DOMXPath $xpath): ?array
+    {
+        if ((int) $xpath->evaluate('count(//nfe:total/nfe:IBSCBSTot)') === 0) {
+            return null;
+        }
+
+        return [
+            'cbs' => (float) $xpath->evaluate('string(//nfe:total/nfe:IBSCBSTot/nfe:gCBS/nfe:vCBS)'),
+            'ibs' => (float) $xpath->evaluate('string(//nfe:total/nfe:IBSCBSTot/nfe:gIBS/nfe:vIBS)'),
+            'is' => (float) $xpath->evaluate('string(//nfe:total/nfe:ISTot/nfe:vIS)'),
         ];
     }
 

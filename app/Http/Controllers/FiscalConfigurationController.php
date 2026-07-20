@@ -863,6 +863,7 @@ class FiscalConfigurationController extends Controller
             'receipt' => $invoice->tb27_recibo,
             'consulta_url' => $xmlData['consulta_url'] ?? null,
             'qr_code_data' => $xmlData['qr_code_data'] ?? null,
+            'tax_summary' => $xmlData['tax_summary'] ?? null,
             'is_preview' => $invoice->tb27_status !== 'emitida',
             'excluded_items' => $excludedItems->values()->all(),
             'items' => $fiscalItems
@@ -951,6 +952,20 @@ class FiscalConfigurationController extends Controller
             'card_present' => (bool) $xpath->evaluate('count(//nfe:infNFe/nfe:pag/nfe:detPag/nfe:card)'),
             'signature_present' => (bool) $xpath->evaluate('count(//ds:Signature)'),
             'csc_id' => $payloadParts[3] ?? null,
+            'tax_summary' => $this->extractIbsCbsTaxSummary($xpath),
+        ];
+    }
+
+    private function extractIbsCbsTaxSummary(DOMXPath $xpath): ?array
+    {
+        if ((int) $xpath->evaluate('count(//nfe:total/nfe:IBSCBSTot)') === 0) {
+            return null;
+        }
+
+        return [
+            'cbs' => (float) $xpath->evaluate('string(//nfe:total/nfe:IBSCBSTot/nfe:gCBS/nfe:vCBS)'),
+            'ibs' => (float) $xpath->evaluate('string(//nfe:total/nfe:IBSCBSTot/nfe:gIBS/nfe:vIBS)'),
+            'is' => (float) $xpath->evaluate('string(//nfe:total/nfe:ISTot/nfe:vIS)'),
         ];
     }
 

@@ -217,6 +217,19 @@ export const buildFiscalReceiptHtml = (receipt) => {
             `,
         )
         .join('');
+    const taxSummary = receipt?.tax_summary && typeof receipt.tax_summary === 'object'
+        ? receipt.tax_summary
+        : null;
+    const taxSummaryHtml = taxSummary
+        ? `
+            <div class="tax-summary">
+                <div class="section-title">Tributos do consumo</div>
+                <div class="tax-row"><span>(*) CBS</span><strong>${formatReceiptCurrency(Number(taxSummary.cbs ?? 0))}</strong></div>
+                <div class="tax-row"><span>(*) IBS</span><strong>${formatReceiptCurrency(Number(taxSummary.ibs ?? 0))}</strong></div>
+                <div class="tax-row"><span>(*) IS</span><strong>${formatReceiptCurrency(Number(taxSummary.is ?? 0))}</strong></div>
+            </div>
+        `
+        : '';
 
     return `
         <!DOCTYPE html>
@@ -261,6 +274,9 @@ export const buildFiscalReceiptHtml = (receipt) => {
                         margin: 2px 0;
                     }
                     .summary-row.total { font-size: 14px; font-weight: 700; margin-top: 6px; }
+                    .tax-summary { border: 1px solid #000; padding: 6px; margin: 8px 0; }
+                    .tax-summary .section-title { text-align: center; margin-bottom: 4px; }
+                    .tax-row { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; margin: 2px 0; }
                     .access-key {
                         font-size: 10px;
                         line-height: 1.4;
@@ -299,6 +315,10 @@ export const buildFiscalReceiptHtml = (receipt) => {
                 <div class="section-title">Itens</div>
                 ${itemsHtml || '<p>Nenhum item fiscal disponivel para impressao.</p>'}
                 <div class="divider"></div>
+                ${taxSummaryHtml}
+                <div class="summary-row total"><span>Valor a pagar</span><strong>${formatReceiptCurrency(receipt?.total)}</strong></div>
+                <div class="divider"></div>
+                <div class="section-title">Forma de pagamento</div>
                 <div class="summary-row"><span>Pagamento</span><strong>${escapeReceiptHtml(receipt?.payment_label || '--')}</strong></div>
                 ${
                     receipt?.amount_paid !== null && receipt?.amount_paid !== undefined
@@ -315,7 +335,6 @@ export const buildFiscalReceiptHtml = (receipt) => {
                         ? `<div class="summary-row"><span>Troco</span><strong>${formatReceiptCurrency(receipt.change)}</strong></div>`
                         : ''
                 }
-                <div class="summary-row total"><span>Total</span><strong>${formatReceiptCurrency(receipt?.total)}</strong></div>
                 <div class="divider"></div>
                 ${protocolBlock}
                 ${receiptBlock}

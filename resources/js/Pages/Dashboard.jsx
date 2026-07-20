@@ -1903,6 +1903,7 @@ export default function Dashboard({
             receipt: receiptData.fiscal.recibo || null,
             consulta_url: null,
             qr_code_data: receiptData.fiscal.xml_debug?.qr_code_data || null,
+            tax_summary: receiptData.fiscal.tax_summary || null,
             is_preview: receiptData.fiscal.status !== 'emitida',
             items: fiscalItems.map((item) => ({
                 id: item.product_id ?? item.id ?? null,
