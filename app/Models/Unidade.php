@@ -48,14 +48,8 @@ class Unidade extends Model
         return $this->hasOne(ConfiguracaoFiscal::class, 'tb2_id', 'tb2_id');
     }
 
-<<<<<<< HEAD
-    public function matriz(): BelongsTo
-    {
-        return $this->belongsTo(Matriz::class, 'matriz_id', 'tb30_id');
-=======
     public function tributacoesFiscaisProduto(): HasMany
     {
         return $this->hasMany(ProdutoTributacaoFiscalUnidade::class, 'tb2_id', 'tb2_id');
->>>>>>> codex/azure-pec83-2026-06-17
     }
 }
