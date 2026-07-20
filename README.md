@@ -210,55 +210,29 @@ git push <remote> <branch>
 git push origin main
 ```
 
-## Deploy na KingHost
+## Deploy na Azure
 
-### Ambiente de producao
+O deploy de producao acontece pelo workflow .github/workflows/deploy.yml, acionado a cada push na branch main.
 
-No servidor da KingHost, use estas variaveis no `.env` de producao:
+A aplicacao e publicada no Azure App Service **PEC83**, no resource group rg-pec-rodrigo, com Nginx apontando para a pasta public.
 
-```env
-APP_NAME=PEC
-APP_ENV=production
-APP_KEY=gerar_com_php_artisan_key_generate
-APP_DEBUG=false
-APP_TIMEZONE=America/Sao_Paulo
-APP_URL=https://paoecafe83.com.br
+### Segredos necessarios no GitHub Actions
 
-DB_CONNECTION=mysql
-DB_HOST=mysql.paoecafe83.com.br
-DB_PORT=3306
-DB_DATABASE=paoecafe83
-DB_USERNAME=paoecafe83
-DB_PASSWORD=sua_senha_de_banco
-
-SESSION_DRIVER=file
-SESSION_LIFETIME=120
-SESSION_ENCRYPT=false
-SESSION_PATH=/
-SESSION_DOMAIN=null
-
-CACHE_STORE=file
-QUEUE_CONNECTION=sync
-FILESYSTEM_DISK=local
-APP_STORAGE=/home/paoecafe83/storage
-```
-
-### Publicacao
-
-- O deploy principal acontece pelo workflow `.github/workflows/deploy.yml`.
-- O pipeline faz build do PHP e do front-end, gera os assets e envia o conteudo para a KingHost por FTP.
-- Como a KingHost trabalha com a pasta `www/`, o upload deve ser publicado nela para que o dominio encontre o `index.php` do projeto.
-- Configure no GitHub Actions o segredo `KINGHOST_FTP_PASSWORD` com a senha do FTP.
-
-### Passos iniciais no servidor
-
-1. Criar o banco `paoecafe83` na KingHost.
-2. Ajustar o `.env` de producao com os dados acima.
-3. Executar `php artisan key:generate` uma unica vez no servidor, se a chave ainda nao existir.
-4. Executar `php artisan migrate --force` para criar as tabelas no banco de producao.
-5. Conferir permissao de escrita para `storage` e `bootstrap/cache`.
+- AZURE_CLIENT_ID
+- AZURE_TENANT_ID
+- AZURE_SUBSCRIPTION_ID
+- LARAVEL_APP_KEY
+- DB_CONNECTION
+- DB_HOST
+- DB_PORT
+- DB_DATABASE
+- DB_USERNAME
+- DB_PASSWORD
+- APP_URL (opcional; sem ele, o workflow usa a URL padrao do App Service)
 
 ### Observacoes
 
-- Os arquivos de deploy agora devem seguir o fluxo de FTP da KingHost.
-- O banco de producao deve ser consultado diretamente na KingHost quando houver necessidade de validacao operacional.
+- O pipeline instala dependencias PHP e Node, gera os assets Vite e publica o pacote por Zip Deploy.
+- Certificados (.pfx e .p12), .env, banco, logs e arquivos temporarios nao seguem no pacote.
+- O armazenamento persistente da aplicacao fica em /home/site/storage.
+- A primeira configuracao da infraestrutura pode ser executada manualmente pelo workflow_dispatch; os pushes seguintes apenas publicam a aplicacao.
