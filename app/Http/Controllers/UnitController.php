@@ -32,7 +32,6 @@ class UnitController extends Controller
         $todayEnd = Carbon::today()->endOfDay();
         $unitsQuery = Unidade::query()
             ->select('tb2_unidades.*')
-            ->with('matriz:tb30_id,tb30_nome,tb30_status')
             ->with('configuracaoFiscal:tb26_id,tb2_id,tb26_geracao_automatica_ativa')
             ->selectSub(
                 DB::table('tb27_notas_fiscais')

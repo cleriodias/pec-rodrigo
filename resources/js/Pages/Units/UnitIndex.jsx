@@ -114,32 +114,6 @@ export default function UnitIndex({ auth, units, canCreate = false, canActivateF
         );
     };
 
-    const renderMatrizBadge = (matriz) => {
-        if (!matriz?.tb30_nome) {
-            return (
-                <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
-                    Sem matriz
-                </span>
-            );
-        }
-
-        const isActive = Number(matriz.tb30_status) === 1;
-
-        return (
-            <span
-                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${
-                    isActive
-                        ? 'bg-indigo-100 text-indigo-700'
-                        : 'bg-slate-100 text-slate-500'
-                }`}
-                title={`Matriz: ${matriz.tb30_nome}`}
-            >
-                <i className="bi bi-diagram-3" aria-hidden="true"></i>
-                {matriz.tb30_nome}
-            </span>
-        );
-    };
-
     return (
         <AuthenticatedLayout
             user={auth.user}
@@ -169,7 +143,6 @@ export default function UnitIndex({ auth, units, canCreate = false, canActivateF
                                     <tr>
                                         <td className="px-4 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">ID</td>
                                         <td className="px-4 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">Nome</td>
-                                        <td className="px-4 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">Matriz</td>
                                         <td className="px-4 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">NF</td>
                                         <td className="px-4 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">CEP</td>
                                         <td className="px-4 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">Telefone</td>
@@ -188,9 +161,7 @@ export default function UnitIndex({ auth, units, canCreate = false, canActivateF
                                     <td className="px-4 py-2 text-sm text-gray-500 tracking-wider">
                                         {unit.tb2_nome}
                                     </td>
-                                    <td className="px-4 py-2 text-sm text-gray-500 tracking-wider">
-                                        {renderMatrizBadge(unit.matriz)}
-                                    </td>
+
                                     <td className="px-4 py-2 text-sm text-gray-500 tracking-wider">
                                         <div className="flex min-w-[180px] items-center justify-between gap-3">
                                             <Link
