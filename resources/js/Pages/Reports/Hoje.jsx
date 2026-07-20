@@ -132,8 +132,9 @@ export default function Hoje({ records = [], reportDate, unit, filters = {} }) {
         printWindow.document.write(buildFiscalReceiptHtml(receipt));
         printWindow.document.close();
         printWindow.focus();
-        printWindow.print();
-        printWindow.close();
+        printWindow.addEventListener('afterprint', () => {
+            printWindow.close();
+        }, { once: true });
     };
 
     const headerContent = (
