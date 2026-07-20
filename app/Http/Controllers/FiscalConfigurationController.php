@@ -314,6 +314,8 @@ class FiscalConfigurationController extends Controller
             'tb26_emitir_nfe' => ['nullable', 'boolean'],
             'tb26_emitir_nfce' => ['nullable', 'boolean'],
             'tb26_geracao_automatica_ativa' => ['nullable', 'boolean'],
+            'tb26_rtc_2026_ativa' => ['nullable', 'boolean'],
+            'tb26_regime_tributario' => ['nullable', Rule::in(['simples_nacional', 'lucro_presumido', 'lucro_real'])],
             'tb26_ambiente' => ['required', Rule::in(['homologacao', 'producao'])],
             'tb26_serie' => ['required', 'string', 'max:10'],
             'tb26_proximo_numero' => ['required', 'integer', 'min:1'],
@@ -388,6 +390,25 @@ class FiscalConfigurationController extends Controller
                 ]);
             }
 
+            $currentRtcStatus = $configuration->exists
+                ? (bool) $configuration->tb26_rtc_2026_ativa
+                : false;
+            $requestedRtcStatus = $request->has('tb26_rtc_2026_ativa')
+                ? (bool) ($data['tb26_rtc_2026_ativa'] ?? false)
+                : $currentRtcStatus;
+
+            if ($requestedRtcStatus !== $currentRtcStatus && ! ManagementScope::isMaster($user)) {
+                throw ValidationException::withMessages([
+                    'tb26_rtc_2026_ativa' => 'Somente o master pode ativar ou desativar a RTC 2026.',
+                ]);
+            }
+
+            if ($requestedRtcStatus && blank($data['tb26_regime_tributario'] ?? null)) {
+                throw ValidationException::withMessages([
+                    'tb26_regime_tributario' => 'Informe o regime tributario da loja para ativar a RTC 2026.',
+                ]);
+            }
+
             if ($request->boolean('remover_certificado') && filled($configuration->tb26_certificado_arquivo)) {
                 Storage::delete($configuration->tb26_certificado_arquivo);
                 $configuration->tb26_certificado_arquivo = null;
@@ -441,6 +462,8 @@ class FiscalConfigurationController extends Controller
                 'tb26_emitir_nfe' => (bool) ($data['tb26_emitir_nfe'] ?? false),
                 'tb26_emitir_nfce' => (bool) ($data['tb26_emitir_nfce'] ?? false),
                 'tb26_geracao_automatica_ativa' => $requestedFiscalGenerationStatus,
+                'tb26_rtc_2026_ativa' => $requestedRtcStatus,
+                'tb26_regime_tributario' => $data['tb26_regime_tributario'] ?? null,
                 'tb26_ambiente' => $data['tb26_ambiente'],
                 'tb26_serie' => trim((string) $data['tb26_serie']),
                 'tb26_proximo_numero' => (int) $data['tb26_proximo_numero'],
@@ -511,6 +534,7 @@ class FiscalConfigurationController extends Controller
     ): RedirectResponse {
         $user = $request->user();
         $this->ensureAdmin($user);
+        $this->ensureFiscalPreparationAllowed($user);
 
         $data = $request->validate([
             'tb2_id' => ['required', 'integer', 'exists:tb2_unidades,tb2_id'],
@@ -535,6 +559,7 @@ class FiscalConfigurationController extends Controller
     ): RedirectResponse {
         $user = $request->user();
         $this->ensureAdmin($user);
+        $this->ensureFiscalPreparationAllowed($user);
 
         if (! ManagementScope::canManageUnit($user, (int) $notaFiscal->tb2_id)) {
             abort(403, 'Acesso negado.');
@@ -612,6 +637,7 @@ class FiscalConfigurationController extends Controller
     ): RedirectResponse {
         $user = $request->user();
         $this->ensureAdmin($user);
+        $this->ensureFiscalPreparationAllowed($user);
 
         if (! ManagementScope::canManageUnit($user, (int) $notaFiscal->tb2_id)) {
             abort(403, 'Acesso negado.');
@@ -651,6 +677,13 @@ class FiscalConfigurationController extends Controller
     {
         if (! $user || ! in_array((int) $user->funcao, [0, 1], true)) {
             abort(403, 'Acesso negado.');
+        }
+    }
+
+    private function ensureFiscalPreparationAllowed($user): void
+    {
+        if (! $user || (int) $user->id !== 1) {
+            abort(403, 'Durante os testes, somente Clerio pode preparar ou regenerar notas fiscais.');
         }
     }
 
@@ -1283,6 +1316,8 @@ class FiscalConfigurationController extends Controller
             'tb26_emitir_nfe' => false,
             'tb26_emitir_nfce' => false,
             'tb26_geracao_automatica_ativa' => false,
+            'tb26_rtc_2026_ativa' => false,
+            'tb26_regime_tributario' => null,
             'tb26_ambiente' => 'homologacao',
             'tb26_serie' => '1',
             'tb26_proximo_numero' => 1,
@@ -1324,6 +1359,8 @@ class FiscalConfigurationController extends Controller
             'tb26_emitir_nfe' => (bool) ($configuration?->tb26_emitir_nfe ?? false),
             'tb26_emitir_nfce' => (bool) ($configuration?->tb26_emitir_nfce ?? false),
             'tb26_geracao_automatica_ativa' => (bool) ($configuration?->tb26_geracao_automatica_ativa ?? false),
+            'tb26_rtc_2026_ativa' => (bool) ($configuration?->tb26_rtc_2026_ativa ?? false),
+            'tb26_regime_tributario' => $configuration?->tb26_regime_tributario,
             'tb26_ambiente' => $configuration?->tb26_ambiente ?? 'homologacao',
             'tb26_serie' => $configuration?->tb26_serie ?? '1',
             'tb26_proximo_numero' => (int) ($configuration?->tb26_proximo_numero ?? 1),

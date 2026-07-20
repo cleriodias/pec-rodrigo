@@ -48,6 +48,11 @@ class Produto extends Model
         'tb1_vr_credit' => 'boolean',
     ];
 
+    public function tributacoesFiscaisUnidade(): HasMany
+    {
+        return $this->hasMany(ProdutoTributacaoFiscalUnidade::class, 'tb1_id', 'tb1_id');
+    }
+
     public function stockMovements(): HasMany
     {
         return $this->hasMany(ProductStockMovement::class, 'product_id', 'tb1_id');

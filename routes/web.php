@@ -9,6 +9,7 @@ use App\Http\Controllers\DiscardSettingsController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\FiscalConfigurationController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ProductFiscalRuleController;
 use App\Http\Controllers\ProductDiscardController;
 use App\Http\Controllers\ProductStockController;
 use App\Http\Controllers\ProfileController;
@@ -373,6 +374,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/products/search', [ProductController::class, 'search'])->name('products.search');
     Route::get('/products/favorites', [ProductController::class, 'favorites'])->name('products.favorites');
     Route::post('/products/{product}/favorite', [ProductController::class, 'toggleFavorite'])->name('products.favorite');
+    Route::get('/products/{product}/tributacao-fiscal', [ProductFiscalRuleController::class, 'index'])->name('products.fiscal-rule.index');
+    Route::post('/products/{product}/tributacao-fiscal', [ProductFiscalRuleController::class, 'store'])->name('products.fiscal-rule.store');
     Route::resource('products', ProductController::class);
     Route::get('/sales/open-comandas', [SaleController::class, 'openComandas'])->name('sales.open-comandas');
     Route::get('/sales/restrictions', [SaleController::class, 'restrictions'])->name('sales.restrictions');

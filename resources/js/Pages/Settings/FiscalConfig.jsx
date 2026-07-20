@@ -49,6 +49,8 @@ const buildFiscalFormData = (configuration = {}, selectedUnitId = null) => ({
     tb26_emitir_nfe: Boolean(configuration?.tb26_emitir_nfe),
     tb26_emitir_nfce: Boolean(configuration?.tb26_emitir_nfce),
     tb26_geracao_automatica_ativa: configuration?.tb26_geracao_automatica_ativa ?? false,
+    tb26_rtc_2026_ativa: Boolean(configuration?.tb26_rtc_2026_ativa),
+    tb26_regime_tributario: configuration?.tb26_regime_tributario ?? '',
     tb26_ambiente: configuration?.tb26_ambiente ?? 'homologacao',
     tb26_serie: configuration?.tb26_serie ?? '1',
     tb26_proximo_numero: configuration?.tb26_proximo_numero ?? 1,
@@ -492,6 +494,34 @@ const FiscalConfigFormSection = ({
                                     <option value="3">3 - Regime normal</option>
                                 </select>
                                 <InputError message={errors.tb26_crt} className="mt-2" />
+                            </div>
+
+                            <div>
+                                <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Regime tributario</label>
+                                <select
+                                    value={data.tb26_regime_tributario}
+                                    onChange={(event) => setData('tb26_regime_tributario', event.target.value)}
+                                    className={fiscalFieldClassName}
+                                >
+                                    <option value="">Selecione quando usar RTC 2026</option>
+                                    <option value="simples_nacional">Simples Nacional</option>
+                                    <option value="lucro_presumido">Lucro Presumido</option>
+                                    <option value="lucro_real">Lucro Real</option>
+                                </select>
+                                <InputError message={errors.tb26_regime_tributario} className="mt-2" />
+                            </div>
+
+                            <div className="md:col-span-2">
+                                <label className="flex items-start gap-3 rounded-[18px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+                                    <input
+                                        type="checkbox"
+                                        checked={Boolean(data.tb26_rtc_2026_ativa)}
+                                        onChange={(event) => setData('tb26_rtc_2026_ativa', event.target.checked)}
+                                        className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span><strong>RTC 2026 ativa nesta loja</strong><br />Exige cadastro IBS/CBS por produto e loja antes da emissao.</span>
+                                </label>
+                                <InputError message={errors.tb26_rtc_2026_ativa} className="mt-2" />
                             </div>
 
                             <div>

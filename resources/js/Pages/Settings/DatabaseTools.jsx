@@ -59,6 +59,7 @@ export default function DatabaseTools({
 }) {
     const { flash } = usePage().props;
     const [pendingAction, setPendingAction] = useState(null);
+    const [showMigrations, setShowMigrations] = useState(false);
     const [showSeeders, setShowSeeders] = useState(false);
 
     const handleAction = (action, payload = {}) => {
@@ -87,8 +88,6 @@ export default function DatabaseTools({
     const migrationsTotal = migrationStatus?.total ?? 0;
     const migrationsRan = migrationStatus?.ran ?? 0;
     const migrationsError = migrationStatus?.error;
-    const pendingPreview = pendingMigrations.slice(0, 5);
-    const pendingRest = Math.max(pendingCount - pendingPreview.length, 0);
     const seedersTotal = seederStatus?.total ?? 0;
     const seederPending = Boolean(seederStatus?.pending);
     const seederReason = seederStatus?.pending_reason;
@@ -127,6 +126,19 @@ export default function DatabaseTools({
             {
                 action: 'seed-single',
                 seeder: seeder.name,
+            },
+        );
+    };
+
+    const handleRunMigration = (migration) => {
+        handleAction(
+            {
+                key: 'migrate-single:' + migration.name,
+                confirm: 'Executar somente ' + (migration.label ?? migration.name) + '? Isso pode alterar o banco.',
+            },
+            {
+                action: 'migrate-single',
+                migration: migration.name,
             },
         );
     };
@@ -192,19 +204,38 @@ export default function DatabaseTools({
                                 </p>
                             ) : pendingCount > 0 ? (
                                 <div className="mt-3">
-                                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">
-                                        Pendentes
-                                    </p>
-                                    <ul className="mt-2 space-y-1 text-xs text-gray-600 dark:text-gray-300">
-                                        {pendingPreview.map((name) => (
-                                            <li key={name} className="break-all">
-                                                {name}
-                                            </li>
-                                        ))}
-                                        {pendingRest > 0 && (
-                                            <li>+{pendingRest} outras</li>
-                                        )}
-                                    </ul>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowMigrations((current) => !current)}
+                                        className="inline-flex items-center gap-2 text-xs font-semibold text-blue-700 transition hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-100"
+                                    >
+                                        Migrations pendentes: {pendingCount}
+                                        <i className={'bi ' + (showMigrations ? 'bi-chevron-up' : 'bi-chevron-down')} aria-hidden="true"></i>
+                                    </button>
+                                    {showMigrations && (
+                                        <div className="mt-3 space-y-2 rounded-xl border border-gray-100 bg-gray-50 p-3 dark:border-gray-800 dark:bg-gray-800/60">
+                                            {pendingMigrations.map((migration) => {
+                                                const isMigrationBusy = pendingAction === 'migrate-single:' + migration.name;
+
+                                                return (
+                                                    <div key={migration.name} className="flex flex-col gap-2 rounded-lg border border-white bg-white p-3 text-xs shadow-sm dark:border-gray-700 dark:bg-gray-900 sm:flex-row sm:items-center sm:justify-between">
+                                                        <p className="min-w-0 break-all font-semibold text-gray-700 dark:text-gray-100">
+                                                            {migration.label ?? migration.name}
+                                                        </p>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRunMigration(migration)}
+                                                            disabled={Boolean(pendingAction)}
+                                                            className={'inline-flex items-center justify-center gap-2 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 font-semibold text-indigo-800 transition hover:border-indigo-300 disabled:cursor-not-allowed disabled:opacity-60 dark:border-indigo-500/40 dark:bg-indigo-900/20 dark:text-indigo-200 ' + (isMigrationBusy ? 'opacity-70' : '')}
+                                                        >
+                                                            <i className="bi bi-play-fill" aria-hidden="true"></i>
+                                                            {isMigrationBusy ? 'Executando...' : 'Executar'}
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
                             ) : (
                                 <p className="mt-3 text-xs text-gray-500 dark:text-gray-300">

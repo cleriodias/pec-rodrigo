@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Unidade extends Model
@@ -43,5 +44,10 @@ class Unidade extends Model
     public function configuracaoFiscal(): HasOne
     {
         return $this->hasOne(ConfiguracaoFiscal::class, 'tb2_id', 'tb2_id');
+    }
+
+    public function tributacoesFiscaisProduto(): HasMany
+    {
+        return $this->hasMany(ProdutoTributacaoFiscalUnidade::class, 'tb2_id', 'tb2_id');
     }
 }

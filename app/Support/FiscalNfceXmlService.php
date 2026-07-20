@@ -30,6 +30,7 @@ class FiscalNfceXmlService
         ?array $consumer,
         ConfiguracaoFiscal $configuration,
         array $certificateData,
+        array $rtcTaxSnapshots = [],
     ): array {
         if ($invoice->tb27_modelo !== 'nfce') {
             throw new RuntimeException('A geracao automatica de XML assinado nesta etapa esta disponivel apenas para NFC-e.');
@@ -79,10 +80,10 @@ class FiscalNfceXmlService
         $this->appendIde($document, $infNfe, $configuration, $issueDate, $cUf, $cNf, $serie, $number, $verifierDigit);
         $this->appendEmitter($document, $infNfe, $configuration, $unitCnpj);
         $this->appendDestination($document, $infNfe, $consumer);
-        $this->appendItems($document, $infNfe, $sales, (int) $configuration->tb26_crt, $configuration);
-        $documentTotal = (float) $sales->sum('valor_total');
+        $this->appendItems($document, $infNfe, $sales, (int) $configuration->tb26_crt, $configuration, $rtcTaxSnapshots);
+        $documentTotal = $this->documentTotal($sales, $rtcTaxSnapshots, (bool) $configuration->tb26_rtc_2026_ativa);
 
-        $this->appendTotals($document, $infNfe, $sales);
+        $this->appendTotals($document, $infNfe, $sales, $rtcTaxSnapshots, (bool) $configuration->tb26_rtc_2026_ativa);
         $this->appendTransport($document, $infNfe);
         $this->appendPayment($document, $infNfe, $payment, $documentTotal);
         $this->appendAdditionalInfo($document, $infNfe, $payment, $unit->tb2_nome);
@@ -247,8 +248,8 @@ class FiscalNfceXmlService
         $sales,
         int $crt,
         ConfiguracaoFiscal $configuration,
-    ): void
-    {
+        array $rtcTaxSnapshots,
+    ): void {
         foreach ($sales->values() as $index => $sale) {
             /** @var Venda $sale */
             /** @var Produto|null $product */
@@ -256,22 +257,6 @@ class FiscalNfceXmlService
 
             if (! $product) {
                 throw new RuntimeException(sprintf('Produto %d nao encontrado para montar o XML fiscal.', $sale->tb1_id));
-            }
-
-            if ($crt !== 1) {
-                throw new RuntimeException('A geracao automatica de XML assinado nesta etapa esta preparada apenas para CRT 1.');
-            }
-
-            $allowedCsosn = ['102', '103', '300', '400'];
-            $csosn = str_pad((string) $product->tb1_csosn, 3, '0', STR_PAD_LEFT);
-
-            if (! in_array($csosn, $allowedCsosn, true)) {
-                throw new RuntimeException(sprintf(
-                    'O produto %d (%s) possui CSOSN %s. Nesta etapa o XML automatico suporta somente 102, 103, 300 e 400.',
-                    $sale->tb1_id,
-                    $sale->produto_nome,
-                    $csosn
-                ));
             }
 
             $det = $document->createElement('det');
@@ -307,37 +292,177 @@ class FiscalNfceXmlService
 
             $imposto = $document->createElement('imposto');
             $det->appendChild($imposto);
+            $rtcTax = $rtcTaxSnapshots[(string) $sale->tb1_id] ?? null;
 
-            $icms = $document->createElement('ICMS');
-            $imposto->appendChild($icms);
+            $this->appendLegacyTaxes($document, $imposto, $product, $sale, $crt, $configuration, $rtcTax);
+
+            if ($configuration->tb26_rtc_2026_ativa) {
+                $this->appendIbsCbs($document, $imposto, (float) $sale->valor_total, $rtcTax);
+            }
+        }
+    }
+
+    private function appendLegacyTaxes(
+        DOMDocument $document,
+        DOMElement $imposto,
+        Produto $product,
+        Venda $sale,
+        int $crt,
+        ConfiguracaoFiscal $configuration,
+        ?array $rtcTax,
+    ): void {
+        $icms = $document->createElement('ICMS');
+        $imposto->appendChild($icms);
+        $base = (float) $sale->valor_total;
+
+        if ($crt === 1) {
+            $csosn = str_pad((string) ($configuration->tb26_rtc_2026_ativa ? ($rtcTax['csosn'] ?? '') : $product->tb1_csosn), 3, '0', STR_PAD_LEFT);
+            $allowedCsosn = ['102', '103', '300', '400'];
+
+            if (! in_array($csosn, $allowedCsosn, true)) {
+                throw new RuntimeException(sprintf('O produto %d (%s) possui CSOSN %s nao suportado para NFC-e.', $sale->tb1_id, $sale->produto_nome, $csosn));
+            }
+
             $icmsSimpleNational = $document->createElement('ICMSSN' . $csosn);
             $icms->appendChild($icmsSimpleNational);
             $this->appendTextElement($document, $icmsSimpleNational, 'orig', $this->requiredDigits((string) $product->tb1_origem, 1, sprintf('Origem fiscal do produto %s', $sale->produto_nome)));
             $this->appendTextElement($document, $icmsSimpleNational, 'CSOSN', $csosn);
 
-            $pis = $document->createElement('PIS');
-            $imposto->appendChild($pis);
-            $pisOther = $document->createElement('PISOutr');
-            $pis->appendChild($pisOther);
-            $this->appendTextElement($document, $pisOther, 'CST', '99');
-            $this->appendTextElement($document, $pisOther, 'vBC', '0.00');
-            $this->appendTextElement($document, $pisOther, 'pPIS', '0.00');
-            $this->appendTextElement($document, $pisOther, 'vPIS', '0.00');
-
-            $cofins = $document->createElement('COFINS');
-            $imposto->appendChild($cofins);
-            $cofinsOther = $document->createElement('COFINSOutr');
-            $cofins->appendChild($cofinsOther);
-            $this->appendTextElement($document, $cofinsOther, 'CST', '99');
-            $this->appendTextElement($document, $cofinsOther, 'vBC', '0.00');
-            $this->appendTextElement($document, $cofinsOther, 'pCOFINS', '0.00');
-            $this->appendTextElement($document, $cofinsOther, 'vCOFINS', '0.00');
+            $this->appendZeroPisCofins($document, $imposto);
+            return;
         }
+
+        if ($crt !== 3 || ! $configuration->tb26_rtc_2026_ativa) {
+            throw new RuntimeException('A emissao automatica sem RTC permanece disponivel somente para CRT 1. Ative e configure a RTC 2026 para CRT 3.');
+        }
+
+        $cstIcms = str_pad((string) ($rtcTax['cst_icms'] ?? ''), 2, '0', STR_PAD_LEFT);
+        if ($cstIcms !== '00') {
+            throw new RuntimeException(sprintf('O produto %d (%s) deve usar CST ICMS 00 nesta primeira etapa RTC para CRT 3.', $sale->tb1_id, $sale->produto_nome));
+        }
+
+        $icms00 = $document->createElement('ICMS00');
+        $icms->appendChild($icms00);
+        $icmsRate = (float) ($rtcTax['aliquota_icms'] ?? 0);
+        $this->appendTextElement($document, $icms00, 'orig', $this->requiredDigits((string) $product->tb1_origem, 1, sprintf('Origem fiscal do produto %s', $sale->produto_nome)));
+        $this->appendTextElement($document, $icms00, 'CST', '00');
+        $this->appendTextElement($document, $icms00, 'modBC', '3');
+        $this->appendTextElement($document, $icms00, 'vBC', number_format($base, 2, '.', ''));
+        $this->appendTextElement($document, $icms00, 'pICMS', number_format($icmsRate, 4, '.', ''));
+        $this->appendTextElement($document, $icms00, 'vICMS', number_format($base * $icmsRate / 100, 2, '.', ''));
+
+        $this->appendAliquotPisCofins($document, $imposto, $base, $rtcTax);
     }
 
-    private function appendTotals(DOMDocument $document, DOMElement $infNfe, $sales): void
+    private function appendZeroPisCofins(DOMDocument $document, DOMElement $imposto): void
     {
-        $sumProducts = number_format((float) $sales->sum('valor_total'), 2, '.', '');
+        $pis = $document->createElement('PIS');
+        $imposto->appendChild($pis);
+        $pisOther = $document->createElement('PISOutr');
+        $pis->appendChild($pisOther);
+        $this->appendTextElement($document, $pisOther, 'CST', '99');
+        $this->appendTextElement($document, $pisOther, 'vBC', '0.00');
+        $this->appendTextElement($document, $pisOther, 'pPIS', '0.00');
+        $this->appendTextElement($document, $pisOther, 'vPIS', '0.00');
+
+        $cofins = $document->createElement('COFINS');
+        $imposto->appendChild($cofins);
+        $cofinsOther = $document->createElement('COFINSOutr');
+        $cofins->appendChild($cofinsOther);
+        $this->appendTextElement($document, $cofinsOther, 'CST', '99');
+        $this->appendTextElement($document, $cofinsOther, 'vBC', '0.00');
+        $this->appendTextElement($document, $cofinsOther, 'pCOFINS', '0.00');
+        $this->appendTextElement($document, $cofinsOther, 'vCOFINS', '0.00');
+    }
+
+    private function appendAliquotPisCofins(DOMDocument $document, DOMElement $imposto, float $base, array $rtcTax): void
+    {
+        $pisRate = (float) ($rtcTax['aliquota_pis'] ?? 0);
+        $cofinsRate = (float) ($rtcTax['aliquota_cofins'] ?? 0);
+
+        $pis = $document->createElement('PIS');
+        $imposto->appendChild($pis);
+        $pisAliq = $document->createElement('PISAliq');
+        $pis->appendChild($pisAliq);
+        $this->appendTextElement($document, $pisAliq, 'CST', '01');
+        $this->appendTextElement($document, $pisAliq, 'vBC', number_format($base, 2, '.', ''));
+        $this->appendTextElement($document, $pisAliq, 'pPIS', number_format($pisRate, 4, '.', ''));
+        $this->appendTextElement($document, $pisAliq, 'vPIS', number_format($base * $pisRate / 100, 2, '.', ''));
+
+        $cofins = $document->createElement('COFINS');
+        $imposto->appendChild($cofins);
+        $cofinsAliq = $document->createElement('COFINSAliq');
+        $cofins->appendChild($cofinsAliq);
+        $this->appendTextElement($document, $cofinsAliq, 'CST', '01');
+        $this->appendTextElement($document, $cofinsAliq, 'vBC', number_format($base, 2, '.', ''));
+        $this->appendTextElement($document, $cofinsAliq, 'pCOFINS', number_format($cofinsRate, 4, '.', ''));
+        $this->appendTextElement($document, $cofinsAliq, 'vCOFINS', number_format($base * $cofinsRate / 100, 2, '.', ''));
+    }
+
+    private function appendIbsCbs(DOMDocument $document, DOMElement $imposto, float $base, ?array $rtcTax): void
+    {
+        if ($rtcTax === null) {
+            throw new RuntimeException('Tributacao RTC 2026 ausente no item fiscal.');
+        }
+
+        $ibsUfRate = $this->effectiveRate($rtcTax['aliquota_ibs_uf'] ?? 0, $rtcTax['reducao_ibs_uf'] ?? 0);
+        $ibsMunRate = $this->effectiveRate($rtcTax['aliquota_ibs_mun'] ?? 0, $rtcTax['reducao_ibs_mun'] ?? 0);
+        $cbsRate = $this->effectiveRate($rtcTax['aliquota_cbs'] ?? 0, $rtcTax['reducao_cbs'] ?? 0);
+        $ibsUfValue = round($base * $ibsUfRate / 100, 2);
+        $ibsMunValue = round($base * $ibsMunRate / 100, 2);
+        $cbsValue = round($base * $cbsRate / 100, 2);
+
+        $ibsCbs = $document->createElement('IBSCBS');
+        $imposto->appendChild($ibsCbs);
+        $this->appendTextElement($document, $ibsCbs, 'CST', (string) $rtcTax['cst_ibs_cbs']);
+        $this->appendTextElement($document, $ibsCbs, 'cClassTrib', (string) $rtcTax['cclass_trib']);
+
+        $group = $document->createElement('gIBSCBS');
+        $ibsCbs->appendChild($group);
+        $this->appendTextElement($document, $group, 'vBC', number_format($base, 2, '.', ''));
+
+        $ibsUf = $document->createElement('gIBSUF');
+        $group->appendChild($ibsUf);
+        $this->appendTextElement($document, $ibsUf, 'pIBSUF', number_format((float) ($rtcTax['aliquota_ibs_uf'] ?? 0), 4, '.', ''));
+        $this->appendReductionGroup($document, $ibsUf, (float) ($rtcTax['reducao_ibs_uf'] ?? 0), $ibsUfRate);
+        $this->appendTextElement($document, $ibsUf, 'vIBSUF', number_format($ibsUfValue, 2, '.', ''));
+
+        $ibsMun = $document->createElement('gIBSMun');
+        $group->appendChild($ibsMun);
+        $this->appendTextElement($document, $ibsMun, 'pIBSMun', number_format((float) ($rtcTax['aliquota_ibs_mun'] ?? 0), 4, '.', ''));
+        $this->appendReductionGroup($document, $ibsMun, (float) ($rtcTax['reducao_ibs_mun'] ?? 0), $ibsMunRate);
+        $this->appendTextElement($document, $ibsMun, 'vIBSMun', number_format($ibsMunValue, 2, '.', ''));
+        $this->appendTextElement($document, $group, 'vIBS', number_format($ibsUfValue + $ibsMunValue, 2, '.', ''));
+
+        $cbs = $document->createElement('gCBS');
+        $group->appendChild($cbs);
+        $this->appendTextElement($document, $cbs, 'pCBS', number_format((float) ($rtcTax['aliquota_cbs'] ?? 0), 4, '.', ''));
+        $this->appendReductionGroup($document, $cbs, (float) ($rtcTax['reducao_cbs'] ?? 0), $cbsRate);
+        $this->appendTextElement($document, $cbs, 'vCBS', number_format($cbsValue, 2, '.', ''));
+    }
+
+    private function appendReductionGroup(DOMDocument $document, DOMElement $parent, float $reduction, float $effectiveRate): void
+    {
+        if ($reduction <= 0) {
+            return;
+        }
+
+        $group = $document->createElement('gRed');
+        $parent->appendChild($group);
+        $this->appendTextElement($document, $group, 'pRedAliq', number_format($reduction, 4, '.', ''));
+        $this->appendTextElement($document, $group, 'pAliqEfet', number_format($effectiveRate, 4, '.', ''));
+    }
+
+    private function effectiveRate(mixed $rate, mixed $reduction): float
+    {
+        return max(0, (float) $rate * (1 - max(0, min(100, (float) $reduction)) / 100));
+    }
+
+    private function appendTotals(DOMDocument $document, DOMElement $infNfe, $sales, array $rtcTaxSnapshots, bool $rtcEnabled): void
+    {
+        $totals = $this->calculateIbsCbsTotals($sales, $rtcTaxSnapshots, $rtcEnabled);
+        $sumProducts = number_format($totals['base'], 2, '.', '');
+        $documentTotal = number_format($totals['base'] + $totals['ibs_uf'] + $totals['ibs_mun'] + $totals['cbs'], 2, '.', '');
 
         $total = $document->createElement('total');
         $infNfe->appendChild($total);
@@ -345,29 +470,73 @@ class FiscalNfceXmlService
         $icmsTot = $document->createElement('ICMSTot');
         $total->appendChild($icmsTot);
         foreach ([
-            'vBC' => '0.00',
-            'vICMS' => '0.00',
-            'vICMSDeson' => '0.00',
-            'vFCP' => '0.00',
-            'vBCST' => '0.00',
-            'vST' => '0.00',
-            'vFCPST' => '0.00',
-            'vFCPSTRet' => '0.00',
-            'vProd' => $sumProducts,
-            'vFrete' => '0.00',
-            'vSeg' => '0.00',
-            'vDesc' => '0.00',
-            'vII' => '0.00',
-            'vIPI' => '0.00',
-            'vIPIDevol' => '0.00',
-            'vPIS' => '0.00',
-            'vCOFINS' => '0.00',
-            'vOutro' => '0.00',
-            'vNF' => $sumProducts,
-            'vTotTrib' => '0.00',
+            'vBC' => '0.00', 'vICMS' => '0.00', 'vICMSDeson' => '0.00', 'vFCP' => '0.00',
+            'vBCST' => '0.00', 'vST' => '0.00', 'vFCPST' => '0.00', 'vFCPSTRet' => '0.00',
+            'vProd' => $sumProducts, 'vFrete' => '0.00', 'vSeg' => '0.00', 'vDesc' => '0.00',
+            'vII' => '0.00', 'vIPI' => '0.00', 'vIPIDevol' => '0.00', 'vPIS' => '0.00',
+            'vCOFINS' => '0.00', 'vOutro' => '0.00', 'vNF' => $documentTotal, 'vTotTrib' => '0.00',
         ] as $tag => $value) {
             $this->appendTextElement($document, $icmsTot, $tag, $value);
         }
+
+        if (! $rtcEnabled) {
+            return;
+        }
+
+        $ibsCbsTot = $document->createElement('IBSCBSTot');
+        $total->appendChild($ibsCbsTot);
+        $this->appendTextElement($document, $ibsCbsTot, 'vBCIBSCBS', $sumProducts);
+
+        $ibs = $document->createElement('gIBS');
+        $ibsCbsTot->appendChild($ibs);
+        $ibsUf = $document->createElement('gIBSUF');
+        $ibs->appendChild($ibsUf);
+        $this->appendTextElement($document, $ibsUf, 'vDif', '0.00');
+        $this->appendTextElement($document, $ibsUf, 'vDevTrib', '0.00');
+        $this->appendTextElement($document, $ibsUf, 'vIBSUF', number_format($totals['ibs_uf'], 2, '.', ''));
+        $ibsMun = $document->createElement('gIBSMun');
+        $ibs->appendChild($ibsMun);
+        $this->appendTextElement($document, $ibsMun, 'vDif', '0.00');
+        $this->appendTextElement($document, $ibsMun, 'vDevTrib', '0.00');
+        $this->appendTextElement($document, $ibsMun, 'vIBSMun', number_format($totals['ibs_mun'], 2, '.', ''));
+        $this->appendTextElement($document, $ibs, 'vIBS', number_format($totals['ibs_uf'] + $totals['ibs_mun'], 2, '.', ''));
+        $this->appendTextElement($document, $ibs, 'vCredPres', '0.00');
+        $this->appendTextElement($document, $ibs, 'vCredPresCondSus', '0.00');
+
+        $cbs = $document->createElement('gCBS');
+        $ibsCbsTot->appendChild($cbs);
+        $this->appendTextElement($document, $cbs, 'vCredPres', '0.00');
+        $this->appendTextElement($document, $cbs, 'vCredPresCondSus', '0.00');
+        $this->appendTextElement($document, $cbs, 'vDif', '0.00');
+        $this->appendTextElement($document, $cbs, 'vDevTrib', '0.00');
+        $this->appendTextElement($document, $cbs, 'vCBS', number_format($totals['cbs'], 2, '.', ''));
+    }
+
+    private function documentTotal($sales, array $rtcTaxSnapshots, bool $rtcEnabled): float
+    {
+        $totals = $this->calculateIbsCbsTotals($sales, $rtcTaxSnapshots, $rtcEnabled);
+
+        return $totals['base'] + $totals['ibs_uf'] + $totals['ibs_mun'] + $totals['cbs'];
+    }
+
+    private function calculateIbsCbsTotals($sales, array $rtcTaxSnapshots, bool $rtcEnabled): array
+    {
+        $totals = ['base' => 0.0, 'ibs_uf' => 0.0, 'ibs_mun' => 0.0, 'cbs' => 0.0];
+
+        foreach ($sales as $sale) {
+            $base = (float) $sale->valor_total;
+            $totals['base'] += $base;
+            if (! $rtcEnabled) {
+                continue;
+            }
+
+            $tax = $rtcTaxSnapshots[(string) $sale->tb1_id] ?? [];
+            $totals['ibs_uf'] += round($base * $this->effectiveRate($tax['aliquota_ibs_uf'] ?? 0, $tax['reducao_ibs_uf'] ?? 0) / 100, 2);
+            $totals['ibs_mun'] += round($base * $this->effectiveRate($tax['aliquota_ibs_mun'] ?? 0, $tax['reducao_ibs_mun'] ?? 0) / 100, 2);
+            $totals['cbs'] += round($base * $this->effectiveRate($tax['aliquota_cbs'] ?? 0, $tax['reducao_cbs'] ?? 0) / 100, 2);
+        }
+
+        return $totals;
     }
 
     private function appendTransport(DOMDocument $document, DOMElement $infNfe): void
