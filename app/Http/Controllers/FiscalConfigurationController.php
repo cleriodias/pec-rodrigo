@@ -12,6 +12,7 @@ use App\Support\FiscalInvoicePreparationService;
 use App\Support\FiscalMunicipalityCodeService;
 use App\Support\FiscalNfceTransmissionService;
 use App\Support\FiscalWebserviceResolverService;
+use App\Support\Setor9Rtc2026Service;
 use DOMDocument;
 use DOMXPath;
 use Illuminate\Http\UploadedFile;
@@ -528,6 +529,21 @@ class FiscalConfigurationController extends Controller
         }
     }
 
+    public function reclassifySetor9Rtc(Request $request, Setor9Rtc2026Service $setor9Rtc2026Service): RedirectResponse
+    {
+        abort_unless(ManagementScope::isMaster($request->user()), 403, 'Somente o perfil Master pode reclassificar a RTC 2026.');
+
+        $result = $setor9Rtc2026Service->reclassify((int) ($request->user()?->id ?? 0));
+        $unitId = $setor9Rtc2026Service->preview()['unit_id'] ?? null;
+
+        return redirect()->route('settings.fiscal', $unitId ? ['unit_id' => $unitId] : [])
+            ->with('success', sprintf(
+                'RTC 2026 da SETOR-9 reclassificada: %d atualizada(s), %d inalterada(s) e %d regra(s) manual(is) preservada(s).',
+                (int) ($result['updated'] ?? 0),
+                (int) ($result['unchanged'] ?? 0),
+                (int) ($result['manual'] ?? 0),
+            ));
+    }
     public function reprocess(
         Request $request,
         FiscalInvoicePreparationService $fiscalInvoicePreparationService,
@@ -1282,6 +1298,9 @@ class FiscalConfigurationController extends Controller
             'invoiceLoadWarning' => $invoiceLoadWarning,
             'invoiceStatusFilter' => $invoiceStatusFilter,
             'canActivateFiscalGeneration' => ManagementScope::isMaster(request()->user()),
+            'setor9RtcPreview' => $unit && $unit->tb2_nome === 'SETOR-9' && ManagementScope::isMaster(request()->user())
+                ? app(Setor9Rtc2026Service::class)->preview()
+                : null,
         ]);
     }
 

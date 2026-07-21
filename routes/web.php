@@ -341,6 +341,8 @@ Route::middleware('auth')->group(function () {
         ->name('settings.fiscal.update');
     Route::post('/settings/fiscal/reprocess', [FiscalConfigurationController::class, 'reprocess'])
         ->name('settings.fiscal.reprocess');
+    Route::post('/settings/fiscal/setor-9/rtc/reclassify', [FiscalConfigurationController::class, 'reclassifySetor9Rtc'])
+        ->name('settings.fiscal.setor9-rtc.reclassify');
     Route::post('/settings/fiscal/notas/{notaFiscal}/regenerate', [FiscalConfigurationController::class, 'regenerateInvoice'])
         ->name('settings.fiscal.invoices.regenerate');
     Route::delete('/settings/fiscal/notas/{notaFiscal}', [FiscalConfigurationController::class, 'destroyInvoice'])

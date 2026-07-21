@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Produto;
 use App\Models\User;
 use App\Support\ProductQuickLookupCache;
+use App\Support\Setor9Rtc2026Service;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redirect;
@@ -187,7 +188,8 @@ class ProductController extends Controller
     public function updateFiscalQueueItem(
         Request $request,
         Produto $product,
-        ProductQuickLookupCache $quickLookupCache
+        ProductQuickLookupCache $quickLookupCache,
+        Setor9Rtc2026Service $setor9Rtc2026Service,
     ): JsonResponse
     {
         $data = $request->validate(
@@ -216,6 +218,7 @@ class ProductController extends Controller
             'tb1_cst' => $this->normalizeDigitsField($data['tb1_cst'], 3),
         ]);
         $quickLookupCache->invalidateCatalog();
+        $setor9Rtc2026Service->sync($product, (int) ($request->user()?->id ?? 0));
 
         return response()->json([
             'message' => 'Dados fiscais gravados com sucesso.',
@@ -223,7 +226,7 @@ class ProductController extends Controller
         ]);
     }
 
-    public function store(Request $request, ProductQuickLookupCache $quickLookupCache)
+    public function store(Request $request, ProductQuickLookupCache $quickLookupCache, Setor9Rtc2026Service $setor9Rtc2026Service)
     {
         $data = $this->validateProduct($request);
 
@@ -235,6 +238,7 @@ class ProductController extends Controller
         $data = $this->prepareProductData($data);
 
         $product = Produto::create($data);
+        $setor9Rtc2026Service->sync($product, (int) ($request->user()?->id ?? 0), 'product_created');
         $quickLookupCache->invalidateCatalog();
 
         return Redirect::route('products.show', ['product' => $product->tb1_id])
@@ -249,13 +253,14 @@ class ProductController extends Controller
         ));
     }
 
-    public function update(Request $request, Produto $product, ProductQuickLookupCache $quickLookupCache)
+    public function update(Request $request, Produto $product, ProductQuickLookupCache $quickLookupCache, Setor9Rtc2026Service $setor9Rtc2026Service)
     {
         $data = $this->validateProduct($request, $product);
         $data['tb1_vr_credit'] = (bool) ($data['tb1_vr_credit'] ?? false);
         $data = $this->prepareProductData($data, $product);
 
         $product->update($data);
+        $setor9Rtc2026Service->sync($product, (int) ($request->user()?->id ?? 0));
         $quickLookupCache->invalidateCatalog();
 
         return Redirect::route('products.show', ['product' => $product->tb1_id])

@@ -358,6 +358,26 @@ const InvoiceTable = ({ invoices = [], selectedUnitId, invoiceStatusFilter = 'er
     </section>
 );
 
+const Setor9RtcPanel = ({ preview }) => {
+    if (!preview?.available) return null;
+    const summary = preview.summary ?? {};
+    const confirmReclassification = () => {
+        if (!window.confirm(`Reclassificar a SETOR-9? ${summary.update ?? 0} regra(s) serão atualizada(s); regras manuais serão preservadas.`)) return;
+        router.post(route('settings.fiscal.setor9-rtc.reclassify'), {}, { preserveScroll: true });
+    };
+    return (
+        <section className={`${fiscalSectionClassName} space-y-4`}>
+            <FiscalSectionHeader title="RTC 2026 da SETOR-9" description="Prévia calculada pelo NCM. A reclassificação preserva as regras marcadas como manuais." />
+            <div className="grid gap-3 sm:grid-cols-4 text-sm">
+                <div className={fiscalPanelClassName}><p className="text-slate-500">Atualizar</p><p className="mt-1 text-xl font-semibold">{summary.update ?? 0}</p></div>
+                <div className={fiscalPanelClassName}><p className="text-slate-500">Sem alteração</p><p className="mt-1 text-xl font-semibold">{summary.unchanged ?? 0}</p></div>
+                <div className={fiscalPanelClassName}><p className="text-slate-500">Regra manual</p><p className="mt-1 text-xl font-semibold">{summary.manual ?? 0}</p></div>
+                <div className={fiscalPanelClassName}><p className="text-slate-500">Sem NCM</p><p className="mt-1 text-xl font-semibold">{summary.without_ncm ?? 0}</p></div>
+            </div>
+            <div className="flex justify-end"><PrimaryButton type="button" onClick={confirmReclassification}>Reclassificar RTC 2026</PrimaryButton></div>
+        </section>
+    );
+};
 const FiscalConfigFormSection = ({
     configuration = {},
     selectedUnitId = null,
@@ -786,6 +806,7 @@ export default function FiscalConfig({
     invoiceLoadWarning = null,
     invoiceStatusFilter = 'error',
     canActivateFiscalGeneration = false,
+    setor9RtcPreview = null,
 }) {
     const { flash = {} } = usePage().props;
     const fiscalFormKey = JSON.stringify(buildFiscalFormData(configuration, selectedUnitId));
@@ -904,6 +925,9 @@ export default function FiscalConfig({
                                 <CertificateSummaryCard unit={unit} configuration={configuration} resolvedEndpoints={resolvedEndpoints} />
                                 <DiagnosticsCard diagnostics={configurationDiagnostics} />
                             </div>
+
+                            <Setor9RtcPanel preview={setor9RtcPreview} />
+
 
                             <FiscalConfigFormSection
                                 key={fiscalFormKey}

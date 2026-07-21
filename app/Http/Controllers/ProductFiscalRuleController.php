@@ -6,6 +6,7 @@ use App\Models\Produto;
 use App\Models\ProdutoTributacaoFiscalUnidade;
 use App\Models\Unidade;
 use App\Support\ManagementScope;
+use App\Support\Setor9Rtc2026Service;
 use Inertia\Inertia;
 use Inertia\Response;
 use Illuminate\Http\RedirectResponse;
@@ -23,7 +24,7 @@ class ProductFiscalRuleController extends Controller
             'rules' => $product->tributacoesFiscaisUnidade()->get()->keyBy('tb2_id')->map(fn ($rule) => $rule->toArray()),
         ]);
     }
-    public function store(Request $request, Produto $product): RedirectResponse
+    public function store(Request $request, Produto $product, Setor9Rtc2026Service $setor9Rtc2026Service): RedirectResponse
     {
         abort_unless(ManagementScope::isMaster($request->user()), 403, 'Somente o perfil Master pode alterar a tributacao fiscal por loja.');
 
@@ -45,12 +46,14 @@ class ProductFiscalRuleController extends Controller
             'tb28_reducao_ibs_mun' => ['nullable', 'numeric', 'between:0,100'],
             'tb28_reducao_cbs' => ['nullable', 'numeric', 'between:0,100'],
             'tb28_ativo' => ['nullable', 'boolean'],
+            'tb28_rtc_manual' => ['nullable', 'boolean'],
             'copy_to_unit_ids' => ['nullable', 'array'],
             'copy_to_unit_ids.*' => ['integer', Rule::exists('tb2_unidades', 'tb2_id')],
         ]);
 
         $values = collect($data)->except(['tb2_id', 'copy_to_unit_ids'])->all();
         $values['tb28_ativo'] = (bool) ($values['tb28_ativo'] ?? true);
+        $values['tb28_rtc_manual'] = (bool) ($values['tb28_rtc_manual'] ?? false);
         $values['tb28_reducao_ibs_uf'] = $values['tb28_reducao_ibs_uf'] ?? 0;
         $values['tb28_reducao_ibs_mun'] = $values['tb28_reducao_ibs_mun'] ?? 0;
         $values['tb28_reducao_cbs'] = $values['tb28_reducao_cbs'] ?? 0;
@@ -65,6 +68,10 @@ class ProductFiscalRuleController extends Controller
                 ['tb1_id' => $product->tb1_id, 'tb2_id' => $unitId],
                 $values,
             );
+
+            if ($setor9Rtc2026Service->isSetor9((int) $unitId) && ! $values['tb28_rtc_manual']) {
+                $setor9Rtc2026Service->sync($product, (int) ($request->user()?->id ?? 0), 'manual_unlock');
+            }
         }
 
         return back()->with('success', 'Tributacao fiscal por loja gravada com sucesso.');

@@ -18,7 +18,7 @@ class ProdutoTributacaoFiscalUnidade extends Model
         'tb28_cst_pis', 'tb28_aliquota_pis', 'tb28_cst_cofins', 'tb28_aliquota_cofins',
         'tb28_cst_ibs_cbs', 'tb28_cclass_trib', 'tb28_aliquota_ibs_uf',
         'tb28_aliquota_ibs_mun', 'tb28_aliquota_cbs', 'tb28_reducao_ibs_uf',
-        'tb28_reducao_ibs_mun', 'tb28_reducao_cbs', 'tb28_ativo',
+        'tb28_reducao_ibs_mun', 'tb28_reducao_cbs', 'tb28_ativo', 'tb28_rtc_manual',
     ];
 
     protected $casts = [
@@ -26,7 +26,7 @@ class ProdutoTributacaoFiscalUnidade extends Model
         'tb28_aliquota_cofins' => 'float', 'tb28_aliquota_ibs_uf' => 'float',
         'tb28_aliquota_ibs_mun' => 'float', 'tb28_aliquota_cbs' => 'float',
         'tb28_reducao_ibs_uf' => 'float', 'tb28_reducao_ibs_mun' => 'float',
-        'tb28_reducao_cbs' => 'float', 'tb28_ativo' => 'boolean',
+        'tb28_reducao_cbs' => 'float', 'tb28_ativo' => 'boolean', 'tb28_rtc_manual' => 'boolean',
     ];
 
     public function produto(): BelongsTo
