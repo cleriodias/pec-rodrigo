@@ -534,7 +534,6 @@ class FiscalConfigurationController extends Controller
     ): RedirectResponse {
         $user = $request->user();
         $this->ensureAdmin($user);
-        $this->ensureFiscalPreparationAllowed($user);
 
         $data = $request->validate([
             'tb2_id' => ['required', 'integer', 'exists:tb2_unidades,tb2_id'],
@@ -559,7 +558,6 @@ class FiscalConfigurationController extends Controller
     ): RedirectResponse {
         $user = $request->user();
         $this->ensureAdmin($user);
-        $this->ensureFiscalPreparationAllowed($user);
 
         if (! ManagementScope::canManageUnit($user, (int) $notaFiscal->tb2_id)) {
             abort(403, 'Acesso negado.');
@@ -637,7 +635,6 @@ class FiscalConfigurationController extends Controller
     ): RedirectResponse {
         $user = $request->user();
         $this->ensureAdmin($user);
-        $this->ensureFiscalPreparationAllowed($user);
 
         if (! ManagementScope::canManageUnit($user, (int) $notaFiscal->tb2_id)) {
             abort(403, 'Acesso negado.');
@@ -680,12 +677,6 @@ class FiscalConfigurationController extends Controller
         }
     }
 
-    private function ensureFiscalPreparationAllowed($user): void
-    {
-        if (! $user || (int) $user->id !== 1) {
-            abort(403, 'Durante os testes, somente Clerio pode preparar ou regenerar notas fiscais.');
-        }
-    }
 
     private function nullableTrim(?string $value): ?string
     {

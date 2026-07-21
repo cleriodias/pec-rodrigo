@@ -566,9 +566,7 @@ class SaleController extends Controller
                 return $payment;
             });
 
-            $invoice = (int) $user->id === 1
-                ? $fiscalInvoicePreparationService->prepareForPayment($payment)
-                : null;
+            $invoice = $fiscalInvoicePreparationService->prepareForPayment($payment);
 
             $receiptItems = array_map(
                 static function (array $item) use ($comandaCodigo): array {
@@ -639,9 +637,6 @@ class SaleController extends Controller
             abort(403, 'Acesso negado.');
         }
 
-        if ((int) $user->id !== 1) {
-            abort(403, 'Durante os testes, somente Clerio pode preparar notas fiscais.');
-        }
 
         try {
             $notaFiscal->loadMissing('pagamento.vendas.produto', 'pagamento.vendas.unidade');
@@ -705,9 +700,6 @@ class SaleController extends Controller
             abort(403, 'Acesso negado.');
         }
 
-        if ((int) $user->id !== 1) {
-            abort(403, 'Durante os testes, somente Clerio pode preparar notas fiscais.');
-        }
 
         $validated = $request->validate([
             'consumer.type' => ['required', 'string', Rule::in(['cupom_fiscal', 'consumidor'])],
