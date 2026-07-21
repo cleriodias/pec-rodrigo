@@ -43,16 +43,7 @@ class Setor9Rtc2026Service
         $rule->tb28_rtc_manual = false;
         $rule->save();
 
-        DB::table('tb31_historico_tributacoes_fiscais_produto_unidade')->insert([
-            'tb1_id' => $product->tb1_id,
-            'tb2_id' => $unit->tb2_id,
-            'user_id' => $userId,
-            'tb31_motivo' => $reason,
-            'tb31_antes' => $before ? json_encode($before) : null,
-            'tb31_depois' => json_encode($after),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        $this->recordHistory((int) $product->tb1_id, (int) $unit->tb2_id, $userId, $reason, $before, $after);
 
         return ['status' => 'updated', 'rule' => $rule, 'before' => $before, 'after' => $after];
     }
@@ -82,13 +73,30 @@ class Setor9Rtc2026Service
 
     public function reclassify(?int $userId = null): array
     {
+        $unit = $this->setor9();
+        if (! $unit) return ['unit_not_found' => 1];
+
         $result = ['updated' => 0, 'unchanged' => 0, 'manual' => 0];
-        DB::transaction(function () use (&$result, $userId) {
-            Produto::query()->orderBy('tb1_id')->each(function (Produto $product) use (&$result, $userId) {
-                $status = $this->sync($product, $userId, 'setor9_reclassification')['status'];
-                $result[$status] = ($result[$status] ?? 0) + 1;
+        $rules = ProdutoTributacaoFiscalUnidade::query()->where('tb2_id', $unit->tb2_id)->get()->keyBy('tb1_id');
+
+        DB::transaction(function () use ($unit, $rules, &$result, $userId) {
+            Produto::query()->orderBy('tb1_id')->each(function (Produto $product) use ($unit, $rules, &$result, $userId) {
+                $rule = $rules->get($product->tb1_id);
+                if ($rule?->tb28_rtc_manual) { $result['manual']++; return; }
+
+                $after = $this->classificationFor($product);
+                $before = $rule ? $this->rtcValues($rule) : null;
+                if ($before === $after) { $result['unchanged']++; return; }
+
+                $rule ??= new ProdutoTributacaoFiscalUnidade(['tb1_id' => $product->tb1_id, 'tb2_id' => $unit->tb2_id]);
+                $rule->fill($after);
+                $rule->tb28_rtc_manual = false;
+                $rule->save();
+                $this->recordHistory((int) $product->tb1_id, (int) $unit->tb2_id, $userId, 'setor9_reclassification', $before, $after);
+                $result['updated']++;
             });
         });
+
         return $result;
     }
 
@@ -97,6 +105,19 @@ class Setor9Rtc2026Service
         return (int) ($this->setor9()?->tb2_id ?? 0) === $unitId;
     }
 
+    private function recordHistory(int $productId, int $unitId, ?int $userId, string $reason, ?array $before, array $after): void
+    {
+        DB::table('tb31_historico_tributacoes_fiscais_produto_unidade')->insert([
+            'tb1_id' => $productId,
+            'tb2_id' => $unitId,
+            'user_id' => $userId,
+            'tb31_motivo' => $reason,
+            'tb31_antes' => $before ? json_encode($before) : null,
+            'tb31_depois' => json_encode($after),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
     private function setor9(): ?Unidade
     {
         return Unidade::query()->where('tb2_nome', self::UNIT_NAME)->first();
@@ -109,7 +130,7 @@ class Setor9Rtc2026Service
         $zeroI = ['04011010','04011090','04012010','04012090','04014010','04015010','04021010','04021090','04022110','04022120','04022910','04022920','04051000','15171000','15132120','11062000','19030000','11022000','11031300','11041900','11042300','11010010','17011400','17019900','11041200','11042200','11029000','25010020','25010090'];
         if (in_array($ncm, $zeroI, true) || $this->startsWithAny($ncm, ['100620','100630','0901','21011','07133319','07133329','07133399','07133590','19021']) || ($ncm === '19059090' && preg_match('/\bPAO\s+(DE\s+)?SAL\b|\bPAO\s+FRANC/', $name)) || ($ncm === '04061090' && str_contains($name, 'REQUEIJAO'))) return $this->rule('200', '200003', 100);
         if ($this->startsWithAny($ncm, ['04072','0701','07020000','0703','0704','0705','0706','07070000','0708','0709','0710','0714','08011','0803','0804','0805','0806','0807','0808','0809','0810','0811','06'])) return $this->rule('200', '200014', 100);
-        if (in_array($ncm, ['04032000','04039000','11081200'], true) || $this->startsWithAny($ncm, ['1101','1102','1105','1106','110311','110319','11041','11042','100','120','190220','190230','19059010']) || ($ncm === '22029900' && preg_match('/IOG|IOUR|LEITE\s+FERMENTADO/', $name)) || ($ncm === '20029000' && str_contains($name, 'EXTRATO'))) return $this->rule('200', '200034', 60);
+        if (in_array($ncm, ['04032000','04039000','11081200'], true) || $this->startsWithAny($ncm, ['1101','1102','1105','1106','110311','110319','11041','11042','100','120','190220','190230','19059010']) || ($this->startsWithAny($ncm, ['150790','1508','1511','1512','1513','1514','1515']) && str_contains($name, 'OLEO')) || ($ncm === '22029900' && preg_match('/IOG|IOUR|LEITE\s+FERMENTADO/', $name)) || ($ncm === '20029000' && str_contains($name, 'EXTRATO'))) return $this->rule('200', '200034', 60);
         if (in_array($ncm, ['34011190','33061000','96032100','48181000','34011900','96190000'], true)) return $this->rule('200', '200035', 60);
         return $this->rule('000', '000001', 0);
     }
