@@ -1,4 +1,8 @@
-﻿CÃ³digo-fonte das lives sobre [Laravel e React](https://www.youtube.com/watch?v=OsH8sZb8x1k&list=PLmY5AEiqDWwAKFymn4450k9XGLt8v3Xgd&index=1).<br>
+CÃ³digo-fonte das lives sobre [Laravel e React](https://www.youtube.com/watch?v=OsH8sZb8x1k&list=PLmY5AEiqDWwAKFymn4450k9XGLt8v3Xgd&index=1).<br>
+
+## Decisao de arquitetura: sem Matriz
+
+Esta aplicacao **nao possui Matriz**. Cada loja (unidade) e independente para permissoes, operacao e configuracao fiscal. Nao criar modelos, tabelas, migrations, rotas, menus ou vinculos por `matriz_id` neste repositorio.
 
 ## Requisitos
 

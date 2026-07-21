@@ -27,11 +27,6 @@ export default function Config({ auth }) {
             href: route('units.index'),
         },
         {
-            label: 'Matrizes',
-            icon: 'bi-diagram-3',
-            href: route('matrizes.index'),
-        },
-        {
             label: 'Trocar',
             icon: 'bi-arrow-left-right',
             href: route('reports.switch-unit'),

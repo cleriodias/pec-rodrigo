@@ -14,7 +14,6 @@ use App\Http\Controllers\ProductDiscardController;
 use App\Http\Controllers\ProductStockController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\LanchoneteTerminalController;
-use App\Http\Controllers\MatrizController;
 use App\Http\Controllers\NoticeController;
 use App\Http\Controllers\OnlineController;
 use App\Http\Controllers\NewsletterSubscriptionController;
@@ -316,8 +315,6 @@ Route::middleware('auth')->group(function () {
 
         return Inertia::render('Settings/MenuOrder');
     })->name('settings.menu-order');
-    Route::get('/settings/matrizes', [MatrizController::class, 'index'])
-        ->name('settings.matrizes');
     Route::get('/settings/database', [DatabaseToolsController::class, 'index'])
         ->name('settings.database');
     Route::post('/settings/database', [DatabaseToolsController::class, 'run'])
@@ -408,9 +405,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/users/search', [UserController::class, 'search'])->name('users.search');
     Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword'])->name('users.reset-password');
 
-    Route::get('/matrizes', [MatrizController::class, 'index'])->name('matrizes.index');
-    Route::get('/matrizes/{matriz}/edit', [MatrizController::class, 'edit'])->name('matrizes.edit');
-    Route::put('/matrizes/{matriz}', [MatrizController::class, 'update'])->name('matrizes.update');
     Route::get('/units', [UnitController::class, 'index'])->name('units.index');
     Route::get('/units/create', [UnitController::class, 'create'])->name('units.create');
     Route::post('/units', [UnitController::class, 'store'])->name('units.store');

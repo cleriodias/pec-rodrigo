@@ -23,7 +23,6 @@ const SECTIONS = [
         items: [
             { label: 'Usuarios', icon: 'bi-people-fill', href: routeTo('users.index') },
             { label: 'Unidades', icon: 'bi-building', href: routeTo('units.index') },
-            { label: 'Matrizes', icon: 'bi-diagram-3', href: routeTo('matrizes.index') },
             { label: 'Fornecedores', icon: 'bi-truck', href: routeTo('settings.suppliers') },
             { label: 'AnyDesck', icon: 'bi-pc-display', href: routeTo('settings.anydesck') },
         ],

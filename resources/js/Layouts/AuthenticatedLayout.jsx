@@ -59,7 +59,6 @@ const DEFAULT_MENU_KEYS = [
     'dashboard',
     'users',
     'units',
-    'matrizes',
     'products',
     'boletos',
     'cashier_close',
@@ -168,7 +167,6 @@ export default function AuthenticatedLayout({ header, headerClassName = '', chil
     const auth = pageProps.auth ?? {};
     const user = auth.user ?? null;
     const activeUnitName = auth.unit?.name ?? 'Dashboard';
-    const activeUnitMatrizName = auth.unit?.matriz_name ?? null;
     const discardAlert = pageProps.discardAlert ?? null;
     const supportTicketsMenu = pageProps.supportTicketsMenu ?? null;
     const pendingFiscalTransmissions = pageProps.pendingFiscalTransmissions ?? {
@@ -190,7 +188,6 @@ export default function AuthenticatedLayout({ header, headerClassName = '', chil
     const isLanchonete = user && effectiveRole === 4;
     const isMaster = user && effectiveRole === 0;
     const isAdmin = user && [0, 1].includes(effectiveRole);
-    const canSeeMatrices = user && [0, 1, 2].includes(effectiveRole);
     const canSeeHojeReport = user && [0, 1, 2, 3].includes(effectiveRole);
     const canSeeUsers = user && [0, 1].includes(effectiveRole);
     const canSeeUnits = canSeeUsers;
@@ -399,14 +396,14 @@ export default function AuthenticatedLayout({ header, headerClassName = '', chil
                 ),
             },
             {
-                key: 'matrizes',
-                visible: canSeeMatrices && hasMenuAccess('matrizes'),
+                key: 'fiscal_configuration',
+                visible: isAdmin,
                 node: (
                     <NavLink
-                        href={route('matrizes.index')}
-                        active={route().current('matrizes.*')}
+                        href={route('settings.fiscal')}
+                        active={route().current('settings.fiscal') || route().current('settings.nfe')}
                     >
-                        <MenuLabel icon="bi bi-diagram-3" text="Matrizes" />
+                        <MenuLabel icon="bi bi-receipt-cutoff" text="Fiscal" />
                     </NavLink>
                 ),
             },
@@ -687,11 +684,6 @@ export default function AuthenticatedLayout({ header, headerClassName = '', chil
                             ) : (
                                 <div className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100">
                                     {user.name}
-                                </div>
-                            )}
-                            {activeUnitMatrizName && (
-                                <div className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 shadow-sm dark:border-indigo-900 dark:bg-indigo-950 dark:text-indigo-200">
-                                    Matriz: {activeUnitMatrizName}
                                 </div>
                             )}
                             <div className="relative">
