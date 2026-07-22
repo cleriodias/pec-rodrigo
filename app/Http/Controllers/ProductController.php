@@ -157,17 +157,19 @@ class ProductController extends Controller
         return Inertia::render('Products/ProductCreate', $this->formOptions());
     }
 
-    public function fiscalQueue(): Response
+    public function fiscalQueue(Request $request): Response
     {
-        $typeFilter = $this->resolveFiscalQueueTypeFilter(request());
-        $search = $this->resolveFiscalQueueSearch(request());
-        $pendingQuery = $this->pendingFiscalProductsQuery($typeFilter, $search);
+        $typeFilter = $this->resolveFiscalQueueTypeFilter($request);
+        $search = $this->resolveFiscalQueueSearch($request);
+        $missingNcmOnly = $request->boolean('missing_ncm');
+        $pendingQuery = $this->pendingFiscalProductsQuery($typeFilter, $search, $missingNcmOnly);
 
         return Inertia::render('Products/ProductFiscalQueue', [
             'items' => $pendingQuery->limit(20)->get(),
-            'pendingCount' => $this->pendingFiscalProductsQuery($typeFilter, $search)->count(),
+            'pendingCount' => $this->pendingFiscalProductsQuery($typeFilter, $search, $missingNcmOnly)->count(),
             'selectedType' => $typeFilter,
             'search' => $search,
+            'missingNcmOnly' => $missingNcmOnly,
             'typeOptions' => $this->formOptions()['typeOptions'],
         ]);
     }
@@ -176,12 +178,14 @@ class ProductController extends Controller
     {
         $typeFilter = $this->resolveFiscalQueueTypeFilter($request);
         $search = $this->resolveFiscalQueueSearch($request);
+        $missingNcmOnly = $request->boolean('missing_ncm');
 
         return response()->json([
-            'items' => $this->pendingFiscalProductsQuery($typeFilter, $search)->limit(20)->get(),
-            'pendingCount' => $this->pendingFiscalProductsQuery($typeFilter, $search)->count(),
+            'items' => $this->pendingFiscalProductsQuery($typeFilter, $search, $missingNcmOnly)->limit(20)->get(),
+            'pendingCount' => $this->pendingFiscalProductsQuery($typeFilter, $search, $missingNcmOnly)->count(),
             'selectedType' => $typeFilter,
             'search' => $search,
+            'missingNcmOnly' => $missingNcmOnly,
         ]);
     }
 
@@ -682,7 +686,7 @@ class ProductController extends Controller
         ];
     }
 
-    private function pendingFiscalProductsQuery(?int $typeFilter = null, string $search = '')
+    private function pendingFiscalProductsQuery(?int $typeFilter = null, string $search = '', bool $missingNcmOnly = false)
     {
         return Produto::query()
             ->select([
@@ -719,8 +723,13 @@ class ProductController extends Controller
                     $builder->where('tb1_nome', 'like', $likeTerm);
                 });
             })
-            ->where(function ($query) {
-                $query
+            ->when(
+                $missingNcmOnly,
+                fn ($query) => $query->where(fn ($missingNcmQuery) => $missingNcmQuery
+                    ->whereNull('tb1_ncm')
+                    ->orWhere('tb1_ncm', '=', '')
+                ),
+                fn ($query) => $query->where(fn ($pendingFiscalQuery) => $pendingFiscalQuery
                     ->whereNull('tb1_ncm')
                     ->orWhere('tb1_ncm', '=', '')
                     ->orWhereNull('tb1_cfop')
@@ -728,8 +737,9 @@ class ProductController extends Controller
                     ->orWhereNull('tb1_csosn')
                     ->orWhere('tb1_csosn', '=', '')
                     ->orWhereNull('tb1_cst')
-                    ->orWhere('tb1_cst', '=', '');
-            })
+                    ->orWhere('tb1_cst', '=', '')
+                )
+            )
             ->orderBy('tb1_id');
     }
 

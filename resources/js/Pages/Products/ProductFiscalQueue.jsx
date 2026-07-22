@@ -29,6 +29,7 @@ export default function ProductFiscalQueue({
     pendingCount = 0,
     selectedType = null,
     search = "",
+    missingNcmOnly = false,
     typeOptions = [],
 }) {
     const { flash } = usePage().props;
@@ -64,6 +65,10 @@ export default function ProductFiscalQueue({
 
         if (termValue !== "") {
             query.search = termValue;
+        }
+
+        if (missingNcmOnly) {
+            query.missing_ncm = 1;
         }
 
         return query;
@@ -198,10 +203,12 @@ export default function ProductFiscalQueue({
                 <div className="flex items-center justify-between gap-3">
                     <div>
                         <h2 className="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
-                            Fila Fiscal
+                            {missingNcmOnly ? "Produtos sem NCM - RTC 2026" : "Fila Fiscal"}
                         </h2>
                         <p className="text-sm text-gray-500 dark:text-gray-300">
-                            Atualize os dados fiscais em lote sem recarregar a tela.
+                            {missingNcmOnly
+                                ? "Produtos da SETOR-9 que exigem NCM para a classificacao automatica da RTC 2026."
+                                : "Atualize os dados fiscais em lote sem recarregar a tela."}
                         </p>
                     </div>
                     <Link href={route("products.index")}>

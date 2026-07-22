@@ -374,7 +374,15 @@ const Setor9RtcPanel = ({ preview }) => {
                 <div className={fiscalPanelClassName}><p className="text-slate-500">Regra manual</p><p className="mt-1 text-xl font-semibold">{summary.manual ?? 0}</p></div>
                 <div className={fiscalPanelClassName}><p className="text-slate-500">Sem NCM</p><p className="mt-1 text-xl font-semibold">{summary.without_ncm ?? 0}</p></div>
             </div>
-            <div className="flex justify-end"><PrimaryButton type="button" onClick={confirmReclassification}>Reclassificar RTC 2026</PrimaryButton></div>
+            <div className="flex flex-wrap justify-end gap-3">
+                <Link
+                    href={route('products.fiscal-queue', { missing_ncm: 1 })}
+                    className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 transition hover:border-amber-400 hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100 dark:hover:bg-amber-500/20"
+                >
+                    Ver produtos sem NCM ({summary.without_ncm ?? 0})
+                </Link>
+                <PrimaryButton type="button" onClick={confirmReclassification}>Reclassificar RTC 2026</PrimaryButton>
+            </div>
         </section>
     );
 };
