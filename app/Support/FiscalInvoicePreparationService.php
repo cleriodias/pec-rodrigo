@@ -20,7 +20,11 @@ class FiscalInvoicePreparationService
     ) {
     }
 
-    public function prepareForPayment(VendaPagamento $payment, ?array $consumer = null): ?NotaFiscal
+    public function prepareForPayment(
+        VendaPagamento $payment,
+        ?array $consumer = null,
+        bool $forceFiscalSignature = false,
+    ): ?NotaFiscal
     {
         $payment->loadMissing([
             'vendas.produto',
@@ -39,7 +43,7 @@ class FiscalInvoicePreparationService
         }
 
         try {
-            return DB::transaction(function () use ($payment, $unitId, $consumer) {
+            return DB::transaction(function () use ($payment, $unitId, $consumer, $forceFiscalSignature) {
                 $config = null;
                 $invoice = NotaFiscal::query()
                     ->where('tb4_id', $payment->tb4_id)
@@ -129,7 +133,12 @@ class FiscalInvoicePreparationService
                 $signedXml = null;
                 $accessKey = null;
 
-                if ($errors === [] && $config && $modelo === 'nfce') {
+                $deferFiscalSignature = $this->shouldDeferFiscalSignatureForPayment(
+                    $payment->tipo_pagamento,
+                    $forceFiscalSignature,
+                ) && ! filled($invoice?->tb27_xml_envio);
+
+                if ($errors === [] && $config && $modelo === 'nfce' && ! $deferFiscalSignature) {
                     try {
                         $certificateData = $this->fiscalCertificateService->loadCertificateForConfiguration($config);
                         $xmlPayload = $this->fiscalNfceXmlService->buildSignedXml(
@@ -684,6 +693,10 @@ class FiscalInvoicePreparationService
     {
         $excludedCount = (int) ($payload['itens_excluidos_qtd'] ?? 0);
 
+        if ($status === 'pendente_emissao' && ($payload['tipo_pagamento'] ?? null) === 'dinheiro') {
+            return 'Nota fiscal aguardando assinatura manual para transmissao. Enquanto isso, imprima apenas o cupom nao fiscal.';
+        }
+
         return match ($status) {
             'xml_assinado' => $excludedCount > 0
                 ? sprintf(
@@ -806,6 +819,11 @@ class FiscalInvoicePreparationService
             'dinheiro_cartao_debito',
             'maquina',
         ], true);
+    }
+
+    private function shouldDeferFiscalSignatureForPayment(?string $paymentType, bool $forceFiscalSignature): bool
+    {
+        return (string) $paymentType === 'dinheiro' && ! $forceFiscalSignature;
     }
 
     private function buildNonFiscalPaymentMessage(?string $paymentType): string

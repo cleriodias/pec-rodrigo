@@ -648,7 +648,10 @@ class SaleController extends Controller
                 ], 422);
             }
 
-            $refreshedInvoice = $fiscalInvoicePreparationService->prepareForPayment($notaFiscal->pagamento);
+            $refreshedInvoice = $fiscalInvoicePreparationService->prepareForPayment(
+                $notaFiscal->pagamento,
+                forceFiscalSignature: true,
+            );
 
             if (! $refreshedInvoice) {
                 return response()->json([

@@ -1838,6 +1838,9 @@ export default function Dashboard({
             unit_name: receiptUnitName,
             unit_address: receiptUnitAddress,
             unit_cnpj: receiptUnitCnpj,
+            non_fiscal_notice: receiptData.fiscal?.status === 'erro_transmissao'
+                ? `Falha na transmissao fiscal: ${receiptData.fiscal.mensagem || 'A SEFAZ nao autorizou a nota.'}`
+                : null,
         }));
         printWindow.document.close();
         printWindow.focus();
@@ -1846,8 +1849,8 @@ export default function Dashboard({
         resetAfterReceipt();
     };
 
-    const handlePrintFiscalReceipt = () => {
-        if (!receiptData?.fiscal) {
+    const handlePrintFiscalReceipt = (fiscalReceiptData = receiptData) => {
+        if (!fiscalReceiptData?.fiscal) {
             return;
         }
 
@@ -1858,8 +1861,8 @@ export default function Dashboard({
             return;
         }
 
-        const fiscalConsumer = receiptData.fiscal.consumer ?? null;
-        const fiscalItems = resolveFiscalReceiptItems(receiptData);
+        const fiscalConsumer = fiscalReceiptData.fiscal.consumer ?? null;
+        const fiscalItems = resolveFiscalReceiptItems(fiscalReceiptData);
         const fiscalConsumerType = resolveFiscalConsumerType(fiscalConsumer);
         const fiscalConsumerAddress = isFullConsumerFiscalType(fiscalConsumer)
             ? [
@@ -1875,36 +1878,36 @@ export default function Dashboard({
         const fiscalReceiptPayload = {
             title: 'DANFE NFC-e',
             subtitle: 'Documento Auxiliar da Nota Fiscal de Consumidor Eletronica',
-            emitter_name: receiptData.unit_name || activeUnitName || 'EMITENTE NAO INFORMADO',
-            emitter_legal_name: receiptData.unit_name || activeUnitName || null,
-            emitter_document: receiptData.unit_cnpj || activeUnitCnpj || null,
-            emitter_address: receiptData.unit_address || activeUnitAddress || null,
-            payment_id: resolveReceiptId(receiptData),
-            model_label: (receiptData.fiscal.modelo || 'NF').toUpperCase(),
-            environment: receiptData.fiscal.ambiente === 'producao' ? 'Producao' : 'Homologacao',
-            serie: receiptData.fiscal.serie || '--',
-            number: receiptData.fiscal.numero || '--',
-            status: receiptData.fiscal.status || '--',
-            status_message: receiptData.fiscal.mensagem || null,
-            issued_at: receiptData.fiscal.emitida_em || receiptData.date_time,
+            emitter_name: fiscalReceiptData.unit_name || activeUnitName || 'EMITENTE NAO INFORMADO',
+            emitter_legal_name: fiscalReceiptData.unit_name || activeUnitName || null,
+            emitter_document: fiscalReceiptData.unit_cnpj || activeUnitCnpj || null,
+            emitter_address: fiscalReceiptData.unit_address || activeUnitAddress || null,
+            payment_id: resolveReceiptId(fiscalReceiptData),
+            model_label: (fiscalReceiptData.fiscal.modelo || 'NF').toUpperCase(),
+            environment: fiscalReceiptData.fiscal.ambiente === 'producao' ? 'Producao' : 'Homologacao',
+            serie: fiscalReceiptData.fiscal.serie || '--',
+            number: fiscalReceiptData.fiscal.numero || '--',
+            status: fiscalReceiptData.fiscal.status || '--',
+            status_message: fiscalReceiptData.fiscal.mensagem || null,
+            issued_at: fiscalReceiptData.fiscal.emitida_em || fiscalReceiptData.date_time,
             consumer_type: fiscalConsumerType,
             consumer_name: fiscalConsumerType === 'cupom_fiscal'
                 ? 'CPF INFORMADO'
-                : (fiscalConsumer?.name || receiptData.fiscal.xml_debug?.dest_name || 'CONSUMIDOR NAO IDENTIFICADO'),
-            consumer_document: fiscalConsumer?.document || receiptData.fiscal.xml_debug?.dest_document || null,
+                : (fiscalConsumer?.name || fiscalReceiptData.fiscal.xml_debug?.dest_name || 'CONSUMIDOR NAO IDENTIFICADO'),
+            consumer_document: fiscalConsumer?.document || fiscalReceiptData.fiscal.xml_debug?.dest_document || null,
             consumer_address: fiscalConsumerAddress,
-            payment_label: receiptData.payment_label || '--',
-            total: receiptData.total,
-            amount_paid: receiptData.payment?.valor_pago,
-            change: receiptData.payment?.troco ?? 0,
-            additional_payment: receiptData.payment?.dois_pgto ?? 0,
-            access_key: receiptData.fiscal.chave_acesso || null,
-            protocol: receiptData.fiscal.protocolo || null,
-            receipt: receiptData.fiscal.recibo || null,
+            payment_label: fiscalReceiptData.payment_label || '--',
+            total: fiscalReceiptData.total,
+            amount_paid: fiscalReceiptData.payment?.valor_pago,
+            change: fiscalReceiptData.payment?.troco ?? 0,
+            additional_payment: fiscalReceiptData.payment?.dois_pgto ?? 0,
+            access_key: fiscalReceiptData.fiscal.chave_acesso || null,
+            protocol: fiscalReceiptData.fiscal.protocolo || null,
+            receipt: fiscalReceiptData.fiscal.recibo || null,
             consulta_url: null,
-            qr_code_data: receiptData.fiscal.xml_debug?.qr_code_data || null,
-            tax_summary: receiptData.fiscal.tax_summary || null,
-            is_preview: receiptData.fiscal.status !== 'emitida',
+            qr_code_data: fiscalReceiptData.fiscal.xml_debug?.qr_code_data || null,
+            tax_summary: fiscalReceiptData.fiscal.tax_summary || null,
+            is_preview: fiscalReceiptData.fiscal.status !== 'emitida',
             items: fiscalItems.map((item) => ({
                 id: item.product_id ?? item.id ?? null,
                 product_name: item.product_name,
@@ -2059,14 +2062,18 @@ export default function Dashboard({
             const response = await axios.post(route('sales.fiscal.transmit', { notaFiscal: fiscalId }));
             const payload = response?.data ?? {};
 
-            setReceiptData((current) => (
-                current
-                    ? {
-                        ...current,
-                        fiscal: payload.fiscal ?? current.fiscal,
-                    }
-                    : current
-            ));
+            const nextReceiptData = receiptData
+                ? {
+                    ...receiptData,
+                    fiscal: payload.fiscal ?? receiptData.fiscal,
+                }
+                : null;
+
+            setReceiptData(nextReceiptData);
+
+            if (nextReceiptData?.fiscal?.status === 'emitida') {
+                window.setTimeout(() => handlePrintFiscalReceipt(nextReceiptData), 0);
+            }
         } catch (error) {
             let message = 'Nao foi possivel transmitir a nota fiscal desta venda.';
 
@@ -3168,7 +3175,11 @@ export default function Dashboard({
                                     <span className="font-medium">Data:</span> {formatDateTime(receiptData.date_time)}
                                 </p>
                                 {receiptData.fiscal && (
-                                    <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-3 text-sm text-blue-900">
+                                    <div className={`rounded-xl border px-3 py-3 text-sm ${
+                                        receiptData.fiscal.status === 'erro_transmissao'
+                                            ? 'border-rose-200 bg-rose-50 text-rose-900'
+                                            : 'border-blue-200 bg-blue-50 text-blue-900'
+                                    }`}>
                                         <p>
                                             <span className="font-medium">Nota fiscal:</span>{' '}
                                             {(receiptData.fiscal.modelo || 'NF').toUpperCase()} {' '}
@@ -3191,7 +3202,11 @@ export default function Dashboard({
                                             </p>
                                         )}
                                         {receiptData.fiscal.mensagem && (
-                                            <p className="text-xs leading-5 text-blue-800">
+                                            <p className={`text-xs leading-5 ${
+                                                receiptData.fiscal.status === 'erro_transmissao'
+                                                    ? 'font-semibold text-rose-800'
+                                                    : 'text-blue-800'
+                                            }`}>
                                                 {receiptData.fiscal.mensagem}
                                             </p>
                                         )}
@@ -3226,14 +3241,22 @@ export default function Dashboard({
                                     Identificacao fiscal
                                 </button>
                             )}
-                            {receiptData.fiscal && ['xml_assinado', 'erro_transmissao'].includes(receiptData.fiscal.status) && (
+                            {receiptData.fiscal && (
+                                receiptData.payment?.tipo_pagamento === 'dinheiro'
+                                    ? ['pendente_emissao', 'erro_transmissao'].includes(receiptData.fiscal.status)
+                                    : ['xml_assinado', 'erro_transmissao'].includes(receiptData.fiscal.status)
+                            ) && (
                                 <button
                                     type="button"
                                     className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                                     onClick={handleTransmitFiscal}
                                     disabled={transmittingFiscal}
                                 >
-                                    {transmittingFiscal ? 'Transmitindo...' : 'Transmitir NF'}
+                                    {transmittingFiscal
+                                        ? 'Assinando e transmitindo...'
+                                        : (receiptData.payment?.tipo_pagamento === 'dinheiro'
+                                            ? 'Assinar e transmitir NF'
+                                            : 'Transmitir NF')}
                                 </button>
                             )}
                             <button
@@ -3257,7 +3280,7 @@ export default function Dashboard({
                                 className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-indigo-700"
                                 onClick={handlePrintReceipt}
                             >
-                                Imprimir
+                                Imprimir cupom nao fiscal
                             </button>
                         </div>
                     </div>

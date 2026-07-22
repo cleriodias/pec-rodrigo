@@ -99,6 +99,9 @@ export const buildReceiptHtml = (receipt) => {
         ${receipt?.unit_address ? `<p>Endereco: ${receipt.unit_address}</p>` : ''}
         ${receipt?.unit_cnpj ? `<p>CNPJ: ${receipt.unit_cnpj}</p>` : ''}
     `;
+    const nonFiscalNotice = receipt?.non_fiscal_notice
+        ? `<p class="non-fiscal-notice">${receipt.non_fiscal_notice}</p>`
+        : '';
 
     const itemsHtml = (receipt?.items || [])
         .map(
@@ -149,10 +152,13 @@ export const buildReceiptHtml = (receipt) => {
                     .items-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px; }
                     .items-row-subtotal { font-style: italic; }
                     .total { font-size: 14px; font-weight: bold; text-align: right; margin-top: 10px; }
+                    .non-fiscal { text-align: center; font-size: 12px; font-weight: bold; margin: 0 0 10px 0; }
+                    .non-fiscal-notice { border: 1px solid #b91c1c; color: #991b1b; padding: 6px; font-weight: bold; }
                 </style>
             </head>
             <body>
                 <h1>${receipt?.unit_name || 'Cupom'}</h1>
+                <p class="non-fiscal">CUPOM NAO FISCAL</p>
                 ${unitInfoHtml}
                 ${receiptId ? `<p>Cupom: #${receiptId}</p>` : ''}
                 ${receiptComanda ? `<p>Comanda: #${receiptComanda}</p>` : ''}
@@ -169,6 +175,7 @@ export const buildReceiptHtml = (receipt) => {
                 ${itemsHtml}
                 <div class="divider"></div>
                 ${paymentHtml}
+                ${nonFiscalNotice}
                 <div class="total">Total: ${formatReceiptCurrency(receipt?.total)}</div>
                 <p style="text-align:center;margin-top:12px;">Obrigado pela preferencia</p>
             </body>

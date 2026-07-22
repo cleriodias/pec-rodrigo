@@ -218,6 +218,19 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         $this->assertFalse($method->invoke($service, $simplesNacional, 'cartao_credito'));
     }
 
+    public function test_cash_payment_defers_signature_until_it_is_explicitly_requested(): void
+    {
+        $service = $this->makeService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('shouldDeferFiscalSignatureForPayment');
+        $method->setAccessible(true);
+
+        $this->assertTrue($method->invoke($service, 'dinheiro', false));
+        $this->assertFalse($method->invoke($service, 'dinheiro', true));
+        $this->assertFalse($method->invoke($service, 'dinheiro_cartao_credito', false));
+        $this->assertFalse($method->invoke($service, 'pix', false));
+    }
+
     public function test_build_non_fiscal_payment_message_marks_internal_control_payments(): void
     {
         $service = $this->makeService();
