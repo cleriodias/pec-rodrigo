@@ -56,7 +56,11 @@ class FiscalInvoicePreparationService
                         ->lockForUpdate()
                         ->first();
 
-                    if ($config && ! $config->tb26_geracao_automatica_ativa) {
+                    if (
+                        $config
+                        && ! $config->tb26_geracao_automatica_ativa
+                        && ! $this->requiresFiscalGenerationDespiteDisabledAutomaticGeneration($config, $payment->tipo_pagamento)
+                    ) {
                         return null;
                     }
 
@@ -777,6 +781,24 @@ class FiscalInvoicePreparationService
     {
         return in_array((string) $paymentType, [
             'dinheiro',
+            'cartao_credito',
+            'cartao_debito',
+            'pix',
+            'dinheiro_cartao_credito',
+            'dinheiro_cartao_debito',
+            'maquina',
+        ], true);
+    }
+
+    private function requiresFiscalGenerationDespiteDisabledAutomaticGeneration(
+        ConfiguracaoFiscal $config,
+        ?string $paymentType,
+    ): bool {
+        if ((string) $config->tb26_regime_tributario !== 'lucro_presumido') {
+            return false;
+        }
+
+        return in_array((string) $paymentType, [
             'cartao_credito',
             'cartao_debito',
             'pix',

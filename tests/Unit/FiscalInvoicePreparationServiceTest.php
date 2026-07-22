@@ -26,7 +26,7 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         $payment = $this->makePaymentWithFiscalProduct();
         [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment, $service);
 
-        $errors = $validatePayload->invoke($service, $payment, null, 'nfce', null, $eligibleSales, $excludedItems);
+        $errors = $validatePayload->invoke($service, $payment, null, 'nfce', null, $eligibleSales, $excludedItems, []);
 
         $this->assertSame(
             ['Configure a emissao fiscal da unidade antes de gerar a nota.'],
@@ -45,7 +45,7 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         $config = $this->makeConfiguration();
         [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment, $service);
 
-        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', null, $eligibleSales, $excludedItems);
+        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', null, $eligibleSales, $excludedItems, []);
 
         $this->assertSame([], $errors);
     }
@@ -64,7 +64,7 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', [
             'type' => 'cupom_fiscal',
             'document' => '12345678901',
-        ], $eligibleSales, $excludedItems);
+        ], $eligibleSales, $excludedItems, []);
 
         $this->assertSame([], $errors);
     }
@@ -84,7 +84,7 @@ class FiscalInvoicePreparationServiceTest extends TestCase
             'type' => 'consumidor',
             'name' => 'RODRIGO TESTE',
             'document' => '12345678901',
-        ], $eligibleSales, $excludedItems);
+        ], $eligibleSales, $excludedItems, []);
 
         $this->assertContains('Logradouro do consumidor nao informado para a NF Consumidor.', $errors);
         $this->assertContains('CEP do consumidor invalido para a NF Consumidor.', $errors);
@@ -106,7 +106,7 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         $config = $this->makeConfiguration();
         [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment, $service);
 
-        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', null, $eligibleSales, $excludedItems);
+        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', null, $eligibleSales, $excludedItems, []);
 
         $productError = collect($errors)->first(fn (string $error) => str_contains($error, 'Nenhum item da venda possui dados fiscais minimos'));
 
@@ -127,7 +127,7 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         ]);
         [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment, $service);
 
-        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', null, $eligibleSales, $excludedItems);
+        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', null, $eligibleSales, $excludedItems, []);
 
         $this->assertContains(
             'O CNPJ do certificado nao pertence ao mesmo CNPJ base da loja da venda.',
@@ -150,7 +150,7 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         ]);
         [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment, $service);
 
-        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', null, $eligibleSales, $excludedItems);
+        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', null, $eligibleSales, $excludedItems, []);
 
         $this->assertContains(
             'O codigo do municipio IBGE 5300108 nao pertence a UF GO informada na configuracao fiscal. Use um codigo iniciado por 52.',
@@ -171,7 +171,7 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         ]);
         [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment, $service);
 
-        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', null, $eligibleSales, $excludedItems);
+        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', null, $eligibleSales, $excludedItems, []);
 
         $this->assertContains(
             'A inscricao estadual da unidade esta invalida para emissao fiscal. Informe apenas digitos ou ISENTO.',
@@ -197,6 +197,25 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         $this->assertFalse($supportsMethod->invoke($service, 'vale'));
         $this->assertFalse($supportsMethod->invoke($service, 'refeicao'));
         $this->assertFalse($supportsMethod->invoke($service, 'faturar'));
+    }
+
+    public function test_lucro_presumido_requires_fiscal_generation_for_card_and_pix_when_automatic_generation_is_disabled(): void
+    {
+        $service = $this->makeService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('requiresFiscalGenerationDespiteDisabledAutomaticGeneration');
+        $method->setAccessible(true);
+
+        $lucroPresumido = $this->makeConfiguration(['tb26_regime_tributario' => 'lucro_presumido']);
+        $simplesNacional = $this->makeConfiguration(['tb26_regime_tributario' => 'simples_nacional']);
+
+        foreach (['cartao_credito', 'cartao_debito', 'pix', 'dinheiro_cartao_credito', 'dinheiro_cartao_debito', 'maquina'] as $paymentType) {
+            $this->assertTrue($method->invoke($service, $lucroPresumido, $paymentType));
+        }
+
+        $this->assertFalse($method->invoke($service, $lucroPresumido, 'dinheiro'));
+        $this->assertFalse($method->invoke($service, $lucroPresumido, 'vale'));
+        $this->assertFalse($method->invoke($service, $simplesNacional, 'cartao_credito'));
     }
 
     public function test_build_non_fiscal_payment_message_marks_internal_control_payments(): void
@@ -348,6 +367,7 @@ class FiscalInvoicePreparationServiceTest extends TestCase
             null,
             $eligibleSales,
             $excludedItems,
+            [],
         );
 
         $this->assertCount(1, $payload['itens']);
