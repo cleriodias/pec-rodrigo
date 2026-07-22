@@ -13,6 +13,7 @@ use App\Support\FiscalMunicipalityCodeService;
 use App\Support\FiscalNfceTransmissionService;
 use App\Support\FiscalWebserviceResolverService;
 use App\Support\Setor9Rtc2026Service;
+use Carbon\Carbon;
 use DOMDocument;
 use DOMXPath;
 use Illuminate\Http\UploadedFile;
@@ -211,6 +212,7 @@ class FiscalConfigurationController extends Controller
         $units = collect();
         $selectedUnitId = (int) $request->query('unit_id', 0);
         $signedMode = $this->normalizeNfeSignedMode($request->query('signed_mode', 'signed'));
+        $selectedDate = $this->normalizeNfeInvoiceDate($request->query('date'));
         $lastStep = 'inicializar tela NFe';
 
         try {
@@ -220,6 +222,8 @@ class FiscalConfigurationController extends Controller
                     'id' => (int) $unit->tb2_id,
                     'name' => $unit->tb2_nome,
                     'cnpj' => $unit->tb2_cnpj,
+                    'daily_issued_count' => 0,
+                    'daily_issued_total' => 0,
                 ])
                 ->values();
 
@@ -242,8 +246,11 @@ class FiscalConfigurationController extends Controller
                     'As tabelas fiscais ainda nao estao disponiveis neste ambiente. Execute as migrations fiscais do deploy antes de usar esta tela.',
                     null,
                     $signedMode,
+                    $selectedDate,
                 );
             }
+
+            $units = $this->attachNfeDailyIssuedSummaries($units, $selectedDate);
 
             $lastStep = 'carregar dados da unidade';
             $unit = $selectedUnitId > 0
@@ -254,18 +261,21 @@ class FiscalConfigurationController extends Controller
             $errorInvoices = collect();
             $signedInvoices = $this->emptyNfePaginator($request, 'signed_page');
             $issuedInvoices = $this->emptyNfePaginator($request, 'issued_page');
+            $invoiceCounts = $this->emptyNfeInvoiceCounts();
 
             if ($selectedUnitId > 0) {
                 try {
                     $lastStep = 'carregar ultimas notas fiscais da unidade';
-                    $errorInvoices = $this->loadPreparedInvoicesForUnit($selectedUnitId, 'error');
-                    $signedInvoices = $this->loadPreparedInvoicesPageForUnit($request, $selectedUnitId, 'signed', 10, 'signed_page');
-                    $issuedInvoices = $this->loadPreparedInvoicesPageForUnit($request, $selectedUnitId, 'issued', 10, 'issued_page');
+                    $errorInvoices = $this->loadPreparedInvoicesForUnit($selectedUnitId, 'error', $selectedDate);
+                    $signedInvoices = $this->loadPreparedInvoicesPageForUnit($request, $selectedUnitId, 'signed', $selectedDate, 10, 'signed_page');
+                    $issuedInvoices = $this->loadPreparedInvoicesPageForUnit($request, $selectedUnitId, 'issued', $selectedDate, 10, 'issued_page');
+                    $invoiceCounts = $this->loadNfeInvoiceCounts($selectedUnitId, $selectedDate);
                 } catch (Throwable) {
                     $invoiceLoadWarning = 'Nao foi possivel carregar todas as notas fiscais desta unidade neste ambiente. A tela foi mantida aberta sem derrubar a configuracao.';
                     $errorInvoices = collect();
                     $signedInvoices = $this->emptyNfePaginator($request, 'signed_page');
                     $issuedInvoices = $this->emptyNfePaginator($request, 'issued_page');
+                    $invoiceCounts = $this->emptyNfeInvoiceCounts();
                 }
             }
 
@@ -279,6 +289,8 @@ class FiscalConfigurationController extends Controller
                 null,
                 $invoiceLoadWarning,
                 $signedMode,
+                $selectedDate,
+                $invoiceCounts,
             );
         } catch (Throwable $exception) {
             report($exception);
@@ -297,6 +309,7 @@ class FiscalConfigurationController extends Controller
                 ),
                 null,
                 $signedMode,
+                $selectedDate,
             );
         }
     }
@@ -1124,9 +1137,81 @@ class FiscalConfigurationController extends Controller
         return in_array($signedMode, ['signed', 'issued'], true) ? $signedMode : 'signed';
     }
 
-    private function loadPreparedInvoicesForUnit(int $selectedUnitId, string $invoiceStatusFilter)
+    private function normalizeNfeInvoiceDate(mixed $date): string
     {
-        return $this->buildPreparedInvoicesQuery($selectedUnitId, $invoiceStatusFilter)
+        $date = trim((string) $date);
+
+        if ($date === '') {
+            return now()->toDateString();
+        }
+
+        try {
+            $parsedDate = Carbon::createFromFormat('!Y-m-d', $date);
+
+            return $parsedDate->format('Y-m-d') === $date
+                ? $parsedDate->toDateString()
+                : now()->toDateString();
+        } catch (Throwable) {
+            return now()->toDateString();
+        }
+    }
+
+    private function attachNfeDailyIssuedSummaries($units, string $selectedDate)
+    {
+        $unitIds = collect($units)->pluck('id')->map(fn ($unitId) => (int) $unitId)->filter()->values();
+
+        if ($unitIds->isEmpty()) {
+            return $units;
+        }
+
+        $summaries = NotaFiscal::query()
+            ->whereIn('tb2_id', $unitIds)
+            ->where('tb27_status', 'emitida')
+            ->whereDate('tb27_emitida_em', $selectedDate)
+            ->with('pagamento:tb4_id,valor_total')
+            ->get(['tb27_id', 'tb2_id', 'tb4_id', 'tb27_payload'])
+            ->groupBy('tb2_id')
+            ->map(function ($invoices): array {
+                return [
+                    'count' => $invoices->count(),
+                    'total' => round($invoices->sum(function (NotaFiscal $invoice): float {
+                        $payload = is_array($invoice->tb27_payload) ? $invoice->tb27_payload : [];
+
+                        return (float) ($payload['valor_total_documento'] ?? $invoice->pagamento?->valor_total ?? 0);
+                    }), 2),
+                ];
+            });
+
+        return collect($units)->map(function (array $unit) use ($summaries): array {
+            $summary = $summaries->get((int) $unit['id'], ['count' => 0, 'total' => 0]);
+            $unit['daily_issued_count'] = (int) $summary['count'];
+            $unit['daily_issued_total'] = (float) $summary['total'];
+
+            return $unit;
+        })->values();
+    }
+
+    private function emptyNfeInvoiceCounts(): array
+    {
+        return [
+            'error' => 0,
+            'signed' => 0,
+            'issued' => 0,
+        ];
+    }
+
+    private function loadNfeInvoiceCounts(int $selectedUnitId, string $selectedDate): array
+    {
+        return [
+            'error' => $this->buildPreparedInvoicesQuery($selectedUnitId, 'error', $selectedDate)->count(),
+            'signed' => $this->buildPreparedInvoicesQuery($selectedUnitId, 'signed', $selectedDate)->count(),
+            'issued' => $this->buildPreparedInvoicesQuery($selectedUnitId, 'issued', $selectedDate)->count(),
+        ];
+    }
+
+    private function loadPreparedInvoicesForUnit(int $selectedUnitId, string $invoiceStatusFilter, string $selectedDate)
+    {
+        return $this->buildPreparedInvoicesQuery($selectedUnitId, $invoiceStatusFilter, $selectedDate)
             ->with([
                 'pagamento.vendas.unidade:tb2_id,tb2_nome,tb2_endereco,tb2_cnpj',
                 'pagamento.vendas.caixa:id,name',
@@ -1162,10 +1247,11 @@ class FiscalConfigurationController extends Controller
         Request $request,
         int $selectedUnitId,
         string $invoiceStatusFilter,
+        string $selectedDate,
         int $perPage,
         string $pageName,
     ): LengthAwarePaginator {
-        $paginator = $this->buildPreparedInvoicesQuery($selectedUnitId, $invoiceStatusFilter)
+        $paginator = $this->buildPreparedInvoicesQuery($selectedUnitId, $invoiceStatusFilter, $selectedDate)
             ->with([
                 'pagamento.vendas.unidade:tb2_id,tb2_nome,tb2_endereco,tb2_cnpj',
                 'pagamento.vendas.caixa:id,name',
@@ -1203,7 +1289,7 @@ class FiscalConfigurationController extends Controller
         return $paginator;
     }
 
-    private function buildPreparedInvoicesQuery(int $selectedUnitId, string $invoiceStatusFilter)
+    private function buildPreparedInvoicesQuery(int $selectedUnitId, string $invoiceStatusFilter, string $selectedDate)
     {
         $invoiceQuery = NotaFiscal::query()
             ->where('tb2_id', $selectedUnitId);
@@ -1215,6 +1301,10 @@ class FiscalConfigurationController extends Controller
         } elseif ($invoiceStatusFilter === 'issued') {
             $invoiceQuery->where('tb27_status', 'emitida');
         }
+
+        $dateColumn = $invoiceStatusFilter === 'issued' ? 'tb27_emitida_em' : 'created_at';
+
+        $invoiceQuery->whereDate($dateColumn, $selectedDate);
 
         return $invoiceQuery;
     }
@@ -1252,6 +1342,9 @@ class FiscalConfigurationController extends Controller
         if ($routeName === 'settings.nfe') {
             $routeParameters['signed_mode'] = $this->normalizeNfeSignedMode(
                 $request->input('signed_mode', $request->query('signed_mode', 'signed'))
+            );
+            $routeParameters['date'] = $this->normalizeNfeInvoiceDate(
+                $request->input('date', $request->query('date'))
             );
         }
 
@@ -1314,6 +1407,8 @@ class FiscalConfigurationController extends Controller
         ?string $fiscalUnavailableMessage,
         ?string $invoiceLoadWarning,
         string $signedMode = 'signed',
+        ?string $selectedDate = null,
+        ?array $invoiceCounts = null,
     ): Response {
         return Inertia::render('Settings/Nfe', [
             'units' => $units,
@@ -1331,6 +1426,8 @@ class FiscalConfigurationController extends Controller
             'fiscalUnavailableMessage' => $fiscalUnavailableMessage,
             'invoiceLoadWarning' => $invoiceLoadWarning,
             'signedMode' => $signedMode,
+            'selectedDate' => $selectedDate ?? now()->toDateString(),
+            'invoiceCounts' => array_merge($this->emptyNfeInvoiceCounts(), $invoiceCounts ?? []),
         ]);
     }
 

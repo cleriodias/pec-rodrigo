@@ -41,6 +41,9 @@ const InvoiceTable = ({
     hideHeader = false,
     wrapperClassName = 'rounded-2xl bg-white p-0 shadow dark:bg-gray-800',
     signedMode = 'signed',
+    dateColumnLabel = 'Criada em',
+    dateValueKey = 'criada_em',
+    selectedDate = '',
 }) => {
     const invoiceItems = Array.isArray(invoices)
         ? invoices
@@ -65,7 +68,7 @@ const InvoiceTable = ({
                     <thead className="bg-gray-100 dark:bg-gray-900/60">
                         <tr>
                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Status</th>
-                            <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Criada em</th>
+                            <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">{dateColumnLabel}</th>
                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Regenerar</th>
                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">XML</th>
                             {showTransmit && (
@@ -84,7 +87,7 @@ const InvoiceTable = ({
                                         {STATUS_LABEL[invoice.status] ?? invoice.status}
                                     </span>
                                 </td>
-                                <td className="px-3 py-3 text-gray-700 dark:text-gray-200">{invoice.criada_em ?? '--'}</td>
+                                <td className="px-3 py-3 text-gray-700 dark:text-gray-200">{invoice[dateValueKey] ?? '--'}</td>
                                 <td className="px-3 py-3 text-gray-700 dark:text-gray-200">
                                     {invoice.pode_regenerar ? (
                                         <Link
@@ -92,6 +95,7 @@ const InvoiceTable = ({
                                                 notaFiscal: invoice.id,
                                                 origin: 'nfe',
                                                 signed_mode: signedMode,
+                                                date: selectedDate,
                                             })}
                                             method="post"
                                             as="button"
@@ -123,6 +127,7 @@ const InvoiceTable = ({
                                                     notaFiscal: invoice.id,
                                                     origin: 'nfe',
                                                     signed_mode: signedMode,
+                                                    date: selectedDate,
                                                 })}
                                                 method="post"
                                                 as="button"
@@ -170,6 +175,8 @@ export default function Nfe({
     fiscalUnavailableMessage = null,
     invoiceLoadWarning = null,
     signedMode = 'signed',
+    selectedDate = '',
+    invoiceCounts = {},
 }) {
     const { flash = {} } = usePage().props;
     const [activeSignedMode, setActiveSignedMode] = useState(signedMode);
@@ -181,6 +188,11 @@ export default function Nfe({
     }, [signedMode]);
 
     const rightInvoices = activeSignedMode === 'issued' ? issuedInvoices : signedInvoices;
+    const counts = {
+        error: Number(invoiceCounts.error ?? 0),
+        signed: Number(invoiceCounts.signed ?? 0),
+        issued: Number(invoiceCounts.issued ?? 0),
+    };
 
     const handlePrintFiscalReceipt = (receipt) => {
         setPrintError('');
@@ -201,15 +213,20 @@ export default function Nfe({
         printWindow.document.close();
     };
 
-    const handleSelectUnit = (unitId) => {
+    const navigateToNfe = ({ unitId = selectedUnitId, mode = activeSignedMode, date = selectedDate } = {}) => {
         router.get(route('settings.nfe'), {
             unit_id: unitId,
-            signed_mode: activeSignedMode,
+            signed_mode: mode,
+            date,
         }, {
             preserveState: true,
             preserveScroll: true,
             replace: true,
         });
+    };
+
+    const handleSelectUnit = (unitId) => {
+        navigateToNfe({ unitId });
     };
 
     const handleSignedModeChange = (mode) => {
@@ -218,14 +235,11 @@ export default function Nfe({
         }
 
         setActiveSignedMode(mode);
-        router.get(route('settings.nfe'), {
-            unit_id: selectedUnitId,
-            signed_mode: mode,
-        }, {
-            preserveState: true,
-            preserveScroll: true,
-            replace: true,
-        });
+        navigateToNfe({ mode });
+    };
+
+    const handleDateChange = (event) => {
+        navigateToNfe({ date: event.target.value });
     };
 
     return (
@@ -254,12 +268,23 @@ export default function Nfe({
                                         Selecione a loja pelos botoes abaixo.
                                     </p>
                                 </div>
-                                <Link
-                                    href={route('settings.fiscal')}
-                                    className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:border-blue-300 hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200 dark:hover:bg-blue-500/20"
-                                >
-                                    Abrir configuracao fiscal
-                                </Link>
+                                <div className="flex flex-wrap items-end gap-3">
+                                    <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                                        Data de emissao
+                                        <input
+                                            type="date"
+                                            value={selectedDate}
+                                            onChange={handleDateChange}
+                                            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/20"
+                                        />
+                                    </label>
+                                    <Link
+                                        href={route('settings.fiscal')}
+                                        className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:border-blue-300 hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200 dark:hover:bg-blue-500/20"
+                                    >
+                                        Abrir configuracao fiscal
+                                    </Link>
+                                </div>
                             </div>
                             <div>
                                 <div className="flex flex-wrap gap-3">
@@ -271,13 +296,16 @@ export default function Nfe({
                                             key={store.id}
                                             type="button"
                                             onClick={() => handleSelectUnit(store.id)}
-                                            className={`rounded-full border px-5 py-3 text-sm font-semibold transition ${
+                                            className={`rounded-2xl border px-4 py-3 text-left transition ${
                                                 isActive
                                                     ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm dark:border-blue-400 dark:bg-blue-500/10 dark:text-blue-200'
                                                     : 'border-gray-200 bg-white text-gray-700 hover:border-blue-300 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:border-blue-500/50 dark:hover:text-blue-200'
                                             }`}
                                         >
-                                            {store.name}
+                                            <span className="block text-sm font-semibold">{store.name}</span>
+                                            <span className="mt-1 block text-xs font-medium opacity-80">
+                                                {Number(store.daily_issued_count ?? 0)} emitida(s) · {formatReceiptCurrency(store.daily_issued_total ?? 0)}
+                                            </span>
                                         </button>
                                     );
                                 })}
@@ -312,16 +340,19 @@ export default function Nfe({
 
                             <section className="grid gap-6 xl:grid-cols-2">
                                 <InvoiceTable
-                                    title="Com erro"
+                                    title={`Com erro (${counts.error})`}
                                     description="Notas com erro de validacao ou transmissao."
                                     invoices={errorInvoices}
                                     signedMode={activeSignedMode}
+                                    selectedDate={selectedDate}
                                 />
                                 <section className="rounded-2xl bg-white p-0 shadow dark:bg-gray-800">
                                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4 dark:border-gray-700">
                                         <div>
                                             <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
-                                                {signedMode === 'issued' ? 'Emitidas' : 'Assinadas'}
+                                                {signedMode === 'issued'
+                                                    ? `Emitidas (${counts.issued})`
+                                                    : `Assinadas (${counts.signed})`}
                                             </h3>
                                             <p className="mt-1 text-sm text-gray-500 dark:text-gray-300">
                                                 {signedMode === 'issued'
@@ -339,7 +370,7 @@ export default function Nfe({
                                                         : 'text-slate-600 hover:text-blue-700 dark:text-slate-300 dark:hover:text-blue-200'
                                                 }`}
                                             >
-                                                Assinadas
+                                                Assinadas ({counts.signed})
                                             </button>
                                             <button
                                             type="button"
@@ -350,7 +381,7 @@ export default function Nfe({
                                                         : 'text-slate-600 hover:text-blue-700 dark:text-slate-300 dark:hover:text-blue-200'
                                                 }`}
                                             >
-                                                Emitidas
+                                                Emitidas ({counts.issued})
                                             </button>
                                         </div>
                                     </div>
@@ -366,6 +397,9 @@ export default function Nfe({
                                             hideHeader
                                             wrapperClassName="rounded-none bg-transparent p-0 shadow-none dark:bg-transparent"
                                             signedMode={activeSignedMode}
+                                            dateColumnLabel={activeSignedMode === 'issued' ? 'Emitida em' : 'Criada em'}
+                                            dateValueKey={activeSignedMode === 'issued' ? 'emitida_em' : 'criada_em'}
+                                            selectedDate={selectedDate}
                                         />
 
                                         {rightInvoices?.links?.length > 0 && (
