@@ -1049,6 +1049,7 @@ class FiscalConfigurationController extends Controller
             'recibo' => $invoice->tb27_recibo,
             'emitida_em' => optional($invoice->tb27_emitida_em)->format('d/m/y H:i'),
             'criada_em' => optional($invoice->created_at)->format('d/m/y H:i'),
+            'payment_type' => $invoicePayload['tipo_pagamento'] ?? $invoice->pagamento?->tipo_pagamento,
             'total' => round((float) ($invoicePayload['valor_total_documento'] ?? $invoice->pagamento?->valor_total ?? 0), 2),
             'xml_disponivel' => filled($invoice->tb27_xml_envio),
             'pode_regenerar' => in_array($invoice->tb27_status, [
