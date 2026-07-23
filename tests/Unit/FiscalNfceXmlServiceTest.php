@@ -367,7 +367,7 @@ class FiscalNfceXmlServiceTest extends TestCase
         $this->assertNotFalse($pixXml);
         $this->assertStringContainsString('<tPag>17</tPag>', $pixXml);
         $this->assertStringNotContainsString('<xPag>', $pixXml);
-        $this->assertStringNotContainsString('<card>', $pixXml);
+        $this->assertStringContainsString('<card><tpIntegra>2</tpIntegra></card>', $pixXml);
 
         $mixedDocument = new DOMDocument('1.0', 'UTF-8');
         $mixedInfNfe = $mixedDocument->createElement('infNFe');
@@ -433,7 +433,7 @@ class FiscalNfceXmlServiceTest extends TestCase
         $this->assertStringContainsString('<tPag>17</tPag>', $mixedPixXml);
         $this->assertStringContainsString('<vPag>10.00</vPag>', $mixedPixXml);
         $this->assertStringNotContainsString('<tPag>01</tPag>', $mixedPixXml);
-        $this->assertStringNotContainsString('<card>', $mixedPixXml);
+        $this->assertStringContainsString('<card><tpIntegra>2</tpIntegra></card>', $mixedPixXml);
 
         $valeDocument = new DOMDocument('1.0', 'UTF-8');
         $valeInfNfe = $valeDocument->createElement('infNFe');

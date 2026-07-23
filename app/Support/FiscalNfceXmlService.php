@@ -813,7 +813,7 @@ class FiscalNfceXmlService
             'dinheiro' => ['code' => '01', 'description' => null, 'requires_card' => false],
             'cartao_credito', 'maquina' => ['code' => '03', 'description' => null, 'requires_card' => true],
             'cartao_debito' => ['code' => '04', 'description' => null, 'requires_card' => true],
-            'pix' => ['code' => '17', 'description' => null, 'requires_card' => false],
+            'pix' => ['code' => '17', 'description' => null, 'requires_card' => true],
             'vale' => ['code' => '10', 'description' => null, 'requires_card' => false],
             'refeicao' => ['code' => '11', 'description' => null, 'requires_card' => false],
             'faturar' => ['code' => '90', 'description' => null, 'requires_card' => false],
