@@ -7,7 +7,7 @@ import { useEffect } from "react";
 const normalizeProductName = (value) => value.toLocaleUpperCase("pt-BR");
 const normalizeNcm = (value) => value.replace(/\D/g, "");
 
-export default function ProductEdit({ auth, product, typeOptions = [], statusOptions = [], originOptions = [] }) {
+export default function ProductEdit({ auth, product, typeOptions = [], statusOptions = [], originOptions = [], productTypeOptions = [] }) {
     const { data, setData, put, processing, errors } = useForm({
         tb1_id: product.tb1_id ?? "",
         tb1_nome: product.tb1_nome ?? "",
@@ -18,6 +18,7 @@ export default function ProductEdit({ auth, product, typeOptions = [], statusOpt
             Number(product.tb1_tipo) === 1 ||
             String(product.tb1_codbar ?? "").trim() === String(product.tb1_id ?? "").trim(),
         tb1_tipo: product.tb1_tipo ?? typeOptions[0]?.value ?? 0,
+        tb32_id: product.tb32_id ?? "",
         tb1_ncm: product.tb1_ncm ?? "",
         tb1_cest: product.tb1_cest ?? "",
         tb1_cfop: product.tb1_cfop ?? "",
@@ -46,6 +47,16 @@ export default function ProductEdit({ auth, product, typeOptions = [], statusOpt
     const handleSubmit = (event) => {
         event.preventDefault();
         put(route("products.update", { product: data.tb1_id }));
+    };
+
+    const handleProductTypeChange = (event) => {
+        const value = Number(event.target.value) || "";
+        const selectedType = productTypeOptions.find((option) => Number(option.value) === value);
+
+        setData("tb32_id", value);
+        if (selectedType?.ncm) {
+            setData("tb1_ncm", selectedType.ncm);
+        }
     };
 
     return (
@@ -186,6 +197,25 @@ export default function ProductEdit({ auth, product, typeOptions = [], statusOpt
                                 </p>
                             )}
 
+                                <div>
+                                    <label htmlFor="tb32_id" className="block text-sm font-medium text-gray-700">
+                                        Tipo de produto
+                                    </label>
+                                    <select
+                                        id="tb32_id"
+                                        value={data.tb32_id}
+                                        onChange={handleProductTypeChange}
+                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                    >
+                                        <option value="">Selecione</option>
+                                        {productTypeOptions.map((option) => (
+                                            <option key={option.value} value={option.value}>
+                                                {option.label} - NCM {option.ncm}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {errors.tb32_id && <span className="text-red-600">{errors.tb32_id}</span>}
+                                </div>
                                 <div>
                                     <label htmlFor="tb1_tipo" className="block text-sm font-medium text-gray-700">
                                         Tipo

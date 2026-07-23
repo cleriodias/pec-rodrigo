@@ -87,6 +87,12 @@ export default function ProductShow({ auth, product, typeLabels, statusLabels })
                                 </p>
                             </div>
                             <div>
+                                <p className="text-md font-semibold text-gray-700 dark:text-gray-200">Tipo de produto</p>
+                                <p className="text-gray-600 dark:text-gray-400">
+                                    {product.tipo_produto?.tb32_nome ?? "---"}
+                                </p>
+                            </div>
+                            <div>
                                 <p className="text-md font-semibold text-gray-700 dark:text-gray-200">Status</p>
                                 <p className="text-gray-600 dark:text-gray-400">
                                     {resolveLabel(statusLabels, product.tb1_status)}

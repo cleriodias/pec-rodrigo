@@ -298,6 +298,14 @@ export default function ProductIndex({
                                         <i className="bi bi-plus-lg text-lg" aria-hidden="true"></i>
                                     </SuccessButton>
                                 </Link>
+                                <Link
+                                    href={route("product-types.index")}
+                                    className="self-start sm:self-auto"
+                                >
+                                    <InfoButton aria-label="Cadastro Tipo Produto" title="Cadastro Tipo Produto" className="h-10 w-10 justify-center p-0">
+                                        <i className="bi bi-tags text-lg" aria-hidden="true"></i>
+                                    </InfoButton>
+                                </Link>
                             </div>
                             {searchError && (
                                 <p className="text-sm text-red-600 dark:text-red-400">{searchError}</p>

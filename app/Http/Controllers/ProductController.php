@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Produto;
+use App\Models\TipoProduto;
 use App\Models\User;
 use App\Support\ProductQuickLookupCache;
 use App\Support\Setor9Rtc2026Service;
@@ -145,6 +146,8 @@ class ProductController extends Controller
 
     public function show(Produto $product): Response
     {
+        $product->load('tipoProduto');
+
         return Inertia::render('Products/ProductShow', [
             'product' => $product,
             'typeLabels' => self::TYPE_LABELS,
@@ -533,6 +536,7 @@ class ProductController extends Controller
                     'integer',
                     Rule::in(array_keys(self::TYPE_LABELS)),
                 ],
+                'tb32_id' => ['required', 'integer', Rule::exists('tb32_tipo_produto', 'tb32_id')],
                 'tb1_ncm' => ['nullable', 'string', 'size:8'],
                 'tb1_cest' => ['nullable', 'string', 'size:7'],
                 'tb1_cfop' => ['nullable', 'string', 'size:4'],
@@ -582,6 +586,9 @@ class ProductController extends Controller
                 'tb1_tipo.required' => 'Selecione o tipo do produto.',
                 'tb1_tipo.integer' => 'Tipo de produto invalido.',
                 'tb1_tipo.in' => 'Tipo de produto nao reconhecido.',
+                'tb32_id.required' => 'Selecione o tipo de produto.',
+                'tb32_id.integer' => 'Tipo de produto invalido.',
+                'tb32_id.exists' => 'O tipo de produto selecionado nao existe.',
                 'tb1_ncm.size' => 'O NCM deve ter exatamente 8 digitos.',
                 'tb1_cest.size' => 'O CEST deve ter exatamente 7 digitos.',
                 'tb1_cfop.size' => 'O CFOP deve ter exatamente 4 digitos.',
@@ -683,6 +690,16 @@ class ProductController extends Controller
             'typeOptions' => $format(self::TYPE_LABELS),
             'statusOptions' => $format(self::STATUS_LABELS),
             'originOptions' => $format(self::ORIGIN_LABELS),
+            'productTypeOptions' => TipoProduto::query()
+                ->orderBy('tb32_nome')
+                ->get(['tb32_id', 'tb32_nome', 'tb32_ncm'])
+                ->map(fn (TipoProduto $type) => [
+                    'value' => $type->tb32_id,
+                    'label' => $type->tb32_nome,
+                    'ncm' => $type->tb32_ncm,
+                ])
+                ->values()
+                ->all(),
         ];
     }
 

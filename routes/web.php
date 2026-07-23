@@ -9,6 +9,7 @@ use App\Http\Controllers\DiscardSettingsController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\FiscalConfigurationController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ProductTypeController;
 use App\Http\Controllers\ProductFiscalRuleController;
 use App\Http\Controllers\ProductDiscardController;
 use App\Http\Controllers\ProductStockController;
@@ -426,6 +427,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/products/quick-lookup', [ProductController::class, 'quickLookup'])->name('products.quick-lookup');
     Route::get('/products/quick-lookup/snapshot', [ProductController::class, 'quickLookupSnapshot'])->name('products.quick-lookup.snapshot');
     Route::get('/products/search', [ProductController::class, 'search'])->name('products.search');
+    Route::get('/products/types', [ProductTypeController::class, 'index'])->name('product-types.index');
+    Route::post('/products/types', [ProductTypeController::class, 'store'])->name('product-types.store');
+    Route::put('/products/types/{productType}', [ProductTypeController::class, 'update'])->name('product-types.update');
+    Route::delete('/products/types/{productType}', [ProductTypeController::class, 'destroy'])->name('product-types.destroy');
     Route::get('/products/favorites', [ProductController::class, 'favorites'])->name('products.favorites');
     Route::post('/products/{product}/favorite', [ProductController::class, 'toggleFavorite'])->name('products.favorite');
     Route::get('/products/{product}/tributacao-fiscal', [ProductFiscalRuleController::class, 'index'])->name('products.fiscal-rule.index');

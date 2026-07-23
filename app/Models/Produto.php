@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Produto extends Model
@@ -30,6 +31,7 @@ class Produto extends Model
         'tb1_cst',
         'tb1_aliquota_icms',
         'tb1_tipo',
+        'tb32_id',
         'tb1_qtd',
         'tb1_status',
         'tb1_favorito',
@@ -51,6 +53,11 @@ class Produto extends Model
     public function tributacoesFiscaisUnidade(): HasMany
     {
         return $this->hasMany(ProdutoTributacaoFiscalUnidade::class, 'tb1_id', 'tb1_id');
+    }
+
+    public function tipoProduto(): BelongsTo
+    {
+        return $this->belongsTo(TipoProduto::class, 'tb32_id', 'tb32_id');
     }
 
     public function stockMovements(): HasMany
