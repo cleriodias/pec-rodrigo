@@ -31,6 +31,12 @@ const badgeClassName = (status) =>
         STATUS_CLASS[status] ?? STATUS_CLASS.pendente_configuracao
     }`;
 
+const formatInvoiceTime = (value) => {
+    const time = String(value ?? '').match(/(\d{2}:\d{2})$/)?.[1];
+
+    return time ?? value ?? '--';
+};
+
 const InvoiceTable = ({
     title,
     description,
@@ -44,6 +50,11 @@ const InvoiceTable = ({
     dateColumnLabel = 'Criada em',
     dateValueKey = 'criada_em',
     selectedDate = '',
+    signedPaymentFilter = 'non_cash',
+    compactInvoiceSummary = false,
+    compactTime = false,
+    regenerateLabel = 'Regenerar nota',
+    cashPaymentInGreen = false,
 }) => {
     const invoiceItems = Array.isArray(invoices)
         ? invoices
@@ -83,11 +94,23 @@ const InvoiceTable = ({
                         {invoiceItems.map((invoice) => (
                             <tr key={invoice.id} title={invoice.mensagem ?? ''}>
                                 <td className="px-3 py-3">
-                                    <span className={badgeClassName(invoice.status)}>
-                                        {STATUS_LABEL[invoice.status] ?? invoice.status}
-                                    </span>
+                                    {compactInvoiceSummary ? (
+                                        <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
+                                            cashPaymentInGreen && invoice.payment_type === 'dinheiro'
+                                                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                                                : 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200'
+                                        }`}>
+                                            {invoice.payment_id || '--'} / {formatReceiptCurrency(invoice.total ?? 0)}
+                                        </span>
+                                    ) : (
+                                        <span className={badgeClassName(invoice.status)}>
+                                            {STATUS_LABEL[invoice.status] ?? invoice.status}
+                                        </span>
+                                    )}
                                 </td>
-                                <td className="px-3 py-3 text-gray-700 dark:text-gray-200">{invoice[dateValueKey] ?? '--'}</td>
+                                <td className="px-3 py-3 text-gray-700 dark:text-gray-200">
+                                    {compactTime ? formatInvoiceTime(invoice[dateValueKey]) : (invoice[dateValueKey] ?? '--')}
+                                </td>
                                 <td className="px-3 py-3 text-gray-700 dark:text-gray-200">
                                     {invoice.pode_regenerar ? (
                                         <Link
@@ -95,13 +118,14 @@ const InvoiceTable = ({
                                                 notaFiscal: invoice.id,
                                                 origin: 'nfe',
                                                 signed_mode: signedMode,
+                                                signed_payment: signedPaymentFilter,
                                                 date: selectedDate,
                                             })}
                                             method="post"
                                             as="button"
                                             className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700"
                                         >
-                                            Regenerar nota
+                                            {regenerateLabel}
                                         </Link>
                                     ) : (
                                         '--'
@@ -127,6 +151,7 @@ const InvoiceTable = ({
                                                     notaFiscal: invoice.id,
                                                     origin: 'nfe',
                                                     signed_mode: signedMode,
+                                                    signed_payment: signedPaymentFilter,
                                                     date: selectedDate,
                                                 })}
                                                 method="post"
@@ -179,6 +204,7 @@ export default function Nfe({
     fiscalUnavailableMessage = null,
     invoiceLoadWarning = null,
     signedMode = 'signed',
+    signedCashOnly = false,
     selectedDate = '',
     invoiceCounts = {},
 }) {
@@ -195,6 +221,8 @@ export default function Nfe({
     const counts = {
         error: Number(invoiceCounts.error ?? 0),
         signed: Number(invoiceCounts.signed ?? 0),
+        signedCash: Number(invoiceCounts.signed_cash ?? 0),
+        signedCashTotal: Number(invoiceCounts.signed_cash_total ?? 0),
         issued: Number(invoiceCounts.issued ?? 0),
     };
 
@@ -217,10 +245,16 @@ export default function Nfe({
         printWindow.document.close();
     };
 
-    const navigateToNfe = ({ unitId = selectedUnitId, mode = activeSignedMode, date = selectedDate } = {}) => {
+    const navigateToNfe = ({
+        unitId = selectedUnitId,
+        mode = activeSignedMode,
+        date = selectedDate,
+        cashOnly = signedCashOnly,
+    } = {}) => {
         router.get(route('settings.nfe'), {
             unit_id: unitId,
             signed_mode: mode,
+            signed_payment: cashOnly ? 'cash' : 'non_cash',
             date,
         }, {
             preserveState: true,
@@ -244,6 +278,11 @@ export default function Nfe({
 
     const handleDateChange = (event) => {
         navigateToNfe({ date: event.target.value });
+    };
+
+    const handleSignedCashToggle = () => {
+        setActiveSignedMode('signed');
+        navigateToNfe({ mode: 'signed', cashOnly: !signedCashOnly });
     };
 
     return (
@@ -349,22 +388,47 @@ export default function Nfe({
                                     invoices={errorInvoices}
                                     signedMode={activeSignedMode}
                                     selectedDate={selectedDate}
+                                    signedPaymentFilter={signedCashOnly ? 'cash' : 'non_cash'}
+                                    compactInvoiceSummary
+                                    compactTime
+                                    regenerateLabel="Regenerar"
+                                    cashPaymentInGreen
                                 />
                                 <section className="rounded-2xl bg-white p-0 shadow dark:bg-gray-800">
                                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4 dark:border-gray-700">
                                         <div>
                                             <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
-                                                {signedMode === 'issued'
+                                                {activeSignedMode === 'issued'
                                                     ? `Emitidas (${counts.issued})`
-                                                    : `Assinadas (${counts.signed})`}
+                                                    : signedCashOnly
+                                                        ? `Assinadas em dinheiro (${counts.signedCash})`
+                                                        : `Assinadas (${counts.signed})`}
                                             </h3>
                                             <p className="mt-1 text-sm text-gray-500 dark:text-gray-300">
-                                                {signedMode === 'issued'
+                                                {activeSignedMode === 'issued'
                                                     ? 'Notas emitidas.'
-                                                    : 'Notas assinadas.'}
+                                                    : signedCashOnly
+                                                        ? 'Somente notas com pagamento integral em dinheiro.'
+                                                        : 'Notas assinadas, exceto pagamento integral em dinheiro.'}
                                             </p>
                                         </div>
-                                        <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-900/50">
+                                        <div className="flex flex-wrap items-center justify-end gap-2">
+                                            {activeSignedMode === 'signed' && (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleSignedCashToggle}
+                                                    className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                                                        signedCashOnly
+                                                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200'
+                                                            : 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200'
+                                                    }`}
+                                                >
+                                                    {signedCashOnly
+                                                        ? `Voltar para assinadas · ${counts.signedCash} em dinheiro · ${formatReceiptCurrency(counts.signedCashTotal)}`
+                                                        : `Dinheiro (${counts.signedCash}) · ${formatReceiptCurrency(counts.signedCashTotal)}`}
+                                                </button>
+                                            )}
+                                            <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-900/50">
                                             <button
                                             type="button"
                                             onClick={() => handleSignedModeChange('signed')}
@@ -387,6 +451,7 @@ export default function Nfe({
                                             >
                                                 Emitidas ({counts.issued})
                                             </button>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -404,6 +469,10 @@ export default function Nfe({
                                             dateColumnLabel={activeSignedMode === 'issued' ? 'Emitida em' : 'Criada em'}
                                             dateValueKey={activeSignedMode === 'issued' ? 'emitida_em' : 'criada_em'}
                                             selectedDate={selectedDate}
+                                            signedPaymentFilter={signedCashOnly ? 'cash' : 'non_cash'}
+                                            compactInvoiceSummary={activeSignedMode === 'signed'}
+                                            compactTime={activeSignedMode === 'signed'}
+                                            regenerateLabel={activeSignedMode === 'signed' ? 'Regenerar' : 'Regenerar nota'}
                                         />
 
                                         {rightInvoices?.links?.length > 0 && (

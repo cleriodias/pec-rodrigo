@@ -212,6 +212,7 @@ class FiscalConfigurationController extends Controller
         $units = collect();
         $selectedUnitId = (int) $request->query('unit_id', 0);
         $signedMode = $this->normalizeNfeSignedMode($request->query('signed_mode', 'signed'));
+        $signedPaymentFilter = $this->normalizeNfeSignedPaymentFilter($request->query('signed_payment', 'non_cash'));
         $selectedDate = $this->normalizeNfeInvoiceDate($request->query('date'));
         $lastStep = 'inicializar tela NFe';
 
@@ -247,6 +248,8 @@ class FiscalConfigurationController extends Controller
                     null,
                     $signedMode,
                     $selectedDate,
+                    null,
+                    $signedPaymentFilter,
                 );
             }
 
@@ -267,7 +270,7 @@ class FiscalConfigurationController extends Controller
                 try {
                     $lastStep = 'carregar ultimas notas fiscais da unidade';
                     $errorInvoices = $this->loadPreparedInvoicesForUnit($selectedUnitId, 'error', $selectedDate);
-                    $signedInvoices = $this->loadPreparedInvoicesPageForUnit($request, $selectedUnitId, 'signed', $selectedDate, 10, 'signed_page');
+                    $signedInvoices = $this->loadPreparedInvoicesPageForUnit($request, $selectedUnitId, 'signed', $selectedDate, 10, 'signed_page', $signedPaymentFilter);
                     $issuedInvoices = $this->loadPreparedInvoicesPageForUnit($request, $selectedUnitId, 'issued', $selectedDate, 10, 'issued_page');
                     $invoiceCounts = $this->loadNfeInvoiceCounts($selectedUnitId, $selectedDate);
                 } catch (Throwable) {
@@ -291,6 +294,7 @@ class FiscalConfigurationController extends Controller
                 $signedMode,
                 $selectedDate,
                 $invoiceCounts,
+                $signedPaymentFilter,
             );
         } catch (Throwable $exception) {
             report($exception);
@@ -310,6 +314,8 @@ class FiscalConfigurationController extends Controller
                 null,
                 $signedMode,
                 $selectedDate,
+                null,
+                $signedPaymentFilter,
             );
         }
     }
@@ -1138,6 +1144,13 @@ class FiscalConfigurationController extends Controller
         return in_array($signedMode, ['signed', 'issued'], true) ? $signedMode : 'signed';
     }
 
+    private function normalizeNfeSignedPaymentFilter(mixed $signedPaymentFilter): string
+    {
+        return strtolower(trim((string) $signedPaymentFilter)) === 'cash'
+            ? 'cash'
+            : 'non_cash';
+    }
+
     private function normalizeNfeInvoiceDate(mixed $date): string
     {
         $date = trim((string) $date);
@@ -1197,22 +1210,39 @@ class FiscalConfigurationController extends Controller
         return [
             'error' => 0,
             'signed' => 0,
+            'signed_cash' => 0,
+            'signed_cash_total' => 0,
             'issued' => 0,
         ];
     }
 
     private function loadNfeInvoiceCounts(int $selectedUnitId, string $selectedDate): array
     {
+        $signedCashInvoices = $this->buildPreparedInvoicesQuery($selectedUnitId, 'signed', $selectedDate, 'cash')
+            ->with('pagamento:tb4_id,valor_total')
+            ->get(['tb27_id', 'tb4_id', 'tb27_payload']);
+
         return [
             'error' => $this->buildPreparedInvoicesQuery($selectedUnitId, 'error', $selectedDate)->count(),
-            'signed' => $this->buildPreparedInvoicesQuery($selectedUnitId, 'signed', $selectedDate)->count(),
+            'signed' => $this->buildPreparedInvoicesQuery($selectedUnitId, 'signed', $selectedDate, 'non_cash')->count(),
+            'signed_cash' => $signedCashInvoices->count(),
+            'signed_cash_total' => round($signedCashInvoices->sum(function (NotaFiscal $invoice): float {
+                $payload = is_array($invoice->tb27_payload) ? $invoice->tb27_payload : [];
+
+                return (float) ($payload['valor_total_documento'] ?? $invoice->pagamento?->valor_total ?? 0);
+            }), 2),
             'issued' => $this->buildPreparedInvoicesQuery($selectedUnitId, 'issued', $selectedDate)->count(),
         ];
     }
 
-    private function loadPreparedInvoicesForUnit(int $selectedUnitId, string $invoiceStatusFilter, string $selectedDate)
+    private function loadPreparedInvoicesForUnit(
+        int $selectedUnitId,
+        string $invoiceStatusFilter,
+        string $selectedDate,
+        string $signedPaymentFilter = 'all',
+    )
     {
-        return $this->buildPreparedInvoicesQuery($selectedUnitId, $invoiceStatusFilter, $selectedDate)
+        return $this->buildPreparedInvoicesQuery($selectedUnitId, $invoiceStatusFilter, $selectedDate, $signedPaymentFilter)
             ->with([
                 'pagamento.vendas.unidade:tb2_id,tb2_nome,tb2_endereco,tb2_cnpj',
                 'pagamento.vendas.caixa:id,name',
@@ -1251,8 +1281,9 @@ class FiscalConfigurationController extends Controller
         string $selectedDate,
         int $perPage,
         string $pageName,
+        string $signedPaymentFilter = 'all',
     ): LengthAwarePaginator {
-        $paginator = $this->buildPreparedInvoicesQuery($selectedUnitId, $invoiceStatusFilter, $selectedDate)
+        $paginator = $this->buildPreparedInvoicesQuery($selectedUnitId, $invoiceStatusFilter, $selectedDate, $signedPaymentFilter)
             ->with([
                 'pagamento.vendas.unidade:tb2_id,tb2_nome,tb2_endereco,tb2_cnpj',
                 'pagamento.vendas.caixa:id,name',
@@ -1290,7 +1321,12 @@ class FiscalConfigurationController extends Controller
         return $paginator;
     }
 
-    private function buildPreparedInvoicesQuery(int $selectedUnitId, string $invoiceStatusFilter, string $selectedDate)
+    private function buildPreparedInvoicesQuery(
+        int $selectedUnitId,
+        string $invoiceStatusFilter,
+        string $selectedDate,
+        string $signedPaymentFilter = 'all',
+    )
     {
         $invoiceQuery = NotaFiscal::query()
             ->where('tb2_id', $selectedUnitId);
@@ -1299,6 +1335,7 @@ class FiscalConfigurationController extends Controller
             $invoiceQuery->whereIn('tb27_status', ['erro_validacao', 'erro_transmissao']);
         } elseif ($invoiceStatusFilter === 'signed') {
             $invoiceQuery->where('tb27_status', 'xml_assinado');
+            $this->applyNfeSignedPaymentFilter($invoiceQuery, $signedPaymentFilter);
         } elseif ($invoiceStatusFilter === 'issued') {
             $invoiceQuery->where('tb27_status', 'emitida');
         }
@@ -1308,6 +1345,24 @@ class FiscalConfigurationController extends Controller
         $invoiceQuery->whereDate($dateColumn, $selectedDate);
 
         return $invoiceQuery;
+    }
+
+    private function applyNfeSignedPaymentFilter($invoiceQuery, string $signedPaymentFilter): void
+    {
+        if ($signedPaymentFilter === 'cash') {
+            $invoiceQuery->whereHas('pagamento', fn ($paymentQuery) => $paymentQuery->where('tipo_pagamento', 'dinheiro'));
+
+            return;
+        }
+
+        if ($signedPaymentFilter !== 'non_cash') {
+            return;
+        }
+
+        $invoiceQuery->where(function ($query): void {
+            $query->whereDoesntHave('pagamento')
+                ->orWhereHas('pagamento', fn ($paymentQuery) => $paymentQuery->where('tipo_pagamento', '!=', 'dinheiro'));
+        });
     }
 
     private function emptyNfePaginator(Request $request, string $pageName): LengthAwarePaginator
@@ -1343,6 +1398,9 @@ class FiscalConfigurationController extends Controller
         if ($routeName === 'settings.nfe') {
             $routeParameters['signed_mode'] = $this->normalizeNfeSignedMode(
                 $request->input('signed_mode', $request->query('signed_mode', 'signed'))
+            );
+            $routeParameters['signed_payment'] = $this->normalizeNfeSignedPaymentFilter(
+                $request->input('signed_payment', $request->query('signed_payment', 'non_cash'))
             );
             $routeParameters['date'] = $this->normalizeNfeInvoiceDate(
                 $request->input('date', $request->query('date'))
@@ -1410,6 +1468,7 @@ class FiscalConfigurationController extends Controller
         string $signedMode = 'signed',
         ?string $selectedDate = null,
         ?array $invoiceCounts = null,
+        string $signedPaymentFilter = 'non_cash',
     ): Response {
         return Inertia::render('Settings/Nfe', [
             'units' => $units,
@@ -1427,6 +1486,7 @@ class FiscalConfigurationController extends Controller
             'fiscalUnavailableMessage' => $fiscalUnavailableMessage,
             'invoiceLoadWarning' => $invoiceLoadWarning,
             'signedMode' => $signedMode,
+            'signedCashOnly' => $signedPaymentFilter === 'cash',
             'selectedDate' => $selectedDate ?? now()->toDateString(),
             'invoiceCounts' => array_merge($this->emptyNfeInvoiceCounts(), $invoiceCounts ?? []),
         ]);
