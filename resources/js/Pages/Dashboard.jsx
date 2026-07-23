@@ -31,6 +31,7 @@ const paymentLabels = {
     dinheiro: 'Dinheiro',
     dinheiro_cartao_credito: 'Dinheiro + Cartao credito',
     dinheiro_cartao_debito: 'Dinheiro + Cartao debito',
+    dinheiro_pix: 'Dinheiro + Pix',
     pix: 'Pix',
     vale: 'Vale',
     faturar: 'Faturar',
@@ -50,6 +51,14 @@ const cardTypeOptions = [
         shortcutKey: 'F8',
         shortcutLabel: 'F8',
         classes: 'bg-sky-600 hover:bg-sky-700 focus:ring-sky-200 text-white',
+    },
+];
+const cashComplementOptions = [
+    ...cardTypeOptions,
+    {
+        value: 'pix',
+        label: paymentLabels.pix,
+        classes: 'bg-cyan-600 hover:bg-cyan-700 focus:ring-cyan-200 text-white',
     },
 ];
 const fiscalStatusLabels = {
@@ -1543,7 +1552,7 @@ export default function Dashboard({
         }
 
         if (cashCardComplement > 0 && !cashCardType) {
-            setSaleError('Selecione se o restante no cartao sera no credito ou no debito.');
+            setSaleError('Selecione a forma de pagamento do restante.');
             return;
         }
 
@@ -1706,7 +1715,7 @@ export default function Dashboard({
             }
 
             if (cashCardComplement > 0 && !cashCardType) {
-                setSaleError('Selecione se o restante no cartao sera no credito ou no debito.');
+                setSaleError('Selecione a forma de pagamento do restante.');
                 return;
             }
 
@@ -2850,14 +2859,14 @@ export default function Dashboard({
                                                     {cashCardComplement > 0 && (
                                                         <div className="mt-2 space-y-2">
                                                             <p className="text-xs text-amber-700 dark:text-amber-200">
-                                                                Restante no cartao: {formatCurrency(cashCardComplement)}
+                                                                Restante do pagamento: {formatCurrency(cashCardComplement)}
                                                             </p>
                                                             <div>
                                                                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">
-                                                                    Tipo do restante no cartao
+                                                                    Forma de pagamento do restante
                                                                 </p>
                                                                 <div className="mt-2 flex flex-wrap gap-2">
-                                                                    {cardTypeOptions.map((option) => {
+                                                                    {cashComplementOptions.map((option) => {
                                                                         const isSelected = cashCardType === option.value;
 
                                                                         return (
@@ -3144,7 +3153,11 @@ export default function Dashboard({
                                 </p>
                                 {receiptData.payment?.dois_pgto > 0 && (
                                     <p>
-                                        <span className="font-medium">Cartao (compl.):</span>{' '}
+                                        <span className="font-medium">
+                                            {receiptData.payment?.tipo_pagamento === 'dinheiro_pix'
+                                                ? 'Pix (compl.)'
+                                                : 'Cartao (compl.)'}:
+                                        </span>{' '}
                                         {formatCurrency(receiptData.payment.dois_pgto)}
                                     </p>
                                 )}

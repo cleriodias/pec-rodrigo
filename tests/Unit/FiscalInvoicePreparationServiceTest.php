@@ -192,6 +192,7 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         $this->assertTrue($supportsMethod->invoke($service, 'pix'));
         $this->assertTrue($supportsMethod->invoke($service, 'dinheiro_cartao_credito'));
         $this->assertTrue($supportsMethod->invoke($service, 'dinheiro_cartao_debito'));
+        $this->assertTrue($supportsMethod->invoke($service, 'dinheiro_pix'));
         $this->assertTrue($supportsMethod->invoke($service, 'maquina'));
 
         $this->assertFalse($supportsMethod->invoke($service, 'vale'));
@@ -209,7 +210,7 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         $lucroPresumido = $this->makeConfiguration(['tb26_regime_tributario' => 'lucro_presumido']);
         $simplesNacional = $this->makeConfiguration(['tb26_regime_tributario' => 'simples_nacional']);
 
-        foreach (['cartao_credito', 'cartao_debito', 'pix', 'dinheiro_cartao_credito', 'dinheiro_cartao_debito', 'maquina'] as $paymentType) {
+        foreach (['cartao_credito', 'cartao_debito', 'pix', 'dinheiro_cartao_credito', 'dinheiro_cartao_debito', 'dinheiro_pix', 'maquina'] as $paymentType) {
             $this->assertTrue($method->invoke($service, $lucroPresumido, $paymentType));
         }
 

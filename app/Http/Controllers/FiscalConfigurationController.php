@@ -1028,6 +1028,7 @@ class FiscalConfigurationController extends Controller
             'pix' => 'Pix',
             'dinheiro_cartao_credito' => 'Dinheiro + Cartao credito',
             'dinheiro_cartao_debito' => 'Dinheiro + Cartao debito',
+            'dinheiro_pix' => 'Dinheiro + Pix',
             'maquina' => 'Maquina',
             'vale' => 'Vale',
             'refeicao' => 'Refeicao',

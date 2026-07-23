@@ -1419,6 +1419,7 @@ class SalesReportController extends Controller
             'pix' => 'Pix',
             'dinheiro_cartao_credito' => 'Dinheiro + Cartao credito',
             'dinheiro_cartao_debito' => 'Dinheiro + Cartao debito',
+            'dinheiro_pix' => 'Dinheiro + Pix',
             'maquina' => 'Cartao',
             'vale' => 'Vale',
             'refeicao' => 'Refeicao',
@@ -3604,14 +3605,14 @@ class SalesReportController extends Controller
         $paymentTotals = $this->salesPeriodPaymentsBaseQuery($start, $end, $unitId, $allowedUnitIds)
             ->selectRaw("
                 COALESCE(SUM(CASE
-                    WHEN pagamentos.tipo_pagamento IN ('dinheiro', 'dinheiro_cartao_credito', 'dinheiro_cartao_debito')
+                    WHEN pagamentos.tipo_pagamento IN ('dinheiro', 'dinheiro_cartao_credito', 'dinheiro_cartao_debito', 'dinheiro_pix')
                         THEN GREATEST(pagamentos.valor_total - COALESCE(pagamentos.dois_pgto, 0), 0)
                     ELSE 0
                 END), 0) as dinheiro,
                 COALESCE(SUM(CASE
                     WHEN pagamentos.tipo_pagamento IN ('cartao_credito', 'cartao_debito', 'pix', 'maquina')
                         THEN GREATEST(pagamentos.valor_total, 0)
-                    WHEN pagamentos.tipo_pagamento IN ('dinheiro', 'dinheiro_cartao_credito', 'dinheiro_cartao_debito')
+                    WHEN pagamentos.tipo_pagamento IN ('dinheiro', 'dinheiro_cartao_credito', 'dinheiro_cartao_debito', 'dinheiro_pix')
                         THEN GREATEST(COALESCE(pagamentos.dois_pgto, 0), 0)
                     ELSE 0
                 END), 0) as maquina,
@@ -3661,7 +3662,7 @@ class SalesReportController extends Controller
     {
         return match ((string) $paymentType) {
             'cartao_credito', 'cartao_debito', 'pix', 'maquina' => 'maquina',
-            'dinheiro_cartao_credito', 'dinheiro_cartao_debito' => 'dinheiro',
+            'dinheiro_cartao_credito', 'dinheiro_cartao_debito', 'dinheiro_pix' => 'dinheiro',
             default => (string) $paymentType,
         };
     }
@@ -3670,7 +3671,7 @@ class SalesReportController extends Controller
     {
         return match ((string) $paymentType) {
             'cartao_credito', 'cartao_debito', 'pix', 'maquina' => 'maquina',
-            'dinheiro', 'dinheiro_cartao_credito', 'dinheiro_cartao_debito' => 'dinheiro',
+            'dinheiro', 'dinheiro_cartao_credito', 'dinheiro_cartao_debito', 'dinheiro_pix' => 'dinheiro',
             'vale', 'refeicao', 'faturar' => (string) $paymentType,
             default => null,
         };
@@ -3686,14 +3687,14 @@ class SalesReportController extends Controller
             ->selectRaw("
                 DATE(pagamentos.created_at) as payment_date,
                 COALESCE(SUM(CASE
-                    WHEN pagamentos.tipo_pagamento IN ('dinheiro', 'dinheiro_cartao_credito', 'dinheiro_cartao_debito')
+                    WHEN pagamentos.tipo_pagamento IN ('dinheiro', 'dinheiro_cartao_credito', 'dinheiro_cartao_debito', 'dinheiro_pix')
                         THEN GREATEST(pagamentos.valor_total - COALESCE(pagamentos.dois_pgto, 0), 0)
                     ELSE 0
                 END), 0) as dinheiro,
                 COALESCE(SUM(CASE
                     WHEN pagamentos.tipo_pagamento IN ('cartao_credito', 'cartao_debito', 'pix', 'maquina')
                         THEN GREATEST(pagamentos.valor_total, 0)
-                    WHEN pagamentos.tipo_pagamento IN ('dinheiro', 'dinheiro_cartao_credito', 'dinheiro_cartao_debito')
+                    WHEN pagamentos.tipo_pagamento IN ('dinheiro', 'dinheiro_cartao_credito', 'dinheiro_cartao_debito', 'dinheiro_pix')
                         THEN GREATEST(COALESCE(pagamentos.dois_pgto, 0), 0)
                     ELSE 0
                 END), 0) as maquina,
@@ -4030,7 +4031,7 @@ class SalesReportController extends Controller
 
         $cashExpression = "
             CASE
-                WHEN pagamentos.tipo_pagamento IN ('dinheiro', 'dinheiro_cartao_credito', 'dinheiro_cartao_debito')
+                WHEN pagamentos.tipo_pagamento IN ('dinheiro', 'dinheiro_cartao_credito', 'dinheiro_cartao_debito', 'dinheiro_pix')
                     THEN GREATEST(pagamentos.valor_total - COALESCE(pagamentos.dois_pgto, 0), 0)
                 ELSE 0
             END
@@ -4040,7 +4041,7 @@ class SalesReportController extends Controller
             CASE
                     WHEN pagamentos.tipo_pagamento IN ('cartao_credito', 'cartao_debito', 'pix', 'maquina')
                     THEN GREATEST(pagamentos.valor_total, 0)
-                WHEN pagamentos.tipo_pagamento IN ('dinheiro', 'dinheiro_cartao_credito', 'dinheiro_cartao_debito')
+                WHEN pagamentos.tipo_pagamento IN ('dinheiro', 'dinheiro_cartao_credito', 'dinheiro_cartao_debito', 'dinheiro_pix')
                     THEN GREATEST(COALESCE(pagamentos.dois_pgto, 0), 0)
                 ELSE 0
             END

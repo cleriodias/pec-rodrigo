@@ -102,7 +102,7 @@ class SaleController extends Controller
             'vale_user_id' => ['nullable', 'integer', 'exists:users,id'],
             'valor_pago' => ['nullable', 'numeric', 'min:0'],
             'vale_type' => ['nullable', 'string', Rule::in(['vale', 'refeicao'])],
-            'card_type' => ['nullable', 'string', Rule::in(['cartao_credito', 'cartao_debito'])],
+            'card_type' => ['nullable', 'string', Rule::in(['cartao_credito', 'cartao_debito', 'pix'])],
             'comanda_codigo' => ['nullable', 'integer', 'between:3000,3100'],
         ]);
 
@@ -462,11 +462,11 @@ class SaleController extends Controller
                 }
             }
 
-            $selectedCardType = isset($validated['card_type']) ? (string) $validated['card_type'] : null;
+            $selectedCashComplementType = isset($validated['card_type']) ? (string) $validated['card_type'] : null;
 
-            if ($requestedPaymentType === 'dinheiro' && $cardComplement > 0 && ! $this->isCardPaymentType($selectedCardType)) {
+            if ($requestedPaymentType === 'dinheiro' && $cardComplement > 0 && ! $this->isCashComplementPaymentType($selectedCashComplementType)) {
                 throw ValidationException::withMessages([
-                    'card_type' => 'Selecione se o restante no cartao sera no credito ou no debito.',
+                    'card_type' => 'Selecione a forma de pagamento do restante.',
                 ]);
             }
 
@@ -474,7 +474,7 @@ class SaleController extends Controller
                 $requestedPaymentType,
                 $salePaymentType,
                 $cardComplement,
-                $selectedCardType,
+                $selectedCashComplementType,
             );
 
             $payment = DB::transaction(function () use (
@@ -1615,9 +1615,9 @@ class SaleController extends Controller
         return $this->isMachinePaymentType($paymentType) ? 'maquina' : $paymentType;
     }
 
-    private function isCardPaymentType(?string $paymentType): bool
+    private function isCashComplementPaymentType(?string $paymentType): bool
     {
-        return in_array((string) $paymentType, ['cartao_credito', 'cartao_debito'], true);
+        return in_array((string) $paymentType, ['cartao_credito', 'cartao_debito', 'pix'], true);
     }
 
     private function isMachinePaymentType(?string $paymentType): bool
@@ -1629,12 +1629,14 @@ class SaleController extends Controller
         string $requestedPaymentType,
         string $salePaymentType,
         float $cardComplement,
-        ?string $selectedCardType,
+        ?string $selectedCashComplementType,
     ): string {
         if ($requestedPaymentType === 'dinheiro' && $cardComplement > 0) {
-            return $selectedCardType === 'cartao_debito'
-                ? 'dinheiro_cartao_debito'
-                : 'dinheiro_cartao_credito';
+            return match ($selectedCashComplementType) {
+                'cartao_debito' => 'dinheiro_cartao_debito',
+                'pix' => 'dinheiro_pix',
+                default => 'dinheiro_cartao_credito',
+            };
         }
 
         if ($this->isMachinePaymentType($requestedPaymentType)) {

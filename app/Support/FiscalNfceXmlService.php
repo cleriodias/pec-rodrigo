@@ -824,23 +824,27 @@ class FiscalNfceXmlService
     private function resolvePaymentDetails(VendaPagamento $payment, float $documentTotal): array
     {
         $paymentType = (string) $payment->tipo_pagamento;
-        $cardAmount = max((float) $payment->dois_pgto, 0);
+        $secondPaymentAmount = max((float) $payment->dois_pgto, 0);
 
-        if ($paymentType === 'dinheiro' && $cardAmount > 0) {
+        if ($paymentType === 'dinheiro' && $secondPaymentAmount > 0) {
             $paymentType = 'dinheiro_cartao_credito';
         }
 
-        if (! in_array($paymentType, ['dinheiro_cartao_credito', 'dinheiro_cartao_debito'], true)) {
+        if (! in_array($paymentType, ['dinheiro_cartao_credito', 'dinheiro_cartao_debito', 'dinheiro_pix'], true)) {
             return [[
                 'type' => $paymentType,
                 'amount' => $documentTotal,
             ]];
         }
 
-        $cashAmount = max((float) $payment->valor_total - $cardAmount, 0);
+        $cashAmount = max((float) $payment->valor_total - $secondPaymentAmount, 0);
         $documentCashAmount = min($cashAmount, $documentTotal);
-        $documentCardAmount = max($documentTotal - $documentCashAmount, 0);
-        $cardPaymentType = str_ends_with($paymentType, 'debito') ? 'cartao_debito' : 'cartao_credito';
+        $documentSecondPaymentAmount = max($documentTotal - $documentCashAmount, 0);
+        $secondPaymentType = match ($paymentType) {
+            'dinheiro_cartao_debito' => 'cartao_debito',
+            'dinheiro_pix' => 'pix',
+            default => 'cartao_credito',
+        };
         $details = [];
 
         if ($documentCashAmount > 0) {
@@ -850,10 +854,10 @@ class FiscalNfceXmlService
             ];
         }
 
-        if ($documentCardAmount > 0) {
+        if ($documentSecondPaymentAmount > 0) {
             $details[] = [
-                'type' => $cardPaymentType,
-                'amount' => $documentCardAmount,
+                'type' => $secondPaymentType,
+                'amount' => $documentSecondPaymentAmount,
             ];
         }
 

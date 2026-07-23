@@ -799,6 +799,7 @@ class FiscalInvoicePreparationService
             'pix',
             'dinheiro_cartao_credito',
             'dinheiro_cartao_debito',
+            'dinheiro_pix',
             'maquina',
         ], true);
     }
@@ -817,6 +818,7 @@ class FiscalInvoicePreparationService
             'pix',
             'dinheiro_cartao_credito',
             'dinheiro_cartao_debito',
+            'dinheiro_pix',
             'maquina',
         ], true);
     }
