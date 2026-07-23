@@ -837,32 +837,14 @@ class FiscalNfceXmlService
             ]];
         }
 
-        $cashAmount = max((float) $payment->valor_total - $secondPaymentAmount, 0);
-        $documentCashAmount = min($cashAmount, $documentTotal);
-        $documentSecondPaymentAmount = max($documentTotal - $documentCashAmount, 0);
         $secondPaymentType = match ($paymentType) {
             'dinheiro_cartao_debito' => 'cartao_debito',
             'dinheiro_pix' => 'pix',
             default => 'cartao_credito',
         };
-        $details = [];
 
-        if ($documentCashAmount > 0) {
-            $details[] = [
-                'type' => 'dinheiro',
-                'amount' => $documentCashAmount,
-            ];
-        }
-
-        if ($documentSecondPaymentAmount > 0) {
-            $details[] = [
-                'type' => $secondPaymentType,
-                'amount' => $documentSecondPaymentAmount,
-            ];
-        }
-
-        return $details !== [] ? $details : [[
-            'type' => 'dinheiro',
+        return [[
+            'type' => $secondPaymentType,
             'amount' => $documentTotal,
         ]];
     }
