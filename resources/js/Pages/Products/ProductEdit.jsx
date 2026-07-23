@@ -53,10 +53,11 @@ export default function ProductEdit({ auth, product, typeOptions = [], statusOpt
         const value = Number(event.target.value) || "";
         const selectedType = productTypeOptions.find((option) => Number(option.value) === value);
 
-        setData("tb32_id", value);
-        if (selectedType?.ncm) {
-            setData("tb1_ncm", selectedType.ncm);
-        }
+        setData({
+            ...data,
+            tb32_id: value,
+            tb1_ncm: selectedType?.ncm ?? data.tb1_ncm,
+        });
     };
 
     return (
