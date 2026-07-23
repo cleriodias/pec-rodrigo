@@ -499,7 +499,7 @@ class ProductController extends Controller
     private function validateProduct(Request $request, ?Produto $product = null): array
     {
         $request->merge([
-            'tb1_ncm' => $this->nullableTrimmedInput($request->input('tb1_ncm')),
+            'tb1_ncm' => $this->nullableTrimmedInput(preg_replace('/\D+/', '', (string) $request->input('tb1_ncm'))),
             'tb1_cest' => $this->nullableTrimmedInput($request->input('tb1_cest')),
             'tb1_cfop' => $this->nullableTrimmedInput($request->input('tb1_cfop')),
             'tb1_unidade_comercial' => $this->nullableTrimmedInput($request->input('tb1_unidade_comercial')),

@@ -5,6 +5,7 @@ import { Head, Link, useForm } from "@inertiajs/react";
 import { useEffect } from "react";
 
 const normalizeProductName = (value) => value.toLocaleUpperCase("pt-BR");
+const normalizeNcm = (value) => value.replace(/\D/g, "");
 
 export default function ProductEdit({ auth, product, typeOptions = [], statusOptions = [], originOptions = [] }) {
     const { data, setData, put, processing, errors } = useForm({
@@ -294,7 +295,7 @@ export default function ProductEdit({ auth, product, typeOptions = [], statusOpt
                                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                                     <div>
                                         <label htmlFor="tb1_ncm" className="block text-sm font-medium text-gray-700">NCM</label>
-                                        <input id="tb1_ncm" type="text" maxLength="8" value={data.tb1_ncm} onChange={(e) => setData("tb1_ncm", e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm sm:text-sm" />
+                                        <input id="tb1_ncm" type="text" inputMode="numeric" value={data.tb1_ncm} onChange={(e) => setData("tb1_ncm", normalizeNcm(e.target.value))} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm sm:text-sm" />
                                         {errors.tb1_ncm && <span className="text-red-600">{errors.tb1_ncm}</span>}
                                     </div>
                                     <div>
