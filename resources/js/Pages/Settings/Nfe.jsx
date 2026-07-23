@@ -56,6 +56,8 @@ const InvoiceTable = ({
     regenerateLabel = 'Regenerar nota',
     cashPaymentInGreen = false,
     onOpenFiscalCorrection = null,
+    transmittingInvoiceIds = [],
+    onTransmitInvoice = null,
 }) => {
     const invoiceItems = Array.isArray(invoices)
         ? invoices
@@ -152,7 +154,11 @@ const InvoiceTable = ({
                                 </td>
                                 {showTransmit && (
                                     <td className="px-3 py-3 text-gray-700 dark:text-gray-200">
-                                        {invoice.status === 'xml_assinado' ? (
+                                        {transmittingInvoiceIds.includes(invoice.id) ? (
+                                            <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200">
+                                                Enviado para transmissao
+                                            </span>
+                                        ) : invoice.status === 'xml_assinado' ? (
                                             <Link
                                                 href={route('settings.fiscal.invoices.transmit', {
                                                     notaFiscal: invoice.id,
@@ -163,6 +169,7 @@ const InvoiceTable = ({
                                                 })}
                                                 method="post"
                                                 as="button"
+                                                onClick={() => onTransmitInvoice?.(invoice.id)}
                                                 className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
                                                     invoice.payment_type === 'dinheiro'
                                                         ? 'border-rose-200 bg-rose-50 text-rose-700'
@@ -219,6 +226,7 @@ export default function Nfe({
     const [activeSignedMode, setActiveSignedMode] = useState(signedMode);
     const [selectedFiscalReceipt, setSelectedFiscalReceipt] = useState(null);
     const [selectedFiscalCorrectionInvoice, setSelectedFiscalCorrectionInvoice] = useState(null);
+    const [transmittingInvoiceIds, setTransmittingInvoiceIds] = useState([]);
     const [printError, setPrintError] = useState('');
 
     useEffect(() => {
@@ -291,6 +299,12 @@ export default function Nfe({
     const handleSignedCashToggle = () => {
         setActiveSignedMode('signed');
         navigateToNfe({ mode: 'signed', cashOnly: !signedCashOnly });
+    };
+
+    const handleTransmitInvoice = (invoiceId) => {
+        setTransmittingInvoiceIds((currentIds) => (
+            currentIds.includes(invoiceId) ? currentIds : [...currentIds, invoiceId]
+        ));
     };
 
     return (
@@ -482,6 +496,8 @@ export default function Nfe({
                                             compactInvoiceSummary={activeSignedMode === 'signed'}
                                             compactTime={activeSignedMode === 'signed'}
                                             regenerateLabel={activeSignedMode === 'signed' ? 'Regenerar' : 'Regenerar nota'}
+                                            transmittingInvoiceIds={transmittingInvoiceIds}
+                                            onTransmitInvoice={handleTransmitInvoice}
                                         />
 
                                         {rightInvoices?.links?.length > 0 && (
