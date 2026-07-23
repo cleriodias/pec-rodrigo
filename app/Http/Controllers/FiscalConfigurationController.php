@@ -1057,6 +1057,7 @@ class FiscalConfigurationController extends Controller
             'criada_em' => optional($invoice->created_at)->format('d/m/y H:i'),
             'payment_type' => $invoicePayload['tipo_pagamento'] ?? $invoice->pagamento?->tipo_pagamento,
             'total' => round((float) ($invoicePayload['valor_total_documento'] ?? $invoice->pagamento?->valor_total ?? 0), 2),
+            'fiscal_correction_items' => $this->buildFiscalCorrectionItems($invoice),
             'xml_disponivel' => filled($invoice->tb27_xml_envio),
             'pode_regenerar' => in_array($invoice->tb27_status, [
                 'pendente_configuracao',
@@ -1094,6 +1095,33 @@ class FiscalConfigurationController extends Controller
         }
 
         return $payload;
+    }
+
+    private function buildFiscalCorrectionItems(NotaFiscal $invoice): array
+    {
+        if (! $this->isMissingFiscalItemDataError($invoice->tb27_mensagem) || ! $invoice->pagamento) {
+            return [];
+        }
+
+        return $invoice->pagamento->vendas
+            ->map(function (Venda $sale): array {
+                return [
+                    'product_id' => (int) $sale->tb1_id,
+                    'product_name' => $sale->produto?->tb1_nome ?: $sale->produto_nome ?: 'Produto nao informado',
+                    'quantity' => (float) $sale->quantidade,
+                ];
+            })
+            ->filter(fn (array $item) => $item['product_id'] > 0)
+            ->values()
+            ->all();
+    }
+
+    private function isMissingFiscalItemDataError(?string $message): bool
+    {
+        return str_contains(
+            mb_strtolower((string) $message),
+            'nenhum item da venda possui dados fiscais minimos para gerar a nota'
+        );
     }
 
     private function canDeletePreparedInvoice(NotaFiscal $invoice): bool
@@ -1245,6 +1273,7 @@ class FiscalConfigurationController extends Controller
         return $this->buildPreparedInvoicesQuery($selectedUnitId, $invoiceStatusFilter, $selectedDate, $signedPaymentFilter)
             ->with([
                 'pagamento.vendas.unidade:tb2_id,tb2_nome,tb2_endereco,tb2_cnpj',
+                'pagamento.vendas.produto:tb1_id,tb1_nome',
                 'pagamento.vendas.caixa:id,name',
                 'pagamento.vendas.valeUser:id,name',
                 'configuracaoFiscal:tb26_id,tb26_razao_social,tb26_nome_fantasia,tb26_ie,tb26_logradouro,tb26_numero,tb26_complemento,tb26_bairro,tb26_municipio,tb26_uf,tb26_cep',
@@ -1286,6 +1315,7 @@ class FiscalConfigurationController extends Controller
         $paginator = $this->buildPreparedInvoicesQuery($selectedUnitId, $invoiceStatusFilter, $selectedDate, $signedPaymentFilter)
             ->with([
                 'pagamento.vendas.unidade:tb2_id,tb2_nome,tb2_endereco,tb2_cnpj',
+                'pagamento.vendas.produto:tb1_id,tb1_nome',
                 'pagamento.vendas.caixa:id,name',
                 'pagamento.vendas.valeUser:id,name',
                 'configuracaoFiscal:tb26_id,tb26_razao_social,tb26_nome_fantasia,tb26_ie,tb26_logradouro,tb26_numero,tb26_complemento,tb26_bairro,tb26_municipio,tb26_uf,tb26_cep',

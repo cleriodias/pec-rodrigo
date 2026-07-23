@@ -55,6 +55,7 @@ const InvoiceTable = ({
     compactTime = false,
     regenerateLabel = 'Regenerar nota',
     cashPaymentInGreen = false,
+    onOpenFiscalCorrection = null,
 }) => {
     const invoiceItems = Array.isArray(invoices)
         ? invoices
@@ -95,13 +96,19 @@ const InvoiceTable = ({
                             <tr key={invoice.id} title={invoice.mensagem ?? ''}>
                                 <td className="px-3 py-3">
                                     {compactInvoiceSummary ? (
-                                        <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
+                                        <button
+                                            type="button"
+                                            onClick={() => onOpenFiscalCorrection?.(invoice)}
+                                            disabled={!invoice.fiscal_correction_items?.length}
+                                            title={invoice.fiscal_correction_items?.length ? 'Ver produtos para corrigir a tributacao fiscal' : undefined}
+                                            className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
                                             cashPaymentInGreen && invoice.payment_type === 'dinheiro'
                                                 ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                                                 : 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200'
-                                        }`}>
+                                        } ${invoice.fiscal_correction_items?.length ? 'cursor-pointer hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:hover:border-blue-400 dark:hover:bg-blue-500/10 dark:hover:text-blue-200' : 'cursor-default'}`}
+                                        >
                                             {invoice.payment_id || '--'} / {formatReceiptCurrency(invoice.total ?? 0)}
-                                        </span>
+                                        </button>
                                     ) : (
                                         <span className={badgeClassName(invoice.status)}>
                                             {STATUS_LABEL[invoice.status] ?? invoice.status}
@@ -211,6 +218,7 @@ export default function Nfe({
     const { flash = {} } = usePage().props;
     const [activeSignedMode, setActiveSignedMode] = useState(signedMode);
     const [selectedFiscalReceipt, setSelectedFiscalReceipt] = useState(null);
+    const [selectedFiscalCorrectionInvoice, setSelectedFiscalCorrectionInvoice] = useState(null);
     const [printError, setPrintError] = useState('');
 
     useEffect(() => {
@@ -393,6 +401,7 @@ export default function Nfe({
                                     compactTime
                                     regenerateLabel="Regenerar"
                                     cashPaymentInGreen
+                                    onOpenFiscalCorrection={setSelectedFiscalCorrectionInvoice}
                                 />
                                 <section className="rounded-2xl bg-white p-0 shadow dark:bg-gray-800">
                                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4 dark:border-gray-700">
@@ -571,6 +580,62 @@ export default function Nfe({
                         className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-700"
                     >
                         Imprimir Fiscal
+                    </button>
+                </div>
+            </Modal>
+
+            <Modal show={Boolean(selectedFiscalCorrectionInvoice)} onClose={() => setSelectedFiscalCorrectionInvoice(null)} maxWidth="2xl" tone="light">
+                <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-6 py-4">
+                    <div>
+                        <h3 className="text-lg font-semibold text-gray-900">Corrigir dados fiscais dos produtos</h3>
+                        <p className="mt-1 text-sm text-gray-500">
+                            A nota {selectedFiscalCorrectionInvoice?.payment_id ?? '--'} nao possui itens com dados fiscais minimos.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setSelectedFiscalCorrectionInvoice(null)}
+                        className="text-sm font-semibold text-gray-500 hover:text-gray-800"
+                    >
+                        Fechar
+                    </button>
+                </div>
+
+                <div className="space-y-3 px-6 py-5">
+                    {(selectedFiscalCorrectionInvoice?.fiscal_correction_items ?? []).map((item, index) => (
+                        <div
+                            key={`${item.product_id}-${index}`}
+                            className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-slate-700 dark:bg-slate-900/50"
+                        >
+                            <div>
+                                <p className="font-semibold text-slate-900 dark:text-slate-100">{item.product_name}</p>
+                                <p className="mt-1 text-sm text-slate-500 dark:text-slate-300">Quantidade: {item.quantity}</p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                <Link
+                                    href={route('products.edit', { product: item.product_id })}
+                                    className="inline-flex items-center rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                                >
+                                    Editar produto
+                                </Link>
+                                <Link
+                                    href={route('products.fiscal-rule.index', { product: item.product_id })}
+                                    className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:border-blue-300 hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200"
+                                >
+                                    Tributacao fiscal por loja
+                                </Link>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                <div className="flex justify-end border-t border-gray-200 px-6 py-4">
+                    <button
+                        type="button"
+                        onClick={() => setSelectedFiscalCorrectionInvoice(null)}
+                        className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100"
+                    >
+                        Fechar
                     </button>
                 </div>
             </Modal>
