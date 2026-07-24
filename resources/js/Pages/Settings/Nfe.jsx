@@ -55,6 +55,8 @@ const InvoiceTable = ({
     compactTime = false,
     regenerateLabel = 'Regenerar nota',
     cashPaymentInGreen = false,
+    onTransmitBatch = null,
+    batchTransmitting = false,
     onOpenFiscalCorrection = null,
     transmittingInvoiceIds = [],
     onTransmitInvoice = null,
@@ -86,7 +88,16 @@ const InvoiceTable = ({
                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Regenerar</th>
                             <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">XML</th>
                             {showTransmit && (
-                                <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Transmissao</th>
+                                <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
+                                    <button
+                                        type="button"
+                                        onClick={onTransmitBatch}
+                                        disabled={batchTransmitting || !invoiceItems.some((invoice) => invoice.status === 'xml_assinado')}
+                                        className="rounded-lg px-2 py-1 font-semibold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:text-slate-400 dark:text-blue-200 dark:hover:bg-blue-500/10"
+                                    >
+                                        {batchTransmitting ? 'Transmitindo...' : 'Transmitir lote'}
+                                    </button>
+                                </th>
                             )}
                             {showReceipt && (
                                 <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Cupom fiscal</th>
@@ -228,6 +239,7 @@ export default function Nfe({
     const [selectedFiscalCorrectionInvoice, setSelectedFiscalCorrectionInvoice] = useState(null);
     const [transmittingInvoiceIds, setTransmittingInvoiceIds] = useState([]);
     const [printError, setPrintError] = useState('');
+    const [batchTransmission, setBatchTransmission] = useState({ open: false, processing: false, total: 0, results: [], error: '' });
 
     useEffect(() => {
         setActiveSignedMode(signedMode);
@@ -305,6 +317,47 @@ export default function Nfe({
         setTransmittingInvoiceIds((currentIds) => (
             currentIds.includes(invoiceId) ? currentIds : [...currentIds, invoiceId]
         ));
+    };
+
+    const closeBatchTransmission = () => {
+        if (batchTransmission.processing) {
+            return;
+        }
+
+        setBatchTransmission({ open: false, processing: false, total: 0, results: [], error: '' });
+        setTransmittingInvoiceIds([]);
+        navigateToNfe({ mode: 'signed' });
+    };
+
+    const handleTransmitBatch = async () => {
+        const visibleInvoices = Array.isArray(signedInvoices) ? signedInvoices : (signedInvoices?.data ?? []);
+        const invoiceIds = visibleInvoices
+            .filter((invoice) => invoice.status === 'xml_assinado' && !transmittingInvoiceIds.includes(invoice.id))
+            .map((invoice) => invoice.id);
+
+        if (invoiceIds.length === 0) {
+            return;
+        }
+
+        setTransmittingInvoiceIds((currentIds) => [...new Set([...currentIds, ...invoiceIds])]);
+        setBatchTransmission({ open: true, processing: true, total: invoiceIds.length, results: [], error: '' });
+
+        try {
+            const response = await axios.post(route('settings.fiscal.invoices.transmit-batch'), {
+                invoice_ids: invoiceIds,
+            });
+            setBatchTransmission((current) => ({
+                ...current,
+                processing: false,
+                results: response.data?.results ?? [],
+            }));
+        } catch (error) {
+            setBatchTransmission((current) => ({
+                ...current,
+                processing: false,
+                error: error.response?.data?.message ?? 'Nao foi possivel transmitir este lote de notas.',
+            }));
+        }
     };
 
     return (
@@ -499,6 +552,8 @@ export default function Nfe({
                                             transmittingInvoiceIds={transmittingInvoiceIds}
                                             onTransmitInvoice={handleTransmitInvoice}
                                         />
+                                            onTransmitBatch={handleTransmitBatch}
+                                            batchTransmitting={batchTransmission.processing}
 
                                         {rightInvoices?.links?.length > 0 && (
                                             <Pagination
@@ -655,6 +710,67 @@ export default function Nfe({
                     </button>
                 </div>
             </Modal>
+            <Modal show={batchTransmission.open} onClose={closeBatchTransmission} maxWidth="2xl" tone="light">
+                <div className="border-b border-gray-200 px-6 py-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Transmissao em lote</h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                        {batchTransmission.processing
+                            ? `Transmitindo ${batchTransmission.total} nota(s) assinada(s) desta pagina.`
+                            : 'Resultado da transmissao das notas desta pagina.'}
+                    </p>
+                </div>
+
+                <div className="max-h-[60vh] space-y-3 overflow-y-auto px-6 py-5">
+                    {batchTransmission.processing ? (
+                        <div className="flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-4 text-sm font-medium text-blue-700">
+                            <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-200 border-t-blue-700" />
+                            Processando o lote. Nao feche esta janela.
+                        </div>
+                    ) : (
+                        <>
+                            {batchTransmission.error && (
+                                <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                                    {batchTransmission.error}
+                                </div>
+                            )}
+                            <div className="flex flex-wrap gap-2 text-sm font-semibold">
+                                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700">
+                                    {batchTransmission.results.filter((result) => result.status === 'success').length} emitida(s)
+                                </span>
+                                <span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-rose-700">
+                                    {batchTransmission.results.filter((result) => result.status === 'error').length} com erro
+                                </span>
+                            </div>
+                            {batchTransmission.results.map((result) => (
+                                <div
+                                    key={result.invoice_id}
+                                    className={`rounded-xl border px-4 py-3 text-sm ${
+                                        result.status === 'success'
+                                            ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                                            : 'border-rose-200 bg-rose-50 text-rose-800'
+                                    }`}
+                                >
+                                    <p className="font-semibold">Cupom {result.payment_id ?? result.invoice_id}</p>
+                                    <p className="mt-1">{result.message}</p>
+                                </div>
+                            ))}
+                        </>
+                    )}
+                </div>
+
+                {!batchTransmission.processing && (
+                    <div className="flex justify-end border-t border-gray-200 px-6 py-4">
+                        <button
+                            type="button"
+                            onClick={closeBatchTransmission}
+                            className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+                        >
+                            Ver proximas assinadas
+                        </button>
+                    </div>
+                )}
+            </Modal>
+
         </AuthenticatedLayout>
     );
 }

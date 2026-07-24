@@ -331,7 +331,12 @@ export default function ProductEdit({ auth, product, typeOptions = [], statusOpt
                                     </div>
                                     <div>
                                         <label htmlFor="tb1_cfop" className="block text-sm font-medium text-gray-700">CFOP</label>
-                                        <input id="tb1_cfop" type="text" maxLength="4" value={data.tb1_cfop} onChange={(e) => setData("tb1_cfop", e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm sm:text-sm" />
+                                        <select id="tb1_cfop" value={data.tb1_cfop} onChange={(e) => setData("tb1_cfop", e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm sm:text-sm">
+                                            <option value="">Selecione</option>
+                                            <option value="5101">5101 - Venda de producao propria ou para revenda no mesmo estado</option>
+                                            <option value="6102">6102 - Venda para fora do estado</option>
+                                            <option value="5405">5405 - Venda com Substituicao Tributaria</option>
+                                        </select>
                                         {errors.tb1_cfop && <span className="text-red-600">{errors.tb1_cfop}</span>}
                                     </div>
                                     <div>

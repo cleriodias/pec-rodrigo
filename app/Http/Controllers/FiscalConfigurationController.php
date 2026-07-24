@@ -18,6 +18,7 @@ use DOMDocument;
 use DOMXPath;
 use Illuminate\Http\UploadedFile;
 use App\Support\ManagementScope;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -705,8 +706,103 @@ class FiscalConfigurationController extends Controller
             ->with('success', sprintf('Nota fiscal da venda %d enviada para a SEFAZ.', (int) $notaFiscal->tb4_id));
     }
 
-    private function ensureAdmin($user): void
-    {
+    public function transmitBatch(
+        Request $request,
+        FiscalInvoicePreparationService $fiscalInvoicePreparationService,
+        FiscalNfceTransmissionService $fiscalNfceTransmissionService,
+    ): JsonResponse {
+        $user = $request->user();
+        $this->ensureAdmin($user);
+
+        $data = $request->validate([
+            'invoice_ids' => ['required', 'array', 'min:1', 'max:25'],
+            'invoice_ids.*' => ['required', 'integer', 'distinct'],
+        ]);
+
+        $invoiceIds = collect($data['invoice_ids'])->map(fn ($invoiceId) => (int) $invoiceId)->values();
+        $invoices = NotaFiscal::query()
+            ->whereIn('tb27_id', $invoiceIds)
+            ->get()
+            ->keyBy('tb27_id');
+        $results = [];
+
+        foreach ($invoiceIds as $invoiceId) {
+            $notaFiscal = $invoices->get($invoiceId);
+
+            if (! $notaFiscal) {
+                $results[] = [
+                    'invoice_id' => $invoiceId,
+                    'status' => 'error',
+                    'message' => 'Nota fiscal nao encontrada.',
+                ];
+
+                continue;
+            }
+
+            if (! ManagementScope::canManageUnit($user, (int) $notaFiscal->tb2_id)) {
+                $results[] = [
+                    'invoice_id' => $invoiceId,
+                    'payment_id' => (int) $notaFiscal->tb4_id,
+                    'status' => 'error',
+                    'message' => 'Acesso negado para a unidade desta nota.',
+                ];
+
+                continue;
+            }
+
+            if ($notaFiscal->tb27_status !== 'xml_assinado') {
+                $results[] = [
+                    'invoice_id' => $invoiceId,
+                    'payment_id' => (int) $notaFiscal->tb4_id,
+                    'status' => 'error',
+                    'message' => 'A nota nao esta assinada para transmissao.',
+                ];
+
+                continue;
+            }
+
+            try {
+                $notaFiscal->loadMissing('pagamento.vendas.produto', 'pagamento.vendas.unidade');
+
+                if (! $notaFiscal->pagamento) {
+                    throw new RuntimeException('Nao foi encontrado o pagamento vinculado a esta nota fiscal.');
+                }
+
+                $refreshedInvoice = $fiscalInvoicePreparationService->prepareForPayment($notaFiscal->pagamento);
+
+                if (! $refreshedInvoice) {
+                    throw new RuntimeException('Esta forma de pagamento nao gera nota fiscal automatica para transmissao.');
+                }
+
+                if (! filled($refreshedInvoice->tb27_xml_envio)) {
+                    throw new RuntimeException($refreshedInvoice->tb27_mensagem ?: 'A nota ainda nao possui XML assinado para transmissao.');
+                }
+
+                $transmittedInvoice = $fiscalNfceTransmissionService->transmit($refreshedInvoice);
+                $results[] = [
+                    'invoice_id' => (int) $transmittedInvoice->tb27_id,
+                    'payment_id' => (int) $transmittedInvoice->tb4_id,
+                    'status' => $transmittedInvoice->tb27_status === 'emitida' ? 'success' : 'error',
+                    'message' => $transmittedInvoice->tb27_mensagem ?: 'Nota fiscal processada pela SEFAZ.',
+                ];
+            } catch (Throwable $exception) {
+                report($exception);
+                $results[] = [
+                    'invoice_id' => (int) $notaFiscal->tb27_id,
+                    'payment_id' => (int) $notaFiscal->tb4_id,
+                    'status' => 'error',
+                    'message' => $exception->getMessage(),
+                ];
+            }
+        }
+
+        return response()->json([
+            'results' => $results,
+            'success_count' => collect($results)->where('status', 'success')->count(),
+            'error_count' => collect($results)->where('status', 'error')->count(),
+        ]);
+    }
+    private function ensureAdmin($user): void {
         if (! $user || ! in_array((int) $user->funcao, [0, 1], true)) {
             abort(403, 'Acesso negado.');
         }

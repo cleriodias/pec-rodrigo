@@ -352,6 +352,8 @@ Route::middleware('auth')->group(function () {
         ->name('settings.fiscal.invoices.xml');
     Route::post('/settings/fiscal/notas/{notaFiscal}/transmit', [FiscalConfigurationController::class, 'transmit'])
         ->name('settings.fiscal.invoices.transmit');
+    Route::post('/settings/fiscal/notas/transmitir-lote', [FiscalConfigurationController::class, 'transmitBatch'])
+        ->name('settings.fiscal.invoices.transmit-batch');
     Route::get('/settings/contra-cheque', [PayrollController::class, 'contraCheque'])
         ->name('settings.contra-cheque');
     Route::patch('/settings/contra-cheque/{user}/salario', [PayrollController::class, 'updateContraChequeSalary'])
