@@ -551,9 +551,9 @@ export default function Nfe({
                                             regenerateLabel={activeSignedMode === 'signed' ? 'Regenerar' : 'Regenerar nota'}
                                             transmittingInvoiceIds={transmittingInvoiceIds}
                                             onTransmitInvoice={handleTransmitInvoice}
-                                        />
                                             onTransmitBatch={handleTransmitBatch}
                                             batchTransmitting={batchTransmission.processing}
+                                        />
 
                                         {rightInvoices?.links?.length > 0 && (
                                             <Pagination
