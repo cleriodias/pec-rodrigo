@@ -108,12 +108,11 @@ const InvoiceTable = ({
                         {invoiceItems.map((invoice) => (
                             <tr key={invoice.id} title={invoice.mensagem ?? ''}>
                                 <td className="px-3 py-3">
-
+                                    {compactInvoiceSummary ? (
                                         <button
                                             type="button"
                                             onClick={() => onOpenFiscalCorrection?.(invoice)}
-                                            disabled={!invoice.fiscal_correction_items?.length}
-                                            title={invoice.fiscal_correction_items?.length ? 'Ver produtos para corrigir a tributacao fiscal' : undefined}
+                                            title="Ver produtos para corrigir a tributacao fiscal"
                                             className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
                                             cashPaymentInGreen && invoice.payment_type === 'dinheiro'
                                                 ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
@@ -122,7 +121,11 @@ const InvoiceTable = ({
                                         >
                                             {invoice.payment_id || '--'} / {formatReceiptCurrency(invoice.total ?? 0)}
                                         </button>
-
+                                    ) : (
+                                        <span className={badgeClassName(invoice.status)}>
+                                            {STATUS_LABEL[invoice.status] ?? invoice.status}
+                                        </span>
+                                    )}
                                 </td>
                                 <td className="px-3 py-3 text-gray-700 dark:text-gray-200">
                                     {compactTime ? formatInvoiceTime(invoice[dateValueKey]) : (invoice[dateValueKey] ?? '--')}

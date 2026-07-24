@@ -1196,7 +1196,7 @@ class FiscalConfigurationController extends Controller
 
     private function buildFiscalCorrectionItems(NotaFiscal $invoice): array
     {
-        if (! $this->isMissingFiscalItemDataError($invoice->tb27_mensagem) || ! $invoice->pagamento) {
+        if (! in_array($invoice->tb27_status, ['erro_validacao', 'erro_transmissao'], true) || ! $invoice->pagamento) {
             return [];
         }
 
