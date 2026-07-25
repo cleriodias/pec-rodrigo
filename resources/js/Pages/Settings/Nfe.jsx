@@ -37,6 +37,27 @@ const formatInvoiceTime = (value) => {
     return time ?? value ?? '--';
 };
 
+const getMonthFromDate = (value) => /^\d{4}-\d{2}/.test(String(value ?? ''))
+    ? String(value).slice(0, 7)
+    : new Date().toISOString().slice(0, 7);
+
+const formatMonth = (month) => {
+    const label = new Intl.DateTimeFormat('pt-BR', {
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'UTC',
+    }).format(new Date(`${month}-01T00:00:00Z`));
+
+    return label.charAt(0).toUpperCase() + label.slice(1);
+};
+
+const shiftMonth = (month, amount) => {
+    const date = new Date(`${month}-01T00:00:00Z`);
+    date.setUTCMonth(date.getUTCMonth() + amount);
+
+    return date.toISOString().slice(0, 7);
+};
+
 const InvoiceTable = ({
     title,
     description,
@@ -239,6 +260,15 @@ export default function Nfe({
     const [transmittingInvoiceIds, setTransmittingInvoiceIds] = useState([]);
     const [printError, setPrintError] = useState('');
     const [batchTransmission, setBatchTransmission] = useState({ open: false, processing: false, total: 0, results: [], error: '' });
+    const [monthlySummary, setMonthlySummary] = useState({
+        open: false,
+        loading: false,
+        month: getMonthFromDate(selectedDate),
+        count: 0,
+        total: 0,
+        days: [],
+        error: '',
+    });
 
     useEffect(() => {
         setActiveSignedMode(signedMode);
@@ -310,6 +340,59 @@ export default function Nfe({
     const handleSignedCashToggle = () => {
         setActiveSignedMode('signed');
         navigateToNfe({ mode: 'signed', cashOnly: !signedCashOnly });
+    };
+
+    const loadMonthlySummary = async (month, open = true) => {
+        if (!selectedUnitId) {
+            return;
+        }
+
+        setMonthlySummary((current) => ({
+            ...current,
+            open: open || current.open,
+            loading: true,
+            month,
+            error: '',
+        }));
+
+        try {
+            const response = await axios.get(route('settings.fiscal.invoices.issued-monthly-summary'), {
+                params: { unit_id: selectedUnitId, month },
+            });
+            const summary = response.data ?? {};
+
+            setMonthlySummary({
+                open: true,
+                loading: false,
+                month: summary.month ?? month,
+                count: Number(summary.count ?? 0),
+                total: Number(summary.total ?? 0),
+                days: Array.isArray(summary.days) ? summary.days : [],
+                error: '',
+            });
+        } catch (error) {
+            setMonthlySummary((current) => ({
+                ...current,
+                open: true,
+                loading: false,
+                month,
+                error: error.response?.data?.message ?? 'Nao foi possivel carregar o resumo mensal.',
+            }));
+        }
+    };
+
+    const openMonthlySummary = () => {
+        loadMonthlySummary(getMonthFromDate(selectedDate));
+    };
+
+    const closeMonthlySummary = () => {
+        if (!monthlySummary.loading) {
+            setMonthlySummary((current) => ({ ...current, open: false }));
+        }
+    };
+
+    const handleMonthlySummaryMonthChange = (amount) => {
+        loadMonthlySummary(shiftMonth(monthlySummary.month, amount));
     };
 
     const handleTransmitInvoice = (invoiceId) => {
@@ -401,6 +484,14 @@ export default function Nfe({
                                     >
                                         Abrir configuracao fiscal
                                     </Link>
+                                    <button
+                                        type="button"
+                                        onClick={openMonthlySummary}
+                                        disabled={!selectedUnitId}
+                                        className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200"
+                                    >
+                                        Resumo mensal
+                                    </button>
                                 </div>
                             </div>
                             <div>
@@ -707,6 +798,95 @@ export default function Nfe({
                     >
                         Fechar
                     </button>
+                </div>
+            </Modal>
+            <Modal show={monthlySummary.open} onClose={closeMonthlySummary} maxWidth="2xl" tone="light">
+                <div className="border-b border-gray-200 px-6 py-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h3 className="text-lg font-semibold text-gray-900">Resumo mensal de notas emitidas</h3>
+                            <p className="mt-1 text-sm text-gray-500">
+                                Apenas notas fiscais autorizadas da loja selecionada.
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={closeMonthlySummary}
+                            disabled={monthlySummary.loading}
+                            className="text-sm font-semibold text-gray-500 transition hover:text-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            Fechar
+                        </button>
+                    </div>
+                </div>
+
+                <div className="space-y-5 px-6 py-5">
+                    <div className="flex items-center justify-between gap-3">
+                        <button
+                            type="button"
+                            onClick={() => handleMonthlySummaryMonthChange(-1)}
+                            disabled={monthlySummary.loading}
+                            className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            Mes anterior
+                        </button>
+                        <p className="text-center text-base font-semibold text-slate-900">{formatMonth(monthlySummary.month)}</p>
+                        <button
+                            type="button"
+                            onClick={() => handleMonthlySummaryMonthChange(1)}
+                            disabled={monthlySummary.loading}
+                            className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            Proximo mes
+                        </button>
+                    </div>
+
+                    {monthlySummary.loading ? (
+                        <div className="flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-4 text-sm font-medium text-blue-700">
+                            <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-200 border-t-blue-700" />
+                            Carregando resumo mensal.
+                        </div>
+                    ) : monthlySummary.error ? (
+                        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                            {monthlySummary.error}
+                        </div>
+                    ) : (
+                        <>
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Notas emitidas</p>
+                                    <p className="mt-1 text-xl font-bold text-slate-900">{monthlySummary.count}</p>
+                                </div>
+                                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Valor emitido</p>
+                                    <p className="mt-1 text-xl font-bold text-emerald-800">{formatReceiptCurrency(monthlySummary.total)}</p>
+                                </div>
+                            </div>
+
+                            {monthlySummary.days.length > 0 ? (
+                                <div className="overflow-hidden rounded-xl border border-slate-200">
+                                    <div className="grid grid-cols-[1fr_auto_auto] gap-4 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                        <span>Dia</span>
+                                        <span>Notas</span>
+                                        <span>Valor</span>
+                                    </div>
+                                    <div className="divide-y divide-slate-100">
+                                        {monthlySummary.days.map((day) => (
+                                            <div key={day.date} className="grid grid-cols-[1fr_auto_auto] gap-4 px-4 py-3 text-sm text-slate-700">
+                                                <span className="font-semibold">{String(day.date).split('-').reverse().join('/')}</span>
+                                                <span>{day.count}</span>
+                                                <span className="font-semibold text-emerald-700">{formatReceiptCurrency(day.total)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+                                    Nenhuma nota emitida neste mes.
+                                </p>
+                            )}
+                        </>
+                    )}
                 </div>
             </Modal>
             <Modal show={batchTransmission.open} onClose={closeBatchTransmission} maxWidth="2xl" tone="light">

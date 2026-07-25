@@ -321,6 +321,65 @@ class FiscalConfigurationController extends Controller
         }
     }
 
+    public function issuedMonthlySummary(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureAdmin($user);
+
+        $data = $request->validate([
+            'unit_id' => ['required', 'integer', 'exists:tb2_unidades,tb2_id'],
+            'month' => ['required', 'date_format:Y-m'],
+        ]);
+
+        $unitId = (int) $data['unit_id'];
+
+        if (! ManagementScope::canManageUnit($user, $unitId)) {
+            abort(403, 'Acesso negado.');
+        }
+
+        if (! $this->fiscalTablesAreAvailable()) {
+            return response()->json([
+                'message' => 'As tabelas fiscais ainda nao estao disponiveis neste ambiente.',
+            ], 503);
+        }
+
+        $month = Carbon::createFromFormat('!Y-m', $data['month']);
+        $monthStart = $month->copy()->startOfMonth();
+        $monthEnd = $month->copy()->endOfMonth();
+        $invoices = NotaFiscal::query()
+            ->where('tb2_id', $unitId)
+            ->where('tb27_status', 'emitida')
+            ->whereBetween('tb27_emitida_em', [$monthStart, $monthEnd])
+            ->with('pagamento:tb4_id,valor_total')
+            ->orderBy('tb27_emitida_em')
+            ->get(['tb27_id', 'tb4_id', 'tb27_emitida_em', 'tb27_payload']);
+
+        $days = $invoices
+            ->groupBy(fn (NotaFiscal $invoice) => $invoice->tb27_emitida_em->toDateString())
+            ->map(function ($dailyInvoices, string $date): array {
+                $total = $dailyInvoices->sum(function (NotaFiscal $invoice): float {
+                    $payload = is_array($invoice->tb27_payload) ? $invoice->tb27_payload : [];
+
+                    return (float) ($payload['valor_total_documento'] ?? $invoice->pagamento?->valor_total ?? 0);
+                });
+
+                return [
+                    'date' => $date,
+                    'count' => $dailyInvoices->count(),
+                    'total' => round($total, 2),
+                ];
+            })
+            ->sortBy('date')
+            ->values();
+
+        return response()->json([
+            'month' => $month->format('Y-m'),
+            'count' => $invoices->count(),
+            'total' => round($days->sum('total'), 2),
+            'days' => $days,
+        ]);
+    }
+
     public function update(
         Request $request,
         FiscalCertificateService $fiscalCertificateService,
