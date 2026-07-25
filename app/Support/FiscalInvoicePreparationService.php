@@ -60,11 +60,7 @@ class FiscalInvoicePreparationService
                         ->lockForUpdate()
                         ->first();
 
-                    if (
-                        $config
-                        && ! $config->tb26_geracao_automatica_ativa
-                        && ! $this->requiresFiscalGenerationDespiteDisabledAutomaticGeneration($config, $payment->tipo_pagamento)
-                    ) {
+                    if (! $this->shouldPrepareFiscalInvoiceForNewPayment($config, $payment->tipo_pagamento)) {
                         return null;
                     }
 
@@ -802,6 +798,18 @@ class FiscalInvoicePreparationService
             'dinheiro_pix',
             'maquina',
         ], true);
+    }
+
+    private function shouldPrepareFiscalInvoiceForNewPayment(
+        ?ConfiguracaoFiscal $config,
+        ?string $paymentType,
+    ): bool {
+        if (! $config) {
+            return false;
+        }
+
+        return $config->tb26_geracao_automatica_ativa
+            || $this->requiresFiscalGenerationDespiteDisabledAutomaticGeneration($config, $paymentType);
     }
 
     private function requiresFiscalGenerationDespiteDisabledAutomaticGeneration(
