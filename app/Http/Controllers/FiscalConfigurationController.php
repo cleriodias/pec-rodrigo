@@ -376,6 +376,7 @@ class FiscalConfigurationController extends Controller
             'month' => $month->format('Y-m'),
             'count' => $invoices->count(),
             'total' => round($days->sum('total'), 2),
+            'daily_average' => $days->isNotEmpty() ? round($days->sum('total') / $days->count(), 2) : 0,
             'days' => $days,
         ]);
     }

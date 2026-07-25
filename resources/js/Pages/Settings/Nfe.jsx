@@ -263,9 +263,11 @@ export default function Nfe({
     const [monthlySummary, setMonthlySummary] = useState({
         open: false,
         loading: false,
+        unitId: selectedUnitId,
         month: getMonthFromDate(selectedDate),
         count: 0,
         total: 0,
+        dailyAverage: 0,
         days: [],
         error: '',
     });
@@ -342,8 +344,8 @@ export default function Nfe({
         navigateToNfe({ mode: 'signed', cashOnly: !signedCashOnly });
     };
 
-    const loadMonthlySummary = async (month, open = true) => {
-        if (!selectedUnitId) {
+    const loadMonthlySummary = async (month, open = true, unitId = monthlySummary.unitId ?? selectedUnitId) => {
+        if (!unitId) {
             return;
         }
 
@@ -351,22 +353,25 @@ export default function Nfe({
             ...current,
             open: open || current.open,
             loading: true,
+            unitId,
             month,
             error: '',
         }));
 
         try {
             const response = await axios.get(route('settings.fiscal.invoices.issued-monthly-summary'), {
-                params: { unit_id: selectedUnitId, month },
+                params: { unit_id: unitId, month },
             });
             const summary = response.data ?? {};
 
             setMonthlySummary({
                 open: true,
                 loading: false,
+                unitId,
                 month: summary.month ?? month,
                 count: Number(summary.count ?? 0),
                 total: Number(summary.total ?? 0),
+                dailyAverage: Number(summary.daily_average ?? 0),
                 days: Array.isArray(summary.days) ? summary.days : [],
                 error: '',
             });
@@ -375,6 +380,7 @@ export default function Nfe({
                 ...current,
                 open: true,
                 loading: false,
+                unitId,
                 month,
                 error: error.response?.data?.message ?? 'Nao foi possivel carregar o resumo mensal.',
             }));
@@ -382,7 +388,7 @@ export default function Nfe({
     };
 
     const openMonthlySummary = () => {
-        loadMonthlySummary(getMonthFromDate(selectedDate));
+        loadMonthlySummary(getMonthFromDate(selectedDate), true, selectedUnitId);
     };
 
     const closeMonthlySummary = () => {
@@ -392,7 +398,15 @@ export default function Nfe({
     };
 
     const handleMonthlySummaryMonthChange = (amount) => {
-        loadMonthlySummary(shiftMonth(monthlySummary.month, amount));
+        loadMonthlySummary(shiftMonth(monthlySummary.month, amount), true, monthlySummary.unitId);
+    };
+
+    const handleMonthlySummaryUnitChange = (unitId) => {
+        if (Number(unitId) === Number(monthlySummary.unitId) || monthlySummary.loading) {
+            return;
+        }
+
+        loadMonthlySummary(monthlySummary.month, true, unitId);
     };
 
     const handleTransmitInvoice = (invoiceId) => {
@@ -821,6 +835,31 @@ export default function Nfe({
                 </div>
 
                 <div className="space-y-5 px-6 py-5">
+                    <div>
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Loja do resumo</p>
+                        <div className="flex flex-wrap gap-2">
+                            {units.map((store) => {
+                                const isActive = Number(monthlySummary.unitId) === Number(store.id);
+
+                                return (
+                                    <button
+                                        key={store.id}
+                                        type="button"
+                                        onClick={() => handleMonthlySummaryUnitChange(store.id)}
+                                        disabled={monthlySummary.loading}
+                                        className={`rounded-lg border px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                                            isActive
+                                                ? 'border-blue-500 bg-blue-50 text-blue-700'
+                                                : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:text-blue-700'
+                                        }`}
+                                    >
+                                        {store.name}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
                     <div className="flex items-center justify-between gap-3">
                         <button
                             type="button"
@@ -852,7 +891,7 @@ export default function Nfe({
                         </div>
                     ) : (
                         <>
-                            <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="grid gap-3 sm:grid-cols-3">
                                 <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Notas emitidas</p>
                                     <p className="mt-1 text-xl font-bold text-slate-900">{monthlySummary.count}</p>
@@ -860,6 +899,10 @@ export default function Nfe({
                                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
                                     <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Valor emitido</p>
                                     <p className="mt-1 text-xl font-bold text-emerald-800">{formatReceiptCurrency(monthlySummary.total)}</p>
+                                </div>
+                                <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Media diaria</p>
+                                    <p className="mt-1 text-xl font-bold text-blue-800">{formatReceiptCurrency(monthlySummary.dailyAverage)}</p>
                                 </div>
                             </div>
 
