@@ -110,7 +110,7 @@ class FiscalNfceXmlServiceTest extends TestCase
         $sale->setRelation('produto', $product);
 
         $appendEmitter->invoke($service, $document, $infNfe, $config, '11222333000144');
-        $appendItems->invoke($service, $document, $infNfe, collect([$sale]), 1, $config);
+        $appendItems->invoke($service, $document, $infNfe, collect([$sale]), 1, $config, []);
 
         $xml = $document->saveXML();
 
@@ -232,7 +232,7 @@ class FiscalNfceXmlServiceTest extends TestCase
         ]);
         $sale->setRelation('produto', $product);
 
-        $appendItems->invoke($service, $document, $infNfe, collect([$sale]), 1, $config);
+        $appendItems->invoke($service, $document, $infNfe, collect([$sale]), 1, $config, []);
 
         $xml = $document->saveXML();
 
@@ -275,7 +275,7 @@ class FiscalNfceXmlServiceTest extends TestCase
         ]);
         $sale->setRelation('produto', $product);
 
-        $appendItems->invoke($service, $document, $infNfe, collect([$sale]), 1, $config);
+        $appendItems->invoke($service, $document, $infNfe, collect([$sale]), 1, $config, []);
 
         $xml = $document->saveXML();
 

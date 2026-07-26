@@ -492,6 +492,7 @@ class FiscalInvoicePreparationService
             }
 
             $missingFields = [];
+            $invalidNcmMessage = FiscalNcmValidator::invalidMessage($product->tb1_ncm);
 
             foreach ([
                 'tb1_ncm' => 'NCM',
@@ -502,6 +503,10 @@ class FiscalInvoicePreparationService
                 if (blank($product->{$field})) {
                     $missingFields[] = $label;
                 }
+            }
+
+            if ($invalidNcmMessage !== null) {
+                $missingFields[] = $invalidNcmMessage;
             }
 
             if (! $config->tb26_rtc_2026_ativa && blank($product->tb1_csosn) && blank($product->tb1_cst)) {

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\TipoProduto;
+use App\Support\FiscalNcmValidator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\Validation\Rule;
@@ -67,7 +68,7 @@ class ProductTypeController extends Controller
                     'max:50',
                     Rule::unique('tb32_tipo_produto', 'tb32_nome')->ignore($productType?->tb32_id, 'tb32_id'),
                 ],
-                'tb32_ncm' => ['required', 'string', 'size:8'],
+                'tb32_ncm' => ['required', 'string', 'size:8', Rule::notIn(FiscalNcmValidator::invalidCodes())],
             ],
             [
                 'tb32_nome.required' => 'Informe o nome do tipo de produto.',
@@ -75,6 +76,7 @@ class ProductTypeController extends Controller
                 'tb32_nome.unique' => 'Este nome ja esta cadastrado.',
                 'tb32_ncm.required' => 'Informe o NCM.',
                 'tb32_ncm.size' => 'O NCM deve ter exatamente 8 digitos.',
+                'tb32_ncm.not_in' => FiscalNcmValidator::invalidMessage($request->input('tb32_ncm')) ?? 'NCM invalido para emissao fiscal.',
             ],
         );
     }

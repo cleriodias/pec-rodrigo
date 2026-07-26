@@ -158,6 +158,27 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         );
     }
 
+    public function test_validate_payload_flags_known_invalid_ncm_before_signing_xml(): void
+    {
+        $service = $this->makeService();
+        $reflection = new ReflectionClass($service);
+        $validatePayload = $reflection->getMethod('validatePayload');
+        $validatePayload->setAccessible(true);
+
+        $payment = $this->makePaymentWithFiscalProduct([
+            'tb1_ncm' => '04069000',
+        ]);
+        $config = $this->makeConfiguration();
+        [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment, $service);
+
+        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', null, $eligibleSales, $excludedItems, []);
+
+        $this->assertContains(
+            'Produto 10 (COXINHA) sem cadastro fiscal completo: NCM 04069000 inexistente na tabela vigente. Para mussarela, confira 04061010; para outros itens, consulte a tabela Classif/Receita.',
+            $errors
+        );
+    }
+
     public function test_validate_payload_flags_invalid_state_registration(): void
     {
         $service = $this->makeService();

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Produto;
 use App\Models\TipoProduto;
 use App\Models\User;
+use App\Support\FiscalNcmValidator;
 use App\Support\ProductQuickLookupCache;
 use App\Support\Setor9Rtc2026Service;
 use Illuminate\Http\JsonResponse;
@@ -201,7 +202,7 @@ class ProductController extends Controller
     {
         $data = $request->validate(
             [
-                'tb1_ncm' => ['required', 'string', 'size:8'],
+                'tb1_ncm' => ['required', 'string', 'size:8', Rule::notIn(FiscalNcmValidator::invalidCodes())],
                 'tb1_cfop' => ['required', 'string', 'size:4'],
                 'tb1_csosn' => ['required', 'string', 'max:4'],
                 'tb1_cst' => ['required', 'string', 'max:3'],
@@ -209,6 +210,7 @@ class ProductController extends Controller
             [
                 'tb1_ncm.required' => 'Informe o NCM.',
                 'tb1_ncm.size' => 'O NCM deve ter exatamente 8 digitos.',
+                'tb1_ncm.not_in' => FiscalNcmValidator::invalidMessage($request->input('tb1_ncm')) ?? 'NCM invalido para emissao fiscal.',
                 'tb1_cfop.required' => 'Informe o CFOP.',
                 'tb1_cfop.size' => 'O CFOP deve ter exatamente 4 digitos.',
                 'tb1_csosn.required' => 'Informe o CSOSN.',
@@ -537,7 +539,7 @@ class ProductController extends Controller
                     Rule::in(array_keys(self::TYPE_LABELS)),
                 ],
                 'tb32_id' => ['required', 'integer', Rule::exists('tb32_tipo_produto', 'tb32_id')],
-                'tb1_ncm' => ['nullable', 'string', 'size:8'],
+                'tb1_ncm' => ['nullable', 'string', 'size:8', Rule::notIn(FiscalNcmValidator::invalidCodes())],
                 'tb1_cest' => ['nullable', 'string', 'size:7'],
                 'tb1_cfop' => ['nullable', 'string', Rule::in(['5101', '6102', '5405'])],
                 'tb1_unidade_comercial' => ['nullable', 'string', 'max:6'],
@@ -590,6 +592,7 @@ class ProductController extends Controller
                 'tb32_id.integer' => 'Tipo de produto invalido.',
                 'tb32_id.exists' => 'O tipo de produto selecionado nao existe.',
                 'tb1_ncm.size' => 'O NCM deve ter exatamente 8 digitos.',
+                'tb1_ncm.not_in' => FiscalNcmValidator::invalidMessage($request->input('tb1_ncm')) ?? 'NCM invalido para emissao fiscal.',
                 'tb1_cest.size' => 'O CEST deve ter exatamente 7 digitos.',
                 'tb1_cfop.in' => 'Selecione um CFOP valido.',
                 'tb1_unidade_comercial.max' => 'A unidade comercial deve ter no maximo :max caracteres.',
@@ -745,10 +748,12 @@ class ProductController extends Controller
                 fn ($query) => $query->where(fn ($missingNcmQuery) => $missingNcmQuery
                     ->whereNull('tb1_ncm')
                     ->orWhere('tb1_ncm', '=', '')
+                    ->orWhereIn('tb1_ncm', FiscalNcmValidator::invalidCodes())
                 ),
                 fn ($query) => $query->where(fn ($pendingFiscalQuery) => $pendingFiscalQuery
                     ->whereNull('tb1_ncm')
                     ->orWhere('tb1_ncm', '=', '')
+                    ->orWhereIn('tb1_ncm', FiscalNcmValidator::invalidCodes())
                     ->orWhereNull('tb1_cfop')
                     ->orWhere('tb1_cfop', '=', '')
                     ->orWhereNull('tb1_csosn')
