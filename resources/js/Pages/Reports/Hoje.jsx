@@ -2,7 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { formatBrazilDateTime } from '@/Utils/date';
 import { buildFiscalReceiptHtml, buildReceiptHtml } from '@/Utils/receipt';
 import { Head, useForm } from '@inertiajs/react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 const PAYMENT_LABELS = {
     dinheiro: 'Dinheiro',
@@ -46,15 +46,22 @@ export default function Hoje({ records = [], reportDate, unit, filters = {} }) {
     const [selectedReceipt, setSelectedReceipt] = useState(null);
     const [selectedFiscalReceipt, setSelectedFiscalReceipt] = useState(null);
     const [printError, setPrintError] = useState('');
+    const [fiscalActionMessage, setFiscalActionMessage] = useState('');
+    const [visibleRecords, setVisibleRecords] = useState(records);
+    const [regeneratingFiscalId, setRegeneratingFiscalId] = useState(null);
 
     const totalValue = useMemo(
-        () => records.reduce((sum, record) => sum + Number(record.total ?? 0), 0),
-        [records],
+        () => visibleRecords.reduce((sum, record) => sum + Number(record.total ?? 0), 0),
+        [visibleRecords],
     );
     const fiscalQrCodeImageUrl = useMemo(
         () => buildQrCodeImageUrl(selectedFiscalReceipt?.qr_code_data),
         [selectedFiscalReceipt],
     );
+
+    useEffect(() => {
+        setVisibleRecords(records);
+    }, [records]);
 
     const handleSubmit = (event) => {
         event.preventDefault();
@@ -137,6 +144,69 @@ export default function Hoje({ records = [], reportDate, unit, filters = {} }) {
         }, { once: true });
     };
 
+    const handleRegenerateAndTransmitFiscal = async (record) => {
+        const invoiceId = record?.fiscal_receipt?.invoice_id;
+
+        if (!invoiceId || regeneratingFiscalId) {
+            return;
+        }
+
+        setPrintError('');
+        setFiscalActionMessage('');
+        setRegeneratingFiscalId(invoiceId);
+
+        try {
+            const response = await axios.post(route('reports.hoje.fiscal.regenerate-transmit', { notaFiscal: invoiceId }));
+            const fiscalReceipt = response.data?.fiscal_receipt ?? null;
+
+            if (fiscalReceipt) {
+                setVisibleRecords((currentRecords) => currentRecords.map((currentRecord) => (
+                    currentRecord.id === record.id
+                        ? {
+                            ...currentRecord,
+                            fiscal_receipt: fiscalReceipt,
+                            receipt: {
+                                ...currentRecord.receipt,
+                                fiscal_receipt: fiscalReceipt,
+                            },
+                        }
+                        : currentRecord
+                )));
+
+                setSelectedFiscalReceipt((currentReceipt) => (
+                    currentReceipt?.invoice_id === invoiceId ? fiscalReceipt : currentReceipt
+                ));
+            }
+
+            setFiscalActionMessage(response.data?.message ?? 'Nota fiscal regenerada e enviada para a SEFAZ.');
+        } catch (error) {
+            const fiscalReceipt = error.response?.data?.fiscal_receipt ?? null;
+
+            if (fiscalReceipt) {
+                setVisibleRecords((currentRecords) => currentRecords.map((currentRecord) => (
+                    currentRecord.id === record.id
+                        ? {
+                            ...currentRecord,
+                            fiscal_receipt: fiscalReceipt,
+                            receipt: {
+                                ...currentRecord.receipt,
+                                fiscal_receipt: fiscalReceipt,
+                            },
+                        }
+                        : currentRecord
+                )));
+
+                setSelectedFiscalReceipt((currentReceipt) => (
+                    currentReceipt?.invoice_id === invoiceId ? fiscalReceipt : currentReceipt
+                ));
+            }
+
+            setPrintError(error.response?.data?.message ?? 'Nao foi possivel regenerar e transmitir a nota fiscal.');
+        } finally {
+            setRegeneratingFiscalId(null);
+        }
+    };
+
     const headerContent = (
         <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -168,6 +238,11 @@ export default function Hoje({ records = [], reportDate, unit, filters = {} }) {
                     {printError && (
                         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200">
                             {printError}
+                        </div>
+                    )}
+                    {fiscalActionMessage && (
+                        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
+                            {fiscalActionMessage}
                         </div>
                     )}
 
@@ -253,7 +328,7 @@ export default function Hoje({ records = [], reportDate, unit, filters = {} }) {
                             </h3>
                             <div className="flex flex-wrap items-center gap-3">
                                 <span className="text-xs font-semibold text-gray-500 dark:text-gray-300">
-                                    {records.length} registros
+                                    {visibleRecords.length} registros
                                 </span>
                                 <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-indigo-700 shadow-sm dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200">
                                     <p className="text-[10px] font-semibold uppercase tracking-wide">
@@ -265,7 +340,7 @@ export default function Hoje({ records = [], reportDate, unit, filters = {} }) {
                         </div>
 
                         <div className="mt-4 overflow-x-auto">
-                            {records.length === 0 ? (
+                            {visibleRecords.length === 0 ? (
                                 <p className="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-300">
                                     Nenhum cupom encontrado com os filtros informados para hoje nesta loja.
                                 </p>
@@ -294,7 +369,7 @@ export default function Hoje({ records = [], reportDate, unit, filters = {} }) {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                                        {records.map((record) => (
+                                        {visibleRecords.map((record) => (
                                             <tr key={record.id}>
                                                 <td className="px-3 py-2 text-gray-800 dark:text-gray-100">
                                                     #{record.id}
@@ -320,6 +395,17 @@ export default function Hoje({ records = [], reportDate, unit, filters = {} }) {
                                                         >
                                                             Nao Fiscal
                                                         </button>
+                                                        {record.fiscal_receipt?.can_regenerate && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleRegenerateAndTransmitFiscal(record)}
+                                                                disabled={regeneratingFiscalId !== null}
+                                                                title="Regenerar do zero, assinar e transmitir"
+                                                                className="rounded-xl bg-amber-600 px-3 py-1 text-xs font-semibold text-white shadow hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                                            >
+                                                                {regeneratingFiscalId === record.fiscal_receipt.invoice_id ? 'Enviando...' : 'Regenerar'}
+                                                            </button>
+                                                        )}
                                                         <button
                                                             type="button"
                                                             onClick={() => setSelectedFiscalReceipt(record.fiscal_receipt)}

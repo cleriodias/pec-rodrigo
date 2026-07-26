@@ -469,6 +469,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/pdr-cache', [SalesReportController::class, 'pdrCache'])->name('reports.pdr-cache');
     Route::delete('/reports/descarte/{discard}', [ProductDiscardController::class, 'destroy'])->name('reports.descarte.destroy');
     Route::get('/reports/hoje', [SalesReportController::class, 'hoje'])->name('reports.hoje');
+    Route::post('/reports/hoje/fiscal/{notaFiscal}/regenerate-transmit', [SalesReportController::class, 'regenerateAndTransmitHojeFiscal'])->name('reports.hoje.fiscal.regenerate-transmit');
     Route::get('/reports/cash-closure', [SalesReportController::class, 'cashClosure'])->name('reports.cash.closure');
     Route::post('/reports/cash-closure/zero-close', [SalesReportController::class, 'storeZeroCashClosure'])->name('reports.cash.closure.zero-close');
     Route::post('/reports/cash-closure/ok-close', [SalesReportController::class, 'storeSystemCashClosure'])->name('reports.cash.closure.ok-close');

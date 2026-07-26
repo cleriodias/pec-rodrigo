@@ -13,6 +13,8 @@ use App\Models\VendaPagamento;
 use App\Models\User;
 use App\Models\Unidade;
 use App\Support\DiscardAlertService;
+use App\Support\FiscalInvoicePreparationService;
+use App\Support\FiscalNfceTransmissionService;
 use App\Support\ManagementScope;
 use App\Support\ProductQuickLookupCache;
 use Carbon\Carbon;
@@ -1339,6 +1341,7 @@ class SalesReportController extends Controller
             'number' => $invoice->tb27_numero,
             'status' => $invoice->tb27_status,
             'status_message' => $invoice->tb27_mensagem,
+            'can_regenerate' => ! in_array((string) $invoice->tb27_status, ['emitida', 'cancelada'], true),
             'issued_at' => ($invoice->tb27_emitida_em ?? $firstSale?->data_hora ?? $invoice->created_at)?->toIso8601String(),
             'emitter_name' => $unit?->tb2_nome ?? 'EMITENTE NAO INFORMADO',
             'emitter_document' => $unit?->tb2_cnpj,
@@ -1857,6 +1860,76 @@ class SalesReportController extends Controller
                 'valor' => trim((string) $request->query('valor', '')),
                 'hora' => $timeWindow['value'] ?? trim((string) $request->query('hora', '')),
             ],
+        ]);
+    }
+
+    public function regenerateAndTransmitHojeFiscal(
+        Request $request,
+        NotaFiscal $notaFiscal,
+        FiscalInvoicePreparationService $fiscalInvoicePreparationService,
+        FiscalNfceTransmissionService $fiscalNfceTransmissionService,
+    ): JsonResponse {
+        $this->ensureHojeAccess($request);
+
+        $unitId = $this->resolveUnitId($request);
+
+        if ($unitId <= 0 || (int) $notaFiscal->tb2_id !== $unitId) {
+            abort(403, 'A nota fiscal nao pertence a loja ativa.');
+        }
+
+        if (in_array((string) $notaFiscal->tb27_status, ['emitida', 'cancelada'], true)) {
+            return response()->json([
+                'message' => 'Notas fiscais ja transmitidas nao podem ser regeneradas.',
+                'fiscal_receipt' => $this->buildReportFiscalReceiptPayload($notaFiscal),
+            ], 422);
+        }
+
+        $currentInvoice = $notaFiscal;
+
+        try {
+            $notaFiscal->loadMissing('pagamento.vendas.produto', 'pagamento.vendas.unidade');
+
+            if (! $notaFiscal->pagamento) {
+                return response()->json([
+                    'message' => 'Nao foi encontrado o pagamento vinculado a esta nota fiscal.',
+                    'fiscal_receipt' => $this->buildReportFiscalReceiptPayload($notaFiscal),
+                ], 422);
+            }
+
+            $refreshedInvoice = $fiscalInvoicePreparationService->prepareForPayment(
+                $notaFiscal->pagamento,
+                forceFiscalSignature: true,
+            );
+            $currentInvoice = $refreshedInvoice ?? $notaFiscal;
+
+            if (! $refreshedInvoice) {
+                return response()->json([
+                    'message' => 'Esta forma de pagamento nao gera nota fiscal automatica para transmissao.',
+                    'fiscal_receipt' => $this->buildReportFiscalReceiptPayload($notaFiscal),
+                ], 422);
+            }
+
+            if (! filled($refreshedInvoice->tb27_xml_envio)) {
+                return response()->json([
+                    'message' => $refreshedInvoice->tb27_mensagem ?: 'A nota ainda nao possui XML assinado para transmissao.',
+                    'fiscal_receipt' => $this->buildReportFiscalReceiptPayload($refreshedInvoice),
+                ], 422);
+            }
+
+            $notaFiscal = $fiscalNfceTransmissionService->transmit($refreshedInvoice);
+            $currentInvoice = $notaFiscal;
+        } catch (\RuntimeException $exception) {
+            $currentInvoice->refresh();
+
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'fiscal_receipt' => $this->buildReportFiscalReceiptPayload($currentInvoice),
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => sprintf('Nota fiscal da venda %d regenerada e enviada para a SEFAZ.', (int) $notaFiscal->tb4_id),
+            'fiscal_receipt' => $this->buildReportFiscalReceiptPayload($notaFiscal),
         ]);
     }
 
