@@ -271,10 +271,11 @@ class FiscalInvoicePreparationService
             'itens' => $eligibleSales->map(function ($sale) {
                 /** @var Produto|null $product */
                 $product = $sale->produto;
+                $productName = $this->resolveFiscalProductName($sale);
 
                 return [
                     'produto_id' => (int) $sale->tb1_id,
-                    'descricao' => $sale->produto_nome,
+                    'descricao' => $productName,
                     'quantidade' => (int) $sale->quantidade,
                     'valor_unitario' => round((float) $sale->valor_unitario, 2),
                     'valor_total' => round((float) $sale->valor_total, 2),
@@ -483,7 +484,7 @@ class FiscalInvoicePreparationService
             /** @var Produto|null $product */
             $product = $sale->produto;
             $productId = (int) $sale->tb1_id;
-            $productName = $sale->produto_nome;
+            $productName = $this->resolveFiscalProductName($sale);
 
             if (! $product) {
                 $errors[] = sprintf('Produto %d nao encontrado para a emissao fiscal.', $productId);
@@ -744,7 +745,7 @@ class FiscalInvoicePreparationService
 
             $excludedItems[] = [
                 'produto_id' => (int) $sale->tb1_id,
-                'descricao' => (string) $sale->produto_nome,
+                'descricao' => $this->resolveFiscalProductName($sale),
                 'motivo' => sprintf(
                     'Item fora da nota por falta de: %s.',
                     implode(', ', $missingFields)
@@ -755,6 +756,17 @@ class FiscalInvoicePreparationService
         }
 
         return [$eligibleSales, $excludedItems];
+    }
+
+    private function resolveFiscalProductName($sale): string
+    {
+        $currentName = trim((string) ($sale->produto?->tb1_nome ?? ''));
+
+        if ($currentName !== '') {
+            return $currentName;
+        }
+
+        return trim((string) ($sale->produto_nome ?? ''));
     }
 
     private function onlyDigits(?string $value): ?string

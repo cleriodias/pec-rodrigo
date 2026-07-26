@@ -270,16 +270,17 @@ class FiscalNfceXmlService
             $quantity = number_format((float) $sale->quantidade, 4, '.', '');
             $unitPrice = number_format((float) $sale->valor_unitario, 4, '.', '');
             $total = number_format((float) $sale->valor_total, 2, '.', '');
+            $productName = $this->resolveFiscalProductName($sale);
             $productDescription = $index === 0 && $configuration->tb26_ambiente === 'homologacao'
                 ? self::HOMOLOGATION_ITEM_DESCRIPTION
-                : (string) $sale->produto_nome;
+                : $productName;
 
             $this->appendTextElement($document, $prod, 'cProd', (string) $sale->tb1_id);
             $this->appendTextElement($document, $prod, 'cEAN', $ean);
             $this->appendTextElement($document, $prod, 'xProd', $productDescription);
-            $this->appendTextElement($document, $prod, 'NCM', $this->requiredDigits($product->tb1_ncm, 8, sprintf('NCM do produto %s', $sale->produto_nome)));
+            $this->appendTextElement($document, $prod, 'NCM', $this->requiredDigits($product->tb1_ncm, 8, sprintf('NCM do produto %s', $productName)));
             $this->appendOptionalTextElement($document, $prod, 'CEST', $this->optionalDigits($product->tb1_cest, 7));
-            $this->appendTextElement($document, $prod, 'CFOP', $this->requiredDigits($product->tb1_cfop, 4, sprintf('CFOP do produto %s', $sale->produto_nome)));
+            $this->appendTextElement($document, $prod, 'CFOP', $this->requiredDigits($product->tb1_cfop, 4, sprintf('CFOP do produto %s', $productName)));
             $this->appendTextElement($document, $prod, 'uCom', (string) $product->tb1_unidade_comercial);
             $this->appendTextElement($document, $prod, 'qCom', $quantity);
             $this->appendTextElement($document, $prod, 'vUnCom', $unitPrice);
@@ -316,16 +317,17 @@ class FiscalNfceXmlService
         $base = (float) $sale->valor_total;
 
         if ($crt === 1) {
+            $productName = $this->resolveFiscalProductName($sale);
             $csosn = str_pad((string) ($configuration->tb26_rtc_2026_ativa ? ($rtcTax['csosn'] ?? '') : $product->tb1_csosn), 3, '0', STR_PAD_LEFT);
             $allowedCsosn = ['102', '103', '300', '400'];
 
             if (! in_array($csosn, $allowedCsosn, true)) {
-                throw new RuntimeException(sprintf('O produto %d (%s) possui CSOSN %s nao suportado para NFC-e.', $sale->tb1_id, $sale->produto_nome, $csosn));
+                throw new RuntimeException(sprintf('O produto %d (%s) possui CSOSN %s nao suportado para NFC-e.', $sale->tb1_id, $productName, $csosn));
             }
 
             $icmsSimpleNational = $document->createElement('ICMSSN' . $csosn);
             $icms->appendChild($icmsSimpleNational);
-            $this->appendTextElement($document, $icmsSimpleNational, 'orig', $this->requiredDigits((string) $product->tb1_origem, 1, sprintf('Origem fiscal do produto %s', $sale->produto_nome)));
+            $this->appendTextElement($document, $icmsSimpleNational, 'orig', $this->requiredDigits((string) $product->tb1_origem, 1, sprintf('Origem fiscal do produto %s', $productName)));
             $this->appendTextElement($document, $icmsSimpleNational, 'CSOSN', $csosn);
 
             $this->appendZeroPisCofins($document, $imposto);
@@ -337,14 +339,16 @@ class FiscalNfceXmlService
         }
 
         $cstIcms = str_pad((string) ($rtcTax['cst_icms'] ?? ''), 2, '0', STR_PAD_LEFT);
+        $productName = $this->resolveFiscalProductName($sale);
+
         if ($cstIcms !== '00') {
-            throw new RuntimeException(sprintf('O produto %d (%s) deve usar CST ICMS 00 nesta primeira etapa RTC para CRT 3.', $sale->tb1_id, $sale->produto_nome));
+            throw new RuntimeException(sprintf('O produto %d (%s) deve usar CST ICMS 00 nesta primeira etapa RTC para CRT 3.', $sale->tb1_id, $productName));
         }
 
         $icms00 = $document->createElement('ICMS00');
         $icms->appendChild($icms00);
         $icmsRate = (float) ($rtcTax['aliquota_icms'] ?? 0);
-        $this->appendTextElement($document, $icms00, 'orig', $this->requiredDigits((string) $product->tb1_origem, 1, sprintf('Origem fiscal do produto %s', $sale->produto_nome)));
+        $this->appendTextElement($document, $icms00, 'orig', $this->requiredDigits((string) $product->tb1_origem, 1, sprintf('Origem fiscal do produto %s', $productName)));
         $this->appendTextElement($document, $icms00, 'CST', '00');
         $this->appendTextElement($document, $icms00, 'modBC', '3');
         $this->appendTextElement($document, $icms00, 'vBC', number_format($base, 2, '.', ''));
@@ -879,6 +883,17 @@ class FiscalNfceXmlService
         }
 
         return ltrim($digits, '0') ?: '0';
+    }
+
+    private function resolveFiscalProductName(Venda $sale): string
+    {
+        $currentName = trim((string) ($sale->produto?->tb1_nome ?? ''));
+
+        if ($currentName !== '') {
+            return $currentName;
+        }
+
+        return trim((string) ($sale->produto_nome ?? ''));
     }
 
     private function optionalDigits(?string $value, ?int $expectedLength = null): ?string
