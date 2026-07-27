@@ -804,7 +804,7 @@ export default function Nfe({
                     ))}
                 </div>
 
-                <div className="flex justify-end border-t border-gray-200 px-6 py-4">
+                <div className="flex justify-end gap-3 border-t border-gray-200 px-6 py-4">
                     <button
                         type="button"
                         onClick={() => setSelectedFiscalCorrectionInvoice(null)}
@@ -812,6 +812,22 @@ export default function Nfe({
                     >
                         Fechar
                     </button>
+                    {selectedFiscalCorrectionInvoice?.pode_regenerar && (
+                        <Link
+                            href={route('settings.fiscal.invoices.regenerate', {
+                                notaFiscal: selectedFiscalCorrectionInvoice.id,
+                                origin: 'nfe',
+                                signed_mode: activeSignedMode,
+                                signed_payment: signedCashOnly ? 'cash' : 'non_cash',
+                                date: selectedDate,
+                            })}
+                            method="post"
+                            as="button"
+                            className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-amber-600"
+                        >
+                            Regenerar
+                        </Link>
+                    )}
                 </div>
             </Modal>
             <Modal show={monthlySummary.open} onClose={closeMonthlySummary} maxWidth="2xl" tone="light">
