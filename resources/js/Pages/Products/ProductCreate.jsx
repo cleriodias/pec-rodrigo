@@ -7,14 +7,18 @@ import { useEffect } from "react";
 const normalizeProductName = (value) => value.toLocaleUpperCase("pt-BR");
 const normalizeNcm = (value) => value.replace(/\D/g, "");
 
+const optionValueByValue = (options, expectedValue, fallback) =>
+    options.find((option) => Number(option.value) === expectedValue)?.value ?? fallback;
+
 export default function ProductCreate({ auth, typeOptions = [], statusOptions = [], originOptions = [], productTypeOptions = [] }) {
-    const defaultType = typeOptions[0]?.value ?? 0;
-    const defaultStatus = statusOptions[0]?.value ?? 1;
+    const defaultType = optionValueByValue(typeOptions, 0, 0);
+    const defaultStatus = optionValueByValue(statusOptions, 1, 1);
+    const defaultOrigin = optionValueByValue(originOptions, 0, 0);
 
     const { data, setData, post, processing, errors } = useForm({
         tb1_id: "",
         tb1_nome: "",
-        tb1_vlr_custo: "",
+        tb1_vlr_custo: "0",
         tb1_vlr_venda: "",
         tb1_codbar: "",
         sem_codigo_barras: false,
@@ -22,13 +26,13 @@ export default function ProductCreate({ auth, typeOptions = [], statusOptions = 
         tb32_id: "",
         tb1_ncm: "",
         tb1_cest: "",
-        tb1_cfop: "",
+        tb1_cfop: "5101",
         tb1_unidade_comercial: "UN",
         tb1_unidade_tributavel: "UN",
-        tb1_origem: originOptions[0]?.value ?? 0,
-        tb1_csosn: "",
-        tb1_cst: "",
-        tb1_aliquota_icms: "0.00",
+        tb1_origem: defaultOrigin,
+        tb1_csosn: "102",
+        tb1_cst: "040",
+        tb1_aliquota_icms: "0",
         tb1_qtd: "0",
         tb1_status: defaultStatus,
         tb1_vr_credit: false,
@@ -91,22 +95,69 @@ export default function ProductCreate({ auth, typeOptions = [], statusOptions = 
 
                     <div className="bg-gray-50 text-sm dark:bg-gray-700 p-4 rounded-lg shadow-m">
                         <form onSubmit={handleSubmit}>
-                            <div className="mb-4">
-                                <label htmlFor="tb1_nome" className="block text-sm font-medium text-gray-700">
-                                    Nome
-                                </label>
-                                <input
-                                    id="tb1_nome"
-                                    type="text"
-                                    placeholder="Nome do produto"
-                                    value={data.tb1_nome}
-                                    onChange={(e) => setData("tb1_nome", normalizeProductName(e.target.value))}
-                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                                />
-                                {errors.tb1_nome && <span className="text-red-600">{errors.tb1_nome}</span>}
+                            <div className="mb-4 grid gap-4 sm:grid-cols-2">
+                                <div>
+                                    <label htmlFor="tb1_nome" className="block text-sm font-medium text-gray-700">
+                                        Nome
+                                    </label>
+                                    <input
+                                        id="tb1_nome"
+                                        type="text"
+                                        placeholder="Nome do produto"
+                                        value={data.tb1_nome}
+                                        onChange={(e) => setData("tb1_nome", normalizeProductName(e.target.value))}
+                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                    />
+                                    {errors.tb1_nome && <span className="text-red-600">{errors.tb1_nome}</span>}
+                                </div>
+
+                                {isBalanceProduct ? (
+                                    <div className="rounded-md border border-amber-200 bg-amber-50 p-4">
+                                        <label htmlFor="tb1_id" className="block text-sm font-medium text-gray-700">
+                                            Codigo de barras
+                                        </label>
+                                        <input
+                                            id="tb1_id"
+                                            type="number"
+                                            min="1"
+                                            placeholder="Informe o tb1_id"
+                                            value={data.tb1_id}
+                                            onChange={(e) => setData("tb1_id", e.target.value)}
+                                            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm"
+                                        />
+                                        <p className="mt-2 text-xs text-amber-800">
+                                            Produto de balanca usa o proprio ID no campo Codbarras.
+                                        </p>
+                                        {errors.tb1_id && <span className="text-red-600">{errors.tb1_id}</span>}
+                                    </div>
+                                ) : withoutBarcode ? (
+                                    <div className="rounded-md border border-amber-200 bg-amber-50 p-4">
+                                        <p className="text-sm font-medium text-gray-700">Codigo de barras</p>
+                                        <p className="mt-2 text-xs text-amber-800">
+                                            Este produto sera salvo sem codigo de barras proprio. Ao salvar, o sistema
+                                            gravara o valor do tb1_id no campo tb1_codbar.
+                                        </p>
+                                        {errors.tb1_codbar && <span className="text-red-600">{errors.tb1_codbar}</span>}
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <label htmlFor="tb1_codbar" className="block text-sm font-medium text-gray-700">
+                                            Codigo de barras
+                                        </label>
+                                        <input
+                                            id="tb1_codbar"
+                                            type="text"
+                                            placeholder="0000000000000"
+                                            value={data.tb1_codbar}
+                                            onChange={(e) => setData("tb1_codbar", e.target.value)}
+                                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                        />
+                                        {errors.tb1_codbar && <span className="text-red-600">{errors.tb1_codbar}</span>}
+                                    </div>
+                                )}
                             </div>
 
-                            <div className="mb-4 grid gap-4 sm:grid-cols-2">
+                            <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                                 <div>
                                     <label htmlFor="tb1_vlr_custo" className="block text-sm font-medium text-gray-700">
                                         Valor de custo
@@ -137,9 +188,6 @@ export default function ProductCreate({ auth, typeOptions = [], statusOptions = 
                                     />
                                     {errors.tb1_vlr_venda && <span className="text-red-600">{errors.tb1_vlr_venda}</span>}
                                 </div>
-                            </div>
-
-                            <div className="mb-4 grid gap-4 sm:grid-cols-2">
                                 <div>
                                     <label htmlFor="tb32_id" className="block text-sm font-medium text-gray-700">
                                         Tipo de produto
@@ -177,27 +225,6 @@ export default function ProductCreate({ auth, typeOptions = [], statusOptions = 
                                     </select>
                                     {errors.tb1_tipo && <span className="text-red-600">{errors.tb1_tipo}</span>}
                                 </div>
-                                {isProductionProduct && (
-                                    <div>
-                                        <label htmlFor="tb1_qtd" className="block text-sm font-medium text-gray-700">
-                                            Quantidade inicial
-                                        </label>
-                                        <input
-                                            id="tb1_qtd"
-                                            type="number"
-                                            min="0"
-                                            step="1"
-                                            placeholder="0"
-                                            value={data.tb1_qtd}
-                                            onChange={(e) => setData("tb1_qtd", e.target.value)}
-                                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                                        />
-                                        <p className="mt-1 text-xs text-gray-500">
-                                            Produtos do tipo Producao utilizam esta quantidade como estoque inicial.
-                                        </p>
-                                        {errors.tb1_qtd && <span className="text-red-600">{errors.tb1_qtd}</span>}
-                                    </div>
-                                )}
                                 <div>
                                     <label htmlFor="tb1_status" className="block text-sm font-medium text-gray-700">
                                         Status
@@ -218,103 +245,72 @@ export default function ProductCreate({ auth, typeOptions = [], statusOptions = 
                                 </div>
                             </div>
 
-                            <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-4">
-                                <label className="flex items-start gap-3 text-sm text-gray-700">
-                                    <input
-                                        type="checkbox"
-                                        checked={withoutBarcode}
-                                        disabled={isBalanceProduct}
-                                        onChange={(event) => setData("sem_codigo_barras", event.target.checked)}
-                                        className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
-                                    />
-                                    <span>
-                                        <span className="block font-medium text-gray-800">
-                                            Produto sem codigo de barras
-                                        </span>
-                                        <span className="mt-1 block text-xs text-gray-500">
-                                            {isBalanceProduct
-                                                ? "Produtos de balanca sempre usam o proprio tb1_id no campo tb1_codbar."
-                                                : "Quando marcado, o sistema gravara o proprio tb1_id no campo tb1_codbar."}
-                                        </span>
-                                    </span>
-                                </label>
-                                {errors.sem_codigo_barras && (
-                                    <span className="mt-2 block text-red-600">{errors.sem_codigo_barras}</span>
-                                )}
-                            </div>
-
-                            {isBalanceProduct ? (
-                                <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-4">
-                                    <label htmlFor="tb1_id" className="block text-sm font-medium text-gray-700">
-                                        ID do produto
-                                    </label>
-                                    <input
-                                        id="tb1_id"
-                                        type="number"
-                                        min="1"
-                                        placeholder="Informe o tb1_id"
-                                        value={data.tb1_id}
-                                        onChange={(e) => setData("tb1_id", e.target.value)}
-                                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm"
-                                    />
-                                    <p className="mt-2 text-xs text-amber-800">
-                                        Produto de balanca nao usa codigo de barras. Informe o tb1_id manualmente.
-                                        O sistema gravara esse mesmo tb1_id no campo tb1_codbar. Se o ID ja existir,
-                                        o cadastro sera bloqueado e os dados atuais serao exibidos. IDs de 3000 a
-                                        3100 sao reservados para comandas e tambem serao bloqueados.
-                                    </p>
-                                    {errors.tb1_id && <span className="text-red-600">{errors.tb1_id}</span>}
-                                </div>
-                            ) : withoutBarcode ? (
-                                <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-4">
-                                    <p className="text-sm font-medium text-gray-700">Codigo de barras</p>
-                                    <p className="mt-2 text-xs text-amber-800">
-                                        Este produto sera salvo sem codigo de barras proprio. O sistema vai copiar o
-                                        tb1_id gerado automaticamente para o campo tb1_codbar.
-                                    </p>
-                                    {errors.tb1_codbar && <span className="text-red-600">{errors.tb1_codbar}</span>}
-                                </div>
-                            ) : (
+                            {isProductionProduct && (
                                 <div className="mb-4">
-                                    <label htmlFor="tb1_codbar" className="block text-sm font-medium text-gray-700">
-                                        Codigo de barras
+                                    <label htmlFor="tb1_qtd" className="block text-sm font-medium text-gray-700">
+                                        Quantidade inicial
                                     </label>
                                     <input
-                                        id="tb1_codbar"
-                                        type="text"
-                                        placeholder="0000000000000"
-                                        value={data.tb1_codbar}
-                                        onChange={(e) => setData("tb1_codbar", e.target.value)}
+                                        id="tb1_qtd"
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        placeholder="0"
+                                        value={data.tb1_qtd}
+                                        onChange={(e) => setData("tb1_qtd", e.target.value)}
                                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                                     />
-                                    {errors.tb1_codbar && <span className="text-red-600">{errors.tb1_codbar}</span>}
+                                    <p className="mt-1 text-xs text-gray-500">
+                                        Produtos do tipo Producao utilizam esta quantidade como estoque inicial.
+                                    </p>
+                                    {errors.tb1_qtd && <span className="text-red-600">{errors.tb1_qtd}</span>}
                                 </div>
                             )}
 
-                            <div className="mb-6">
-                                <span className="text-sm font-medium text-gray-700">Disponivel para VR Credito</span>
-                                <label className="mt-2 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-200">
-                                    <input
-                                        type="checkbox"
-                                        checked={Boolean(data.tb1_vr_credit)}
-                                        onChange={(event) => setData("tb1_vr_credit", event.target.checked)}
-                                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                    />
-                                    Permitir que este produto seja pago com VR Credito.
-                                </label>
-                                {errors.tb1_vr_credit && (
-                                    <span className="text-red-600">{errors.tb1_vr_credit}</span>
-                                )}
+                            <div className="mb-6 rounded-md border border-gray-200 bg-gray-50 p-4">
+                                <div className="flex flex-col gap-4 sm:flex-row sm:gap-8">
+                                    <label className="flex items-start gap-3 text-sm text-gray-700">
+                                        <input
+                                            type="checkbox"
+                                            checked={withoutBarcode}
+                                            disabled={isBalanceProduct}
+                                            onChange={(event) => setData("sem_codigo_barras", event.target.checked)}
+                                            className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+                                        />
+                                        <span>
+                                            <span className="block font-medium text-gray-800">Produto sem codigo de barras</span>
+                                            <span className="mt-1 block text-xs text-gray-500">
+                                                {isBalanceProduct
+                                                    ? "Produtos de balanca sempre usam o proprio ID no campo Codbarras."
+                                                    : "Quando marcado, o sistema grava o proprio ID do produto no campo Codbarras."}
+                                            </span>
+                                        </span>
+                                    </label>
+
+                                    <label className="flex items-start gap-3 text-sm text-gray-700">
+                                        <input
+                                            type="checkbox"
+                                            checked={Boolean(data.tb1_vr_credit)}
+                                            onChange={(event) => setData("tb1_vr_credit", event.target.checked)}
+                                            className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                        />
+                                        <span>
+                                            <span className="block font-medium text-gray-800">Disponivel para VR Credito</span>
+                                            <span className="mt-1 block text-xs text-gray-500">
+                                                Permitir que este produto seja pago com VR Credito.
+                                            </span>
+                                        </span>
+                                    </label>
+                                </div>
+                                {errors.sem_codigo_barras && <span className="mt-2 block text-red-600">{errors.sem_codigo_barras}</span>}
+                                {errors.tb1_vr_credit && <span className="mt-2 block text-red-600">{errors.tb1_vr_credit}</span>}
                             </div>
 
                             <div className="mb-6 rounded-md border border-gray-200 bg-white p-4">
                                 <div className="mb-4">
                                     <h4 className="text-sm font-semibold text-gray-800">Cadastro fiscal</h4>
                                     <p className="mt-1 text-xs text-gray-500">
-                                        Esses campos serao usados na preparacao da NF-e/NFC-e.
-                                    </p>
-                                    <p className="mt-1 text-xs font-medium text-amber-700">
-                                        Todos os campos fiscais sao opcionais no cadastro. Preencha quando quiser deixar o produto pronto para emissao fiscal.
+                                        Esses campos alimentam a preparacao da NF-e/NFC-e.
                                     </p>
                                 </div>
 
@@ -323,11 +319,6 @@ export default function ProductCreate({ auth, typeOptions = [], statusOptions = 
                                         <label htmlFor="tb1_ncm" className="block text-sm font-medium text-gray-700">NCM</label>
                                         <input id="tb1_ncm" type="text" inputMode="numeric" value={data.tb1_ncm} onChange={(e) => setData("tb1_ncm", normalizeNcm(e.target.value))} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm sm:text-sm" />
                                         {errors.tb1_ncm && <span className="text-red-600">{errors.tb1_ncm}</span>}
-                                    </div>
-                                    <div>
-                                        <label htmlFor="tb1_cest" className="block text-sm font-medium text-gray-700">CEST</label>
-                                        <input id="tb1_cest" type="text" maxLength="7" value={data.tb1_cest} onChange={(e) => setData("tb1_cest", e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm sm:text-sm" />
-                                        {errors.tb1_cest && <span className="text-red-600">{errors.tb1_cest}</span>}
                                     </div>
                                     <div>
                                         <label htmlFor="tb1_cfop" className="block text-sm font-medium text-gray-700">CFOP</label>
@@ -340,13 +331,19 @@ export default function ProductCreate({ auth, typeOptions = [], statusOptions = 
                                         {errors.tb1_cfop && <span className="text-red-600">{errors.tb1_cfop}</span>}
                                     </div>
                                     <div>
-                                        <label htmlFor="tb1_origem" className="block text-sm font-medium text-gray-700">Origem</label>
-                                        <select id="tb1_origem" value={data.tb1_origem} onChange={(e) => setData("tb1_origem", Number(e.target.value))} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm sm:text-sm">
-                                            {originOptions.map((option) => (
-                                                <option key={option.value} value={option.value}>{option.label}</option>
-                                            ))}
-                                        </select>
-                                        {errors.tb1_origem && <span className="text-red-600">{errors.tb1_origem}</span>}
+                                        <label htmlFor="tb1_csosn" className="block text-sm font-medium text-gray-700">CSOSN</label>
+                                        <input id="tb1_csosn" type="text" maxLength="4" value={data.tb1_csosn} onChange={(e) => setData("tb1_csosn", e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm sm:text-sm" />
+                                        {errors.tb1_csosn && <span className="text-red-600">{errors.tb1_csosn}</span>}
+                                    </div>
+                                    <div>
+                                        <label htmlFor="tb1_cst" className="block text-sm font-medium text-gray-700">CST</label>
+                                        <input id="tb1_cst" type="text" maxLength="3" value={data.tb1_cst} onChange={(e) => setData("tb1_cst", e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm sm:text-sm" />
+                                        {errors.tb1_cst && <span className="text-red-600">{errors.tb1_cst}</span>}
+                                    </div>
+                                    <div>
+                                        <label htmlFor="tb1_cest" className="block text-sm font-medium text-gray-700">CEST</label>
+                                        <input id="tb1_cest" type="text" maxLength="7" value={data.tb1_cest} onChange={(e) => setData("tb1_cest", e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm sm:text-sm" />
+                                        {errors.tb1_cest && <span className="text-red-600">{errors.tb1_cest}</span>}
                                     </div>
                                     <div>
                                         <label htmlFor="tb1_unidade_comercial" className="block text-sm font-medium text-gray-700">Unidade comercial</label>
@@ -359,19 +356,18 @@ export default function ProductCreate({ auth, typeOptions = [], statusOptions = 
                                         {errors.tb1_unidade_tributavel && <span className="text-red-600">{errors.tb1_unidade_tributavel}</span>}
                                     </div>
                                     <div>
-                                        <label htmlFor="tb1_csosn" className="block text-sm font-medium text-gray-700">CSOSN</label>
-                                        <input id="tb1_csosn" type="text" maxLength="4" value={data.tb1_csosn} onChange={(e) => setData("tb1_csosn", e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm sm:text-sm" />
-                                        {errors.tb1_csosn && <span className="text-red-600">{errors.tb1_csosn}</span>}
-                                    </div>
-                                    <div>
-                                        <label htmlFor="tb1_cst" className="block text-sm font-medium text-gray-700">CST</label>
-                                        <input id="tb1_cst" type="text" maxLength="3" value={data.tb1_cst} onChange={(e) => setData("tb1_cst", e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm sm:text-sm" />
-                                        {errors.tb1_cst && <span className="text-red-600">{errors.tb1_cst}</span>}
-                                    </div>
-                                    <div>
                                         <label htmlFor="tb1_aliquota_icms" className="block text-sm font-medium text-gray-700">Aliquota ICMS</label>
                                         <input id="tb1_aliquota_icms" type="number" step="0.01" min="0" max="100" value={data.tb1_aliquota_icms} onChange={(e) => setData("tb1_aliquota_icms", e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm sm:text-sm" />
                                         {errors.tb1_aliquota_icms && <span className="text-red-600">{errors.tb1_aliquota_icms}</span>}
+                                    </div>
+                                    <div>
+                                        <label htmlFor="tb1_origem" className="block text-sm font-medium text-gray-700">Origem</label>
+                                        <select id="tb1_origem" value={data.tb1_origem} onChange={(e) => setData("tb1_origem", Number(e.target.value))} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm sm:text-sm">
+                                            {originOptions.map((option) => (
+                                                <option key={option.value} value={option.value}>{option.label}</option>
+                                            ))}
+                                        </select>
+                                        {errors.tb1_origem && <span className="text-red-600">{errors.tb1_origem}</span>}
                                     </div>
                                 </div>
                             </div>

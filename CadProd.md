@@ -261,6 +261,14 @@ O `tb1_id` e chave primaria e ja participa de relacoes com:
 
 Por isso a edicao nao deve permitir troca livre do ID.
 
+## Regra de tributacao fiscal por loja
+
+Na tela `products/{id produto}/tributacao-fiscal`, o campo `Copiar para outras lojas` deve ser apresentado como checkboxes e seguir a regra de exclusividade abaixo:
+
+1. quando a loja selecionada for `BARRAGEM 1`, `SETOR 1` ou `SETOR 10`, a loja `SETOR 9` deve ficar desmarcada, as demais lojas desse grupo devem ficar marcadas para copia e o campo `RTC ativa nesta loja` deve ficar desmarcado
+2. quando a loja selecionada for `SETOR 9`, todas as outras lojas devem ficar desmarcadas e o campo `RTC ativa nesta loja` deve ficar marcado
+3. a mesma regra deve ser aplicada tanto ao trocar a loja principal quanto ao marcar/desmarcar lojas em `Copiar para outras lojas`
+
 ## Sequencia recomendada para aplicar na main
 
 1. ajustar `Produto.php`
