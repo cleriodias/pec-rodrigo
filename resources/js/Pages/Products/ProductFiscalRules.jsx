@@ -25,25 +25,97 @@ const empty = (unitId = "") => ({
     copy_to_unit_ids: [],
 });
 
+const normalizeUnitName = (name) => String(name ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, " ")
+    .trim();
+
 export default function ProductFiscalRules({ auth, product, units = [], rules = {} }) {
     const firstUnitId = units[0]?.tb2_id ?? "";
-    const form = useForm({
+    const setor9UnitIds = units
+        .filter((unit) => normalizeUnitName(unit.tb2_nome) === "SETOR 9")
+        .map((unit) => String(unit.tb2_id));
+    const rtcDefaultCopyUnitIds = units
+        .filter((unit) => ["BARRAGEM 1", "SETOR 1", "SETOR 10"].includes(normalizeUnitName(unit.tb2_nome)))
+        .map((unit) => String(unit.tb2_id));
+    const applyUnitSelectionRule = (unitId, data) => {
+        const unitIdText = String(unitId);
+        const availableIds = units
+            .filter((unit) => String(unit.tb2_id) !== unitIdText)
+            .map((unit) => String(unit.tb2_id));
+
+        if (setor9UnitIds.includes(unitIdText)) {
+            return {
+                ...data,
+                tb28_ativo: true,
+                copy_to_unit_ids: [],
+            };
+        }
+
+        if (rtcDefaultCopyUnitIds.includes(unitIdText)) {
+            return {
+                ...data,
+                tb28_ativo: false,
+                copy_to_unit_ids: rtcDefaultCopyUnitIds.filter((id) => availableIds.includes(id)),
+            };
+        }
+
+        return {
+            ...data,
+            copy_to_unit_ids: [],
+        };
+    };
+    const form = useForm(applyUnitSelectionRule(firstUnitId, {
         ...empty(firstUnitId),
         ...(rules[firstUnitId] ?? {}),
         tb2_id: firstUnitId,
         copy_to_unit_ids: [],
-    });
+    }));
+    const copyUnitIds = (form.data.copy_to_unit_ids ?? []).map(String);
+    const visibleCopyUnits = units.filter((unit) => String(unit.tb2_id) !== String(form.data.tb2_id));
+    const availableCopyUnitIds = visibleCopyUnits.map((unit) => String(unit.tb2_id));
 
-    const loadUnit = (unitId) => form.setData({
+    const loadUnit = (unitId) => form.setData(applyUnitSelectionRule(unitId, {
         ...empty(unitId),
         ...(rules[unitId] ?? {}),
         tb2_id: unitId,
         copy_to_unit_ids: [],
-    });
+    }));
 
     const submit = (event) => {
         event.preventDefault();
         form.post(route("products.fiscal-rule.store", { product: product.tb1_id }));
+    };
+
+    const handleCopyUnitChange = (unitId, checked) => {
+        const unitIdText = String(unitId);
+        const isSetor9 = setor9UnitIds.includes(unitIdText);
+        const isRtcDefaultUnit = rtcDefaultCopyUnitIds.includes(unitIdText);
+
+        if (checked && isSetor9) {
+            form.setData({
+                ...form.data,
+                tb28_ativo: true,
+                copy_to_unit_ids: setor9UnitIds.filter((id) => availableCopyUnitIds.includes(id)),
+            });
+            return;
+        }
+
+        if (checked && isRtcDefaultUnit) {
+            form.setData({
+                ...form.data,
+                tb28_ativo: false,
+                copy_to_unit_ids: rtcDefaultCopyUnitIds.filter((id) => availableCopyUnitIds.includes(id)),
+            });
+            return;
+        }
+
+        form.setData("copy_to_unit_ids", checked
+            ? Array.from(new Set([...copyUnitIds, unitIdText]))
+            : copyUnitIds.filter((id) => id !== unitIdText)
+        );
     };
 
     const field = (name, label, props = {}) => (
@@ -151,16 +223,23 @@ export default function ProductFiscalRules({ auth, product, units = [], rules = 
 
                     <section>
                         <p className="text-sm font-semibold text-gray-800">Copiar para outras lojas</p>
-                        <select
-                            multiple
-                            value={form.data.copy_to_unit_ids}
-                            onChange={(event) => form.setData("copy_to_unit_ids", Array.from(event.target.selectedOptions, (option) => option.value))}
-                            className="mt-1 h-20 w-full rounded-md border-gray-300 text-sm"
-                        >
-                            {units
-                                .filter((unit) => String(unit.tb2_id) !== String(form.data.tb2_id))
-                                .map((unit) => <option key={unit.tb2_id} value={unit.tb2_id}>{unit.tb2_nome}</option>)}
-                        </select>
+                        <div className="mt-1 flex flex-wrap gap-x-5 gap-y-2">
+                            {visibleCopyUnits.map((unit) => {
+                                const unitId = String(unit.tb2_id);
+
+                                return (
+                                    <label key={unit.tb2_id} className="flex items-center gap-2 text-sm font-medium">
+                                        <input
+                                            type="checkbox"
+                                            checked={copyUnitIds.includes(unitId)}
+                                            onChange={(event) => handleCopyUnitChange(unitId, event.target.checked)}
+                                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        {unit.tb2_nome}
+                                    </label>
+                                );
+                            })}
+                        </div>
                     </section>
 
                     <div className="flex justify-end">
