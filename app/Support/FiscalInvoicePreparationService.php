@@ -24,6 +24,7 @@ class FiscalInvoicePreparationService
         VendaPagamento $payment,
         ?array $consumer = null,
         bool $forceFiscalSignature = false,
+        bool $forceNewNumber = false,
     ): ?NotaFiscal
     {
         $payment->loadMissing([
@@ -43,7 +44,7 @@ class FiscalInvoicePreparationService
         }
 
         try {
-            return DB::transaction(function () use ($payment, $unitId, $consumer, $forceFiscalSignature) {
+            return DB::transaction(function () use ($payment, $unitId, $consumer, $forceFiscalSignature, $forceNewNumber) {
                 $config = null;
                 $invoice = NotaFiscal::query()
                     ->where('tb4_id', $payment->tb4_id)
@@ -51,9 +52,14 @@ class FiscalInvoicePreparationService
                     ->first();
 
                 if ($invoice) {
-                    $config = ConfiguracaoFiscal::query()
-                        ->where('tb2_id', $unitId)
-                        ->first();
+                    $configQuery = ConfiguracaoFiscal::query()
+                        ->where('tb2_id', $unitId);
+
+                    if ($forceNewNumber) {
+                        $configQuery->lockForUpdate();
+                    }
+
+                    $config = $configQuery->first();
                 } else {
                     $config = ConfiguracaoFiscal::query()
                         ->where('tb2_id', $unitId)
@@ -99,7 +105,7 @@ class FiscalInvoicePreparationService
                 $modelo = $invoice?->tb27_modelo ?? 'nfce';
                 $ambiente = $config?->tb26_ambiente ?? 'homologacao';
 
-                if ($config && $nextNumber === null && ($config->tb26_emitir_nfce || $config->tb26_emitir_nfe)) {
+                if ($config && ($forceNewNumber || $nextNumber === null) && ($config->tb26_emitir_nfce || $config->tb26_emitir_nfe)) {
                     $nextNumber = (int) $config->tb26_proximo_numero;
                     $serie = $config->tb26_serie;
                     $modelo = $config->tb26_emitir_nfce ? 'nfce' : ($config->tb26_emitir_nfe ? 'nfe' : 'nfce');
@@ -181,6 +187,17 @@ class FiscalInvoicePreparationService
                     'tb27_ultima_tentativa_em' => now(),
                     'tb27_mensagem' => $this->buildStatusMessage($status, $errors, $payload),
                 ]);
+
+                if ($forceNewNumber) {
+                    $invoice->fill([
+                        'tb27_protocolo' => null,
+                        'tb27_recibo' => null,
+                        'tb27_xml_retorno' => null,
+                        'tb27_emitida_em' => null,
+                        'tb27_cancelada_em' => null,
+                    ]);
+                }
+
                 $invoice->save();
 
                 return $invoice;

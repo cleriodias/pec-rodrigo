@@ -666,11 +666,23 @@ class FiscalConfigurationController extends Controller
                 ->with('error', 'Nao foi encontrado o pagamento vinculado a esta nota fiscal.');
         }
 
-        $invoice = $fiscalInvoicePreparationService->prepareForPayment($notaFiscal->pagamento);
+        $forceNewNumber = $request->boolean('force_new_number');
+
+        if ($forceNewNumber && in_array((string) $notaFiscal->tb27_status, ['emitida', 'cancelada'], true)) {
+            return $this->redirectToInvoiceListing($request, (int) $notaFiscal->tb2_id)
+                ->with('error', 'Notas fiscais ja transmitidas nao podem ser regeneradas com outro numero.');
+        }
+
+        $invoice = $fiscalInvoicePreparationService->prepareForPayment(
+            $notaFiscal->pagamento,
+            forceNewNumber: $forceNewNumber,
+        );
 
         return $this->redirectToInvoiceListing($request, (int) $notaFiscal->tb2_id)
             ->with('success', sprintf(
-                'Nota fiscal da venda %d regenerada com status %s.',
+                $forceNewNumber
+                    ? 'Nota fiscal da venda %d regenerada com novo numero e status %s.'
+                    : 'Nota fiscal da venda %d regenerada com status %s.',
                 (int) $notaFiscal->tb4_id,
                 $invoice?->tb27_status ?? 'indefinido'
             ));
@@ -844,6 +856,7 @@ class FiscalConfigurationController extends Controller
                     'payment_id' => (int) $transmittedInvoice->tb4_id,
                     'status' => $transmittedInvoice->tb27_status === 'emitida' ? 'success' : 'error',
                     'message' => $transmittedInvoice->tb27_mensagem ?: 'Nota fiscal processada pela SEFAZ.',
+                    'can_regenerate_with_new_number' => $this->isDuplicateInvoiceRejection($transmittedInvoice->tb27_mensagem),
                 ];
             } catch (Throwable $exception) {
                 report($exception);
@@ -852,6 +865,7 @@ class FiscalConfigurationController extends Controller
                     'payment_id' => (int) $notaFiscal->tb4_id,
                     'status' => 'error',
                     'message' => $exception->getMessage(),
+                    'can_regenerate_with_new_number' => $this->isDuplicateInvoiceRejection($exception->getMessage()),
                 ];
             }
         }
@@ -866,6 +880,21 @@ class FiscalConfigurationController extends Controller
         if (! $user || ! in_array((int) $user->funcao, [0, 1], true)) {
             abort(403, 'Acesso negado.');
         }
+    }
+
+    private function isDuplicateInvoiceRejection(?string $message): bool
+    {
+        $normalized = preg_replace('/\s+/', ' ', trim((string) $message));
+
+        if ($normalized === '') {
+            return false;
+        }
+
+        return preg_match('/\bcStat\s*204\b/i', $normalized) === 1
+            || (
+                stripos($normalized, 'duplicidade') !== false
+                && preg_match('/NF-?e/i', $normalized) === 1
+            );
     }
 
 

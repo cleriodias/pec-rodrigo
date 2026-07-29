@@ -990,6 +990,23 @@ export default function Nfe({
                                 >
                                     <p className="font-semibold">Cupom {result.payment_id ?? result.invoice_id}</p>
                                     <p className="mt-1">{result.message}</p>
+                                    {result.can_regenerate_with_new_number && (
+                                        <Link
+                                            href={route('settings.fiscal.invoices.regenerate', {
+                                                notaFiscal: result.invoice_id,
+                                                origin: 'nfe',
+                                                signed_mode: activeSignedMode,
+                                                signed_payment: signedCashOnly ? 'cash' : 'non_cash',
+                                                date: selectedDate,
+                                                force_new_number: 1,
+                                            })}
+                                            method="post"
+                                            as="button"
+                                            className="mt-3 inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 transition hover:border-amber-300 hover:bg-amber-100"
+                                        >
+                                            Regenerar com um novo numero de nota
+                                        </Link>
+                                    )}
                                 </div>
                             ))}
                         </>
