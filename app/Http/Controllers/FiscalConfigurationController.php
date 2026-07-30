@@ -346,21 +346,30 @@ class FiscalConfigurationController extends Controller
         $month = Carbon::createFromFormat('!Y-m', $data['month']);
         $monthStart = $month->copy()->startOfMonth();
         $monthEnd = $month->copy()->endOfMonth();
+        $managedUnits = ManagementScope::managedUnits($user, ['tb2_id', 'tb2_nome']);
+        $managedUnitIds = $managedUnits
+            ->pluck('tb2_id')
+            ->map(fn ($managedUnitId) => (int) $managedUnitId)
+            ->filter()
+            ->values();
+
         $invoices = NotaFiscal::query()
-            ->where('tb2_id', $unitId)
+            ->whereIn('tb2_id', $managedUnitIds)
             ->where('tb27_status', 'emitida')
             ->whereBetween('tb27_emitida_em', [$monthStart, $monthEnd])
             ->with('pagamento:tb4_id,valor_total')
             ->orderBy('tb27_emitida_em')
-            ->get(['tb27_id', 'tb4_id', 'tb27_emitida_em', 'tb27_payload']);
+            ->get(['tb27_id', 'tb2_id', 'tb4_id', 'tb27_emitida_em', 'tb27_payload']);
 
-        $days = $invoices
+        $selectedUnitInvoices = $invoices
+            ->where('tb2_id', $unitId)
+            ->values();
+
+        $days = $selectedUnitInvoices
             ->groupBy(fn (NotaFiscal $invoice) => $invoice->tb27_emitida_em->toDateString())
             ->map(function ($dailyInvoices, string $date): array {
                 $total = $dailyInvoices->sum(function (NotaFiscal $invoice): float {
-                    $payload = is_array($invoice->tb27_payload) ? $invoice->tb27_payload : [];
-
-                    return (float) ($payload['valor_total_documento'] ?? $invoice->pagamento?->valor_total ?? 0);
+                    return $this->fiscalInvoiceDocumentTotal($invoice);
                 });
 
                 return [
@@ -372,11 +381,36 @@ class FiscalConfigurationController extends Controller
             ->sortBy('date')
             ->values();
 
+        $storeSummaries = $invoices
+            ->groupBy('tb2_id')
+            ->map(function ($storeInvoices): array {
+                return [
+                    'count' => $storeInvoices->count(),
+                    'total' => round($storeInvoices->sum(function (NotaFiscal $invoice): float {
+                        return $this->fiscalInvoiceDocumentTotal($invoice);
+                    }), 2),
+                ];
+            });
+
+        $stores = $managedUnits
+            ->map(function (Unidade $unit) use ($storeSummaries): array {
+                $summary = $storeSummaries->get((int) $unit->tb2_id, ['count' => 0, 'total' => 0]);
+
+                return [
+                    'id' => (int) $unit->tb2_id,
+                    'name' => $unit->tb2_nome,
+                    'issued_count' => (int) $summary['count'],
+                    'issued_total' => (float) $summary['total'],
+                ];
+            })
+            ->values();
+
         return response()->json([
             'month' => $month->format('Y-m'),
-            'count' => $invoices->count(),
+            'count' => $selectedUnitInvoices->count(),
             'total' => round($days->sum('total'), 2),
             'daily_average' => $days->isNotEmpty() ? round($days->sum('total') / $days->count(), 2) : 0,
+            'stores' => $stores,
             'days' => $days,
         ]);
     }
@@ -1403,9 +1437,7 @@ class FiscalConfigurationController extends Controller
                 return [
                     'count' => $invoices->count(),
                     'total' => round($invoices->sum(function (NotaFiscal $invoice): float {
-                        $payload = is_array($invoice->tb27_payload) ? $invoice->tb27_payload : [];
-
-                        return (float) ($payload['valor_total_documento'] ?? $invoice->pagamento?->valor_total ?? 0);
+                        return $this->fiscalInvoiceDocumentTotal($invoice);
                     }), 2),
                 ];
             });
@@ -1441,12 +1473,17 @@ class FiscalConfigurationController extends Controller
             'signed' => $this->buildPreparedInvoicesQuery($selectedUnitId, 'signed', $selectedDate, 'non_cash')->count(),
             'signed_cash' => $signedCashInvoices->count(),
             'signed_cash_total' => round($signedCashInvoices->sum(function (NotaFiscal $invoice): float {
-                $payload = is_array($invoice->tb27_payload) ? $invoice->tb27_payload : [];
-
-                return (float) ($payload['valor_total_documento'] ?? $invoice->pagamento?->valor_total ?? 0);
+                return $this->fiscalInvoiceDocumentTotal($invoice);
             }), 2),
             'issued' => $this->buildPreparedInvoicesQuery($selectedUnitId, 'issued', $selectedDate)->count(),
         ];
+    }
+
+    private function fiscalInvoiceDocumentTotal(NotaFiscal $invoice): float
+    {
+        $payload = is_array($invoice->tb27_payload) ? $invoice->tb27_payload : [];
+
+        return (float) ($payload['valor_total_documento'] ?? $invoice->pagamento?->valor_total ?? 0);
     }
 
     private function loadPreparedInvoicesForUnit(

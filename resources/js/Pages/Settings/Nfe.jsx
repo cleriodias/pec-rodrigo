@@ -268,6 +268,7 @@ export default function Nfe({
         count: 0,
         total: 0,
         dailyAverage: 0,
+        stores: [],
         days: [],
         error: '',
     });
@@ -372,6 +373,7 @@ export default function Nfe({
                 count: Number(summary.count ?? 0),
                 total: Number(summary.total ?? 0),
                 dailyAverage: Number(summary.daily_average ?? 0),
+                stores: Array.isArray(summary.stores) ? summary.stores : [],
                 days: Array.isArray(summary.days) ? summary.days : [],
                 error: '',
             });
@@ -854,8 +856,10 @@ export default function Nfe({
                     <div>
                         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Loja do resumo</p>
                         <div className="flex flex-wrap gap-2">
-                            {units.map((store) => {
+                            {(monthlySummary.stores.length > 0 ? monthlySummary.stores : units).map((store) => {
                                 const isActive = Number(monthlySummary.unitId) === Number(store.id);
+                                const issuedCount = Number(store.issued_count ?? 0);
+                                const issuedTotal = Number(store.issued_total ?? 0);
 
                                 return (
                                     <button
@@ -869,7 +873,10 @@ export default function Nfe({
                                                 : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:text-blue-700'
                                         }`}
                                     >
-                                        {store.name}
+                                        <span className="block">{store.name}</span>
+                                        <span className="mt-1 block text-xs font-medium opacity-80">
+                                            {issuedCount} sem erro · {formatReceiptCurrency(issuedTotal)}
+                                        </span>
                                     </button>
                                 );
                             })}
