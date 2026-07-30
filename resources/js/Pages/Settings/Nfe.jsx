@@ -858,7 +858,6 @@ export default function Nfe({
                         <div className="flex flex-wrap gap-2">
                             {(monthlySummary.stores.length > 0 ? monthlySummary.stores : units).map((store) => {
                                 const isActive = Number(monthlySummary.unitId) === Number(store.id);
-                                const issuedCount = Number(store.issued_count ?? 0);
                                 const issuedTotal = Number(store.issued_total ?? 0);
 
                                 return (
@@ -875,7 +874,7 @@ export default function Nfe({
                                     >
                                         <span className="block">{store.name}</span>
                                         <span className="mt-1 block text-xs font-medium opacity-80">
-                                            {issuedCount} sem erro · {formatReceiptCurrency(issuedTotal)}
+                                            {formatReceiptCurrency(issuedTotal)}
                                         </span>
                                     </button>
                                 );
