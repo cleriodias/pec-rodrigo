@@ -601,7 +601,18 @@ class FiscalNfceXmlService
             if ($paymentData['requires_card']) {
                 $card = $document->createElement('card');
                 $detail->appendChild($card);
-                $this->appendTextElement($document, $card, 'tpIntegra', '2');
+                $this->appendTextElement($document, $card, 'tpIntegra', $payment->tef_integrado ? '1' : '2');
+
+                if ($payment->tef_integrado) {
+                    $this->appendTextElement(
+                        $document,
+                        $card,
+                        'CNPJ',
+                        $this->requiredDigits($payment->tef_cnpj_credenciadora, 14, 'CNPJ da credenciadora TEF')
+                    );
+                    $this->appendOptionalTextElement($document, $card, 'tBand', $this->optionalDigits($payment->tef_bandeira, 2));
+                    $this->appendTextElement($document, $card, 'cAut', $this->requiredTefAuthorization($payment->tef_autorizacao));
+                }
             }
         }
     }
@@ -618,7 +629,12 @@ class FiscalNfceXmlService
             $document,
             $additional,
             'infCpl',
-            sprintf('Pagamento interno %d | Loja %s', (int) $payment->tb4_id, $unitName ?: 'NAO INFORMADA')
+            sprintf(
+                'Pagamento interno %d | Loja %s%s',
+                (int) $payment->tb4_id,
+                $unitName ?: 'NAO INFORMADA',
+                $this->buildTefAdditionalInfo($payment)
+            )
         );
     }
 
@@ -944,5 +960,35 @@ class FiscalNfceXmlService
         }
 
         return $digits;
+    }
+
+    private function requiredTefAuthorization(?string $value): string
+    {
+        $value = preg_replace('/[^A-Za-z0-9\-_.]+/', '', trim((string) $value));
+
+        if ($value === '' || strlen($value) > 20) {
+            throw new RuntimeException('Codigo de autorizacao TEF invalido para o schema fiscal.');
+        }
+
+        return $value;
+    }
+
+    private function buildTefAdditionalInfo(VendaPagamento $payment): string
+    {
+        if (! $payment->tef_integrado) {
+            return '';
+        }
+
+        $parts = [];
+
+        if (filled($payment->tef_autorizacao)) {
+            $parts[] = 'Aut TEF ' . $payment->tef_autorizacao;
+        }
+
+        if (filled($payment->tef_terminal)) {
+            $parts[] = 'Terminal ' . $payment->tef_terminal;
+        }
+
+        return $parts !== [] ? ' | ' . implode(' | ', $parts) : ' | TEF integrado';
     }
 }

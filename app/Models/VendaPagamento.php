@@ -21,6 +21,13 @@ class VendaPagamento extends Model
         'valor_pago',
         'troco',
         'dois_pgto',
+        'tef_integrado',
+        'tef_autorizacao',
+        'tef_cnpj_credenciadora',
+        'tef_bandeira',
+        'tef_terminal',
+        'tef_transacao_em',
+        'tef_payload',
     ];
 
     protected $casts = [
@@ -28,6 +35,9 @@ class VendaPagamento extends Model
         'valor_pago' => 'float',
         'troco' => 'float',
         'dois_pgto' => 'float',
+        'tef_integrado' => 'boolean',
+        'tef_transacao_em' => 'datetime',
+        'tef_payload' => 'array',
     ];
 
     public function vendas(): HasMany

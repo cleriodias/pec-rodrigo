@@ -104,6 +104,14 @@ class SaleController extends Controller
             'vale_type' => ['nullable', 'string', Rule::in(['vale', 'refeicao'])],
             'card_type' => ['nullable', 'string', Rule::in(['cartao_credito', 'cartao_debito', 'pix'])],
             'comanda_codigo' => ['nullable', 'integer', 'between:3000,3100'],
+            'tef' => ['nullable', 'array'],
+            'tef.integrado' => ['nullable', 'boolean'],
+            'tef.autorizacao' => ['nullable', 'string', 'max:20'],
+            'tef.cnpj_credenciadora' => ['nullable', 'string', 'max:18'],
+            'tef.bandeira' => ['nullable', 'string', 'max:40'],
+            'tef.terminal' => ['nullable', 'string', 'max:40'],
+            'tef.transacao_em' => ['nullable', 'date'],
+            'tef.payload' => ['nullable', 'array'],
         ]);
 
         $comandaCodigo = $validated['comanda_codigo'] ?? null;
@@ -476,6 +484,7 @@ class SaleController extends Controller
                 $cardComplement,
                 $selectedCashComplementType,
             );
+            $tefData = $this->normalizeTefInput($validated['tef'] ?? null, $storedPaymentType);
 
             $payment = DB::transaction(function () use (
                 $cardComplement,
@@ -487,6 +496,7 @@ class SaleController extends Controller
                 $itemsPayload,
                 $salePaymentType,
                 $storedPaymentType,
+                $tefData,
                 $totalValue,
                 $troco,
                 $unitId,
@@ -500,6 +510,13 @@ class SaleController extends Controller
                     'valor_pago' => $valorPago,
                     'troco' => $troco,
                     'dois_pgto' => $cardComplement,
+                    'tef_integrado' => $tefData['integrado'],
+                    'tef_autorizacao' => $tefData['autorizacao'],
+                    'tef_cnpj_credenciadora' => $tefData['cnpj_credenciadora'],
+                    'tef_bandeira' => $tefData['bandeira'],
+                    'tef_terminal' => $tefData['terminal'],
+                    'tef_transacao_em' => $tefData['transacao_em'],
+                    'tef_payload' => $tefData['payload'],
                 ]);
 
                 if ($comandaCodigo) {
@@ -603,6 +620,12 @@ class SaleController extends Controller
                         'troco' => $payment->troco,
                         'dois_pgto' => $payment->dois_pgto,
                         'tipo_pagamento' => $payment->tipo_pagamento,
+                        'tef_integrado' => (bool) $payment->tef_integrado,
+                        'tef_autorizacao' => $payment->tef_autorizacao,
+                        'tef_cnpj_credenciadora' => $payment->tef_cnpj_credenciadora,
+                        'tef_bandeira' => $payment->tef_bandeira,
+                        'tef_terminal' => $payment->tef_terminal,
+                        'tef_transacao_em' => optional($payment->tef_transacao_em)?->toIso8601String(),
                     ],
                     'fiscal' => $this->buildFiscalSummary($invoice),
                 ],
@@ -1608,6 +1631,150 @@ class SaleController extends Controller
         );
 
         return str_contains($message, $suffix) ? $message : $message.$suffix;
+    }
+
+    private function normalizeTefInput(?array $tef, string $paymentType): array
+    {
+        $default = [
+            'integrado' => false,
+            'autorizacao' => null,
+            'cnpj_credenciadora' => null,
+            'bandeira' => null,
+            'terminal' => null,
+            'transacao_em' => null,
+            'payload' => null,
+        ];
+
+        if (! is_array($tef) || ! (bool) ($tef['integrado'] ?? false)) {
+            return $default;
+        }
+
+        if (! $this->isElectronicFiscalPaymentType($paymentType)) {
+            throw ValidationException::withMessages([
+                'tef.integrado' => 'TEF integrado so pode ser informado para cartao, Pix ou pagamento misto com complemento eletronico.',
+            ]);
+        }
+
+        $authorization = $this->nullableTrim($tef['autorizacao'] ?? null);
+        $acquirerCnpj = $this->onlyDigitsForTef($tef['cnpj_credenciadora'] ?? null);
+        $brand = $this->normalizeTefBrand($tef['bandeira'] ?? null);
+        $terminal = $this->nullableTrim($tef['terminal'] ?? null);
+        $transactionDate = $this->normalizeTefTransactionDate($tef['transacao_em'] ?? null);
+
+        $errors = [];
+
+        if ($authorization === null) {
+            $errors['tef.autorizacao'] = 'Informe o codigo de autorizacao ou identificacao do pedido retornado pelo TEF.';
+        }
+
+        if ($acquirerCnpj === null || strlen($acquirerCnpj) !== 14) {
+            $errors['tef.cnpj_credenciadora'] = 'Informe o CNPJ da credenciadora, subcredenciadora ou intermediador com 14 digitos.';
+        }
+
+        if ($this->isCardFiscalPaymentType($paymentType) && $brand === null) {
+            $errors['tef.bandeira'] = 'Informe a bandeira do cartao retornada pelo TEF.';
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+
+        $payload = is_array($tef['payload'] ?? null) ? $tef['payload'] : [];
+        $payload = [
+            ...$payload,
+            'autorizacao' => $authorization,
+            'cnpj_credenciadora' => $acquirerCnpj,
+            'bandeira' => $brand,
+            'terminal' => $terminal,
+            'transacao_em' => $transactionDate,
+        ];
+
+        return [
+            'integrado' => true,
+            'autorizacao' => $authorization,
+            'cnpj_credenciadora' => $acquirerCnpj,
+            'bandeira' => $brand,
+            'terminal' => $terminal,
+            'transacao_em' => $transactionDate,
+            'payload' => $payload,
+        ];
+    }
+
+    private function normalizeTefBrand(mixed $value): ?string
+    {
+        $value = strtolower(trim((string) $value));
+
+        if ($value === '') {
+            return null;
+        }
+
+        $digits = preg_replace('/\D+/', '', $value);
+
+        if ($digits !== '' && strlen($digits) <= 2) {
+            return str_pad($digits, 2, '0', STR_PAD_LEFT);
+        }
+
+        return match ($value) {
+            'visa' => '01',
+            'mastercard', 'master', 'master card' => '02',
+            'american express', 'amex' => '03',
+            'sorocred' => '04',
+            'diners club', 'diners' => '05',
+            'elo' => '06',
+            'hipercard' => '07',
+            'aura' => '08',
+            'cabal' => '09',
+            default => '99',
+        };
+    }
+
+    private function normalizeTefTransactionDate(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+
+        if ($value === '') {
+            return null;
+        }
+
+        return Carbon::parse($value)->toDateTimeString();
+    }
+
+    private function nullableTrim(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value !== '' ? $value : null;
+    }
+
+    private function onlyDigitsForTef(mixed $value): ?string
+    {
+        $digits = preg_replace('/\D+/', '', (string) $value);
+
+        return $digits !== '' ? $digits : null;
+    }
+
+    private function isElectronicFiscalPaymentType(?string $paymentType): bool
+    {
+        return in_array((string) $paymentType, [
+            'cartao_credito',
+            'cartao_debito',
+            'pix',
+            'maquina',
+            'dinheiro_cartao_credito',
+            'dinheiro_cartao_debito',
+            'dinheiro_pix',
+        ], true);
+    }
+
+    private function isCardFiscalPaymentType(?string $paymentType): bool
+    {
+        return in_array((string) $paymentType, [
+            'cartao_credito',
+            'cartao_debito',
+            'maquina',
+            'dinheiro_cartao_credito',
+            'dinheiro_cartao_debito',
+        ], true);
     }
 
     private function normalizeSalePaymentType(string $paymentType): string

@@ -261,6 +261,14 @@ class FiscalInvoicePreparationService
             'serie' => $serie,
             'numero' => $numero,
             'tipo_pagamento' => $payment->tipo_pagamento,
+            'tef' => [
+                'integrado' => (bool) $payment->tef_integrado,
+                'autorizacao' => $payment->tef_autorizacao,
+                'cnpj_credenciadora' => $payment->tef_cnpj_credenciadora,
+                'bandeira' => $payment->tef_bandeira,
+                'terminal' => $payment->tef_terminal,
+                'transacao_em' => optional($payment->tef_transacao_em)?->toIso8601String(),
+            ],
             'valor_total_venda' => round((float) $payment->valor_total, 2),
             'valor_total_documento' => $documentTotal,
             'itens_excluidos_qtd' => count($excludedItems),
@@ -274,6 +282,7 @@ class FiscalInvoicePreparationService
                     'nome_fantasia' => $config?->tb26_nome_fantasia,
                     'ie' => $config?->tb26_ie,
                     'crt' => $config?->tb26_crt,
+                    'exigir_tef_integrado' => (bool) ($config?->tb26_exigir_tef_integrado ?? false),
                     'logradouro' => $config?->tb26_logradouro,
                     'numero' => $config?->tb26_numero,
                     'bairro' => $config?->tb26_bairro,
@@ -462,6 +471,32 @@ class FiscalInvoicePreparationService
 
             if (blank($config->tb26_csc)) {
                 $errors[] = 'CSC nao configurado para NFC-e.';
+            }
+        }
+
+        if (
+            (bool) $config->tb26_exigir_tef_integrado
+            && $this->isElectronicPaymentType($payment->tipo_pagamento)
+            && ! (bool) $payment->tef_integrado
+        ) {
+            $errors[] = 'A configuracao fiscal desta loja exige TEF integrado para cartao, Pix e pagamentos mistos com complemento eletronico.';
+        }
+
+        if ((bool) $payment->tef_integrado) {
+            if (! $this->isElectronicPaymentType($payment->tipo_pagamento)) {
+                $errors[] = 'TEF integrado foi informado para uma forma de pagamento que nao usa meio eletronico.';
+            }
+
+            if (blank($payment->tef_autorizacao)) {
+                $errors[] = 'Codigo de autorizacao ou identificacao do pedido TEF nao informado.';
+            }
+
+            if (strlen((string) $this->onlyDigits($payment->tef_cnpj_credenciadora)) !== 14) {
+                $errors[] = 'CNPJ da credenciadora, subcredenciadora ou intermediador TEF invalido.';
+            }
+
+            if ($this->isCardPaymentType($payment->tipo_pagamento) && blank($payment->tef_bandeira)) {
+                $errors[] = 'Bandeira do cartao TEF nao informada.';
             }
         }
 
@@ -868,6 +903,30 @@ class FiscalInvoicePreparationService
     private function shouldDeferFiscalSignatureForPayment(?string $paymentType, bool $forceFiscalSignature): bool
     {
         return (string) $paymentType === 'dinheiro' && ! $forceFiscalSignature;
+    }
+
+    private function isElectronicPaymentType(?string $paymentType): bool
+    {
+        return in_array((string) $paymentType, [
+            'cartao_credito',
+            'cartao_debito',
+            'pix',
+            'maquina',
+            'dinheiro_cartao_credito',
+            'dinheiro_cartao_debito',
+            'dinheiro_pix',
+        ], true);
+    }
+
+    private function isCardPaymentType(?string $paymentType): bool
+    {
+        return in_array((string) $paymentType, [
+            'cartao_credito',
+            'cartao_debito',
+            'maquina',
+            'dinheiro_cartao_credito',
+            'dinheiro_cartao_debito',
+        ], true);
     }
 
     private function buildNonFiscalPaymentMessage(?string $paymentType): string

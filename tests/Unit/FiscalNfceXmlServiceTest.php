@@ -455,6 +455,40 @@ class FiscalNfceXmlServiceTest extends TestCase
         $this->assertStringNotContainsString('<card>', $valeXml);
     }
 
+    public function test_append_payment_marks_card_as_integrated_when_tef_data_is_available(): void
+    {
+        $service = new FiscalNfceXmlService(new FiscalWebserviceResolverService());
+        $reflection = new ReflectionClass($service);
+        $appendPayment = $reflection->getMethod('appendPayment');
+        $appendPayment->setAccessible(true);
+
+        $document = new DOMDocument('1.0', 'UTF-8');
+        $infNfe = $document->createElement('infNFe');
+        $document->appendChild($infNfe);
+
+        $payment = new VendaPagamento([
+            'tipo_pagamento' => 'cartao_debito',
+            'valor_total' => 25.0,
+            'troco' => 0,
+            'tef_integrado' => true,
+            'tef_autorizacao' => 'ABC123',
+            'tef_cnpj_credenciadora' => '12.345.678/0001-95',
+            'tef_bandeira' => '02',
+            'tef_terminal' => 'PINPAD-01',
+        ]);
+
+        $appendPayment->invoke($service, $document, $infNfe, $payment, 25.0);
+
+        $xml = $document->saveXML();
+
+        $this->assertNotFalse($xml);
+        $this->assertStringContainsString('<tPag>04</tPag>', $xml);
+        $this->assertStringContainsString('<tpIntegra>1</tpIntegra>', $xml);
+        $this->assertStringContainsString('<CNPJ>12345678000195</CNPJ>', $xml);
+        $this->assertStringContainsString('<tBand>02</tBand>', $xml);
+        $this->assertStringContainsString('<cAut>ABC123</cAut>', $xml);
+    }
+
     public function test_build_signed_xml_keeps_official_root_order_with_supplemental_info_before_signature(): void
     {
         $service = new FiscalNfceXmlService(new FiscalWebserviceResolverService());

@@ -49,6 +49,7 @@ const buildFiscalFormData = (configuration = {}, selectedUnitId = null) => ({
     tb26_emitir_nfe: Boolean(configuration?.tb26_emitir_nfe),
     tb26_emitir_nfce: Boolean(configuration?.tb26_emitir_nfce),
     tb26_geracao_automatica_ativa: configuration?.tb26_geracao_automatica_ativa ?? false,
+    tb26_exigir_tef_integrado: Boolean(configuration?.tb26_exigir_tef_integrado),
     tb26_rtc_2026_ativa: Boolean(configuration?.tb26_rtc_2026_ativa),
     tb26_regime_tributario: configuration?.tb26_regime_tributario ?? '',
     tb26_ambiente: configuration?.tb26_ambiente ?? 'homologacao',
@@ -753,6 +754,38 @@ const FiscalConfigFormSection = ({
                                 Status atual: {fiscalGenerationEnabled ? 'Ativa' : 'Desligada'}
                             </p>
                             <InputError message={errors.tb26_geracao_automatica_ativa} className="mt-2" />
+                        </div>
+
+                        <div className={`${fiscalPanelClassName} flex flex-col justify-between`}>
+                            <label className="flex items-start justify-between gap-4">
+                                <div className="space-y-1">
+                                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                        Exigir TEF integrado
+                                    </p>
+                                    <p className="text-sm text-slate-500 dark:text-slate-300">
+                                        Bloqueia a preparacao fiscal de cartao, Pix e pagamento misto sem retorno TEF.
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setData('tb26_exigir_tef_integrado', !Boolean(data.tb26_exigir_tef_integrado))}
+                                    className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full transition ${
+                                        data.tb26_exigir_tef_integrado ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-600'
+                                    }`}
+                                    aria-pressed={Boolean(data.tb26_exigir_tef_integrado)}
+                                >
+                                    <span className="sr-only">Alternar obrigatoriedade de TEF integrado</span>
+                                    <span
+                                        className={`inline-block h-6 w-6 transform rounded-full bg-white transition ${
+                                            data.tb26_exigir_tef_integrado ? 'translate-x-7' : 'translate-x-1'
+                                        }`}
+                                    />
+                                </button>
+                            </label>
+                            <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                                Status atual: {data.tb26_exigir_tef_integrado ? 'Obrigatorio' : 'Opcional'}
+                            </p>
+                            <InputError message={errors.tb26_exigir_tef_integrado} className="mt-2" />
                         </div>
                     </div>
                 </section>

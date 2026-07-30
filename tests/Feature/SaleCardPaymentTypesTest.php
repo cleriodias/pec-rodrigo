@@ -99,6 +99,55 @@ class SaleCardPaymentTypesTest extends TestCase
         ]);
     }
 
+    public function test_card_sale_stores_tef_metadata_when_integration_returns_it(): void
+    {
+        $unit = $this->makeUnit('Loja Centro');
+        $cashier = $this->makeUser('Caixa', 3, $unit);
+        $product = $this->makeProduct('Bolo simples', 12.00);
+
+        $response = $this
+            ->actingAs($cashier)
+            ->withSession($this->activeSessionPayload($unit, 3))
+            ->postJson(route('sales.store'), [
+                'tipo_pago' => 'cartao_debito',
+                'items' => [
+                    [
+                        'product_id' => $product->tb1_id,
+                        'quantity' => 1,
+                    ],
+                ],
+                'tef' => [
+                    'integrado' => true,
+                    'autorizacao' => 'ABC123',
+                    'cnpj_credenciadora' => '12.345.678/0001-95',
+                    'bandeira' => 'mastercard',
+                    'terminal' => 'PINPAD-01',
+                    'transacao_em' => '2026-07-30 20:10:00',
+                    'payload' => [
+                        'nsu' => '999888',
+                    ],
+                ],
+            ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('sale.payment.tef_integrado', true)
+            ->assertJsonPath('sale.payment.tef_autorizacao', 'ABC123')
+            ->assertJsonPath('sale.payment.tef_cnpj_credenciadora', '12345678000195')
+            ->assertJsonPath('sale.payment.tef_bandeira', '02')
+            ->assertJsonPath('sale.payment.tef_terminal', 'PINPAD-01');
+
+        $this->assertDatabaseHas('tb4_vendas_pg', [
+            'tipo_pagamento' => 'cartao_debito',
+            'valor_total' => 12.00,
+            'tef_integrado' => 1,
+            'tef_autorizacao' => 'ABC123',
+            'tef_cnpj_credenciadora' => '12345678000195',
+            'tef_bandeira' => '02',
+            'tef_terminal' => 'PINPAD-01',
+        ]);
+    }
+
     public function test_cash_sale_with_card_complement_stores_selected_card_subtype_on_payment(): void
     {
         $unit = $this->makeUnit('Loja Centro');

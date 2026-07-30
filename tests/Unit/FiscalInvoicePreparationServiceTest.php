@@ -50,6 +50,53 @@ class FiscalInvoicePreparationServiceTest extends TestCase
         $this->assertSame([], $errors);
     }
 
+    public function test_validate_payload_requires_tef_when_unit_configuration_enforces_it(): void
+    {
+        $service = $this->makeService();
+        $reflection = new ReflectionClass($service);
+        $validatePayload = $reflection->getMethod('validatePayload');
+        $validatePayload->setAccessible(true);
+
+        $payment = $this->makePaymentWithFiscalProduct([], '11.222.333/0001-44', [
+            'tipo_pagamento' => 'cartao_credito',
+        ]);
+        $config = $this->makeConfiguration([
+            'tb26_exigir_tef_integrado' => true,
+        ]);
+        [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment, $service);
+
+        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', null, $eligibleSales, $excludedItems, []);
+
+        $this->assertContains(
+            'A configuracao fiscal desta loja exige TEF integrado para cartao, Pix e pagamentos mistos com complemento eletronico.',
+            $errors
+        );
+    }
+
+    public function test_validate_payload_accepts_integrated_tef_when_required_by_unit(): void
+    {
+        $service = $this->makeService();
+        $reflection = new ReflectionClass($service);
+        $validatePayload = $reflection->getMethod('validatePayload');
+        $validatePayload->setAccessible(true);
+
+        $payment = $this->makePaymentWithFiscalProduct([], '11.222.333/0001-44', [
+            'tipo_pagamento' => 'cartao_credito',
+            'tef_integrado' => true,
+            'tef_autorizacao' => 'ABC123',
+            'tef_cnpj_credenciadora' => '12345678000195',
+            'tef_bandeira' => '01',
+        ]);
+        $config = $this->makeConfiguration([
+            'tb26_exigir_tef_integrado' => true,
+        ]);
+        [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment, $service);
+
+        $errors = $validatePayload->invoke($service, $payment, $config, 'nfce', null, $eligibleSales, $excludedItems, []);
+
+        $this->assertSame([], $errors);
+    }
+
     public function test_validate_payload_accepts_fiscal_coupon_with_cpf_only(): void
     {
         $service = $this->makeService();
@@ -277,6 +324,7 @@ class FiscalInvoicePreparationServiceTest extends TestCase
     private function makePaymentWithFiscalProduct(
         array $productOverrides = [],
         string $unitCnpj = '11.222.333/0001-44',
+        array $paymentOverrides = [],
     ): VendaPagamento
     {
         $product = new Produto(array_merge([
@@ -308,11 +356,11 @@ class FiscalInvoicePreparationServiceTest extends TestCase
             'tb2_cnpj' => $unitCnpj,
         ]));
 
-        $payment = new VendaPagamento([
+        $payment = new VendaPagamento(array_merge([
             'tb4_id' => 99,
             'valor_total' => 15,
             'tipo_pagamento' => 'dinheiro',
-        ]);
+        ], $paymentOverrides));
         $payment->setRelation('vendas', collect([$sale]));
 
         return $payment;

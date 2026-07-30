@@ -4,6 +4,10 @@ CÃ³digo-fonte das lives sobre [Laravel e React](https://www.youtube.com/watch?
 
 Esta aplicacao **nao possui Matriz**. Cada loja (unidade) e independente para permissoes, operacao e configuracao fiscal. Nao criar modelos, tabelas, migrations, rotas, menus ou vinculos por `matriz_id` neste repositorio.
 
+## Documentacao tecnica
+
+- [Implementacao fiscal TEF](docs/tef-fiscal.md)
+
 ## Requisitos
 
 * PHP 8.2 ou superior;
