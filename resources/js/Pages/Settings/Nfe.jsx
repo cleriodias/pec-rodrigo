@@ -51,12 +51,50 @@ const formatMonth = (month) => {
     return label.charAt(0).toUpperCase() + label.slice(1);
 };
 
+const formatShortDate = (value) => {
+    const match = String(value ?? '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+    return match ? `${match[3]}/${match[2]}/${match[1].slice(2)}` : '--';
+};
+
 const shiftMonth = (month, amount) => {
     const date = new Date(`${month}-01T00:00:00Z`);
     date.setUTCMonth(date.getUTCMonth() + amount);
 
     return date.toISOString().slice(0, 7);
 };
+
+const ConferenceList = ({ title, items = [], emptyLabel }) => (
+    <div className="rounded-xl border border-slate-200">
+        <div className="border-b border-slate-100 bg-slate-50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</p>
+        </div>
+        {items.length === 0 ? (
+            <p className="px-4 py-3 text-sm text-slate-500">{emptyLabel}</p>
+        ) : (
+            <div className="divide-y divide-slate-100">
+                {items.map((item, index) => (
+                    <div key={item.access_key ?? `${title}-${index}`} className="px-4 py-3 text-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-semibold text-slate-800">
+                                {item.number ? `Nota ${item.series ?? '--'}/${item.number}` : `Registro ${index + 1}`}
+                            </span>
+                            <span className="font-semibold text-emerald-700">
+                                {formatReceiptCurrency(item.receita_total ?? item.total ?? 0)}
+                            </span>
+                        </div>
+                        <p className="mt-1 break-all font-mono text-[11px] text-slate-500">
+                            {item.access_key ?? '--'}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                            Emissao: {formatShortDate(item.issued_at)}
+                        </p>
+                    </div>
+                ))}
+            </div>
+        )}
+    </div>
+);
 
 const InvoiceTable = ({
     title,
@@ -270,6 +308,9 @@ export default function Nfe({
         dailyAverage: 0,
         stores: [],
         days: [],
+        officialConference: null,
+        conferenceLoading: false,
+        conferenceError: '',
         error: '',
     });
 
@@ -356,6 +397,7 @@ export default function Nfe({
             loading: true,
             unitId,
             month,
+            conferenceError: '',
             error: '',
         }));
 
@@ -375,6 +417,9 @@ export default function Nfe({
                 dailyAverage: Number(summary.daily_average ?? 0),
                 stores: Array.isArray(summary.stores) ? summary.stores : [],
                 days: Array.isArray(summary.days) ? summary.days : [],
+                officialConference: summary.official_conference ?? null,
+                conferenceLoading: false,
+                conferenceError: '',
                 error: '',
             });
         } catch (error) {
@@ -384,6 +429,7 @@ export default function Nfe({
                 loading: false,
                 unitId,
                 month,
+                conferenceLoading: false,
                 error: error.response?.data?.message ?? 'Nao foi possivel carregar o resumo mensal.',
             }));
         }
@@ -394,7 +440,7 @@ export default function Nfe({
     };
 
     const closeMonthlySummary = () => {
-        if (!monthlySummary.loading) {
+        if (!monthlySummary.loading && !monthlySummary.conferenceLoading) {
             setMonthlySummary((current) => ({ ...current, open: false }));
         }
     };
@@ -409,6 +455,38 @@ export default function Nfe({
         }
 
         loadMonthlySummary(monthlySummary.month, true, unitId);
+    };
+
+    const handleOfficialConference = async () => {
+        if (!monthlySummary.unitId || monthlySummary.loading || monthlySummary.conferenceLoading) {
+            return;
+        }
+
+        setMonthlySummary((current) => ({
+            ...current,
+            conferenceLoading: true,
+            conferenceError: '',
+        }));
+
+        try {
+            const response = await axios.post(route('settings.fiscal.invoices.official-monthly-conference'), {
+                unit_id: monthlySummary.unitId,
+                month: monthlySummary.month,
+            });
+
+            setMonthlySummary((current) => ({
+                ...current,
+                officialConference: response.data ?? null,
+                conferenceLoading: false,
+                conferenceError: '',
+            }));
+        } catch (error) {
+            setMonthlySummary((current) => ({
+                ...current,
+                conferenceLoading: false,
+                conferenceError: error.response?.data?.message ?? 'Nao foi possivel consultar a Receita agora.',
+            }));
+        }
     };
 
     const handleTransmitInvoice = (invoiceId) => {
@@ -844,7 +922,7 @@ export default function Nfe({
                         <button
                             type="button"
                             onClick={closeMonthlySummary}
-                            disabled={monthlySummary.loading}
+                            disabled={monthlySummary.loading || monthlySummary.conferenceLoading}
                             className="text-sm font-semibold text-gray-500 transition hover:text-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             Fechar
@@ -865,7 +943,7 @@ export default function Nfe({
                                         key={store.id}
                                         type="button"
                                         onClick={() => handleMonthlySummaryUnitChange(store.id)}
-                                        disabled={monthlySummary.loading}
+                                        disabled={monthlySummary.loading || monthlySummary.conferenceLoading}
                                         className={`rounded-lg border px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
                                             isActive
                                                 ? 'border-blue-500 bg-blue-50 text-blue-700'
@@ -886,16 +964,29 @@ export default function Nfe({
                         <button
                             type="button"
                             onClick={() => handleMonthlySummaryMonthChange(-1)}
-                            disabled={monthlySummary.loading}
+                            disabled={monthlySummary.loading || monthlySummary.conferenceLoading}
                             className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             Mes anterior
                         </button>
-                        <p className="text-center text-base font-semibold text-slate-900">{formatMonth(monthlySummary.month)}</p>
+                        <div className="flex flex-col items-center gap-2">
+                            <p className="text-center text-base font-semibold text-slate-900">{formatMonth(monthlySummary.month)}</p>
+                            <button
+                                type="button"
+                                onClick={handleOfficialConference}
+                                disabled={monthlySummary.loading || monthlySummary.conferenceLoading || !monthlySummary.unitId}
+                                className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {monthlySummary.conferenceLoading && (
+                                    <span className="h-3 w-3 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-700" />
+                                )}
+                                {monthlySummary.conferenceLoading ? 'Consultando Receita...' : 'Conferir Receita'}
+                            </button>
+                        </div>
                         <button
                             type="button"
                             onClick={() => handleMonthlySummaryMonthChange(1)}
-                            disabled={monthlySummary.loading}
+                            disabled={monthlySummary.loading || monthlySummary.conferenceLoading}
                             className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             Proximo mes
@@ -926,6 +1017,129 @@ export default function Nfe({
                                     <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Media diaria</p>
                                     <p className="mt-1 text-xl font-bold text-blue-800">{formatReceiptCurrency(monthlySummary.dailyAverage)}</p>
                                 </div>
+                            </div>
+
+                            <div className="rounded-xl border border-indigo-100 bg-white px-4 py-4 shadow-sm">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                    <div>
+                                        <h4 className="text-base font-semibold text-slate-900">Conferencia Receita x Sistema</h4>
+                                        <p className="mt-1 text-sm text-slate-500">
+                                            Usa a distribuicao oficial DF-e do CNPJ da loja selecionada.
+                                        </p>
+                                    </div>
+                                    {monthlySummary.officialConference?.last_sync_at && (
+                                        <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+                                            Ultima consulta: {formatShortDate(monthlySummary.officialConference.last_sync_at)}
+                                        </span>
+                                    )}
+                                </div>
+
+                                {monthlySummary.conferenceLoading ? (
+                                    <div className="mt-4 flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-4 text-sm font-medium text-indigo-700">
+                                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-700" />
+                                        Consultando documentos oficiais na Receita.
+                                    </div>
+                                ) : monthlySummary.conferenceError ? (
+                                    <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                                        {monthlySummary.conferenceError}
+                                    </div>
+                                ) : monthlySummary.officialConference?.available === false ? (
+                                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                                        {monthlySummary.officialConference.message ?? 'Conferencia oficial ainda indisponivel.'}
+                                    </div>
+                                ) : monthlySummary.officialConference ? (
+                                    <div className="mt-4 space-y-4">
+                                        {monthlySummary.officialConference.message && (
+                                            <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                                                {monthlySummary.officialConference.message}
+                                            </div>
+                                        )}
+                                        {!monthlySummary.officialConference.complete && (
+                                            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                                                A Receita ainda possui NSUs pendentes para este CNPJ. Clique novamente depois para continuar a fila oficial.
+                                            </div>
+                                        )}
+                                        <div className="grid gap-3 sm:grid-cols-3">
+                                            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sistema</p>
+                                                <p className="mt-1 text-lg font-bold text-slate-900">
+                                                    {monthlySummary.officialConference.system?.count ?? 0} nota(s)
+                                                </p>
+                                                <p className="text-sm font-semibold text-slate-700">
+                                                    {formatReceiptCurrency(monthlySummary.officialConference.system?.total ?? 0)}
+                                                </p>
+                                            </div>
+                                            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                                                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Receita</p>
+                                                <p className="mt-1 text-lg font-bold text-emerald-900">
+                                                    {monthlySummary.officialConference.receita?.count ?? 0} nota(s)
+                                                </p>
+                                                <p className="text-sm font-semibold text-emerald-800">
+                                                    {formatReceiptCurrency(monthlySummary.officialConference.receita?.total ?? 0)}
+                                                </p>
+                                            </div>
+                                            <div className={`rounded-xl border px-4 py-3 ${
+                                                Math.abs(Number(monthlySummary.officialConference.difference ?? 0)) <= 0.01
+                                                    ? 'border-blue-200 bg-blue-50'
+                                                    : 'border-rose-200 bg-rose-50'
+                                            }`}>
+                                                <p className={`text-xs font-semibold uppercase tracking-wide ${
+                                                    Math.abs(Number(monthlySummary.officialConference.difference ?? 0)) <= 0.01
+                                                        ? 'text-blue-700'
+                                                        : 'text-rose-700'
+                                                }`}>Diferenca</p>
+                                                <p className={`mt-1 text-lg font-bold ${
+                                                    Math.abs(Number(monthlySummary.officialConference.difference ?? 0)) <= 0.01
+                                                        ? 'text-blue-900'
+                                                        : 'text-rose-800'
+                                                }`}>
+                                                    {formatReceiptCurrency(monthlySummary.officialConference.difference ?? 0)}
+                                                </p>
+                                                <p className="text-xs text-slate-500">Sistema menos Receita</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                                            <span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-rose-700">
+                                                {monthlySummary.officialConference.missing_in_receita_count ?? 0} sem Receita
+                                            </span>
+                                            <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-700">
+                                                {monthlySummary.officialConference.missing_in_system_count ?? 0} fora do sistema
+                                            </span>
+                                            <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-blue-700">
+                                                {monthlySummary.officialConference.divergent_count ?? 0} valor divergente
+                                            </span>
+                                            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-700">
+                                                {monthlySummary.officialConference.canceled_count ?? 0} cancelada(s) na Receita
+                                            </span>
+                                        </div>
+                                        <div className="grid gap-3 lg:grid-cols-2">
+                                            <ConferenceList
+                                                title="No sistema e nao encontrada na Receita"
+                                                items={monthlySummary.officialConference.missing_in_receita ?? []}
+                                                emptyLabel="Nenhuma divergencia deste tipo."
+                                            />
+                                            <ConferenceList
+                                                title="Na Receita e nao encontrada no sistema"
+                                                items={monthlySummary.officialConference.missing_in_system ?? []}
+                                                emptyLabel="Nenhuma divergencia deste tipo."
+                                            />
+                                            <ConferenceList
+                                                title="Valores divergentes"
+                                                items={monthlySummary.officialConference.divergent_values ?? []}
+                                                emptyLabel="Nenhum valor divergente."
+                                            />
+                                            <ConferenceList
+                                                title="Canceladas na Receita"
+                                                items={monthlySummary.officialConference.canceled_in_receita ?? []}
+                                                emptyLabel="Nenhuma nota emitida no sistema consta cancelada na Receita."
+                                            />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+                                        Clique em Conferir Receita para buscar os documentos oficiais deste CNPJ.
+                                    </p>
+                                )}
                             </div>
 
                             {monthlySummary.days.length > 0 ? (

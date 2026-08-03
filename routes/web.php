@@ -346,6 +346,8 @@ Route::middleware('auth')->group(function () {
         ->name('settings.fiscal.setor9-rtc.reclassify');
     Route::get('/settings/fiscal/notas/resumo-mensal', [FiscalConfigurationController::class, 'issuedMonthlySummary'])
         ->name('settings.fiscal.invoices.issued-monthly-summary');
+    Route::post('/settings/fiscal/notas/resumo-mensal/conferir-receita', [FiscalConfigurationController::class, 'syncOfficialMonthlyConference'])
+        ->name('settings.fiscal.invoices.official-monthly-conference');
     Route::post('/settings/fiscal/notas/{notaFiscal}/regenerate', [FiscalConfigurationController::class, 'regenerateInvoice'])
         ->name('settings.fiscal.invoices.regenerate');
     Route::delete('/settings/fiscal/notas/{notaFiscal}', [FiscalConfigurationController::class, 'destroyInvoice'])

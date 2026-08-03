@@ -8,6 +8,7 @@ use App\Models\Unidade;
 use App\Models\Venda;
 use App\Models\VendaPagamento;
 use App\Support\FiscalCertificateService;
+use App\Support\FiscalDfeDistributionService;
 use App\Support\FiscalInvoicePreparationService;
 use App\Support\FiscalMunicipalityCodeService;
 use App\Support\FiscalNfceTransmissionService;
@@ -321,7 +322,7 @@ class FiscalConfigurationController extends Controller
         }
     }
 
-    public function issuedMonthlySummary(Request $request): JsonResponse
+    public function issuedMonthlySummary(Request $request, FiscalDfeDistributionService $fiscalDfeDistributionService): JsonResponse
     {
         $user = $request->user();
         $this->ensureAdmin($user);
@@ -405,6 +406,27 @@ class FiscalConfigurationController extends Controller
             })
             ->values();
 
+        $officialConference = null;
+        $configuration = ConfiguracaoFiscal::query()
+            ->where('tb2_id', $unitId)
+            ->with('unidade:tb2_id,tb2_cnpj')
+            ->first();
+
+        if (
+            $configuration
+            && Schema::hasTable('tb33_dfe_distribuicao_controles')
+            && Schema::hasTable('tb34_dfe_documentos_receita')
+        ) {
+            try {
+                $officialConference = $fiscalDfeDistributionService->compareStoredMonthlySummary($configuration, $month);
+            } catch (Throwable $exception) {
+                $officialConference = [
+                    'available' => false,
+                    'message' => $this->buildSafeExceptionMessage($exception),
+                ];
+            }
+        }
+
         return response()->json([
             'month' => $month->format('Y-m'),
             'count' => $selectedUnitInvoices->count(),
@@ -412,7 +434,60 @@ class FiscalConfigurationController extends Controller
             'daily_average' => $days->isNotEmpty() ? round($days->sum('total') / $days->count(), 2) : 0,
             'stores' => $stores,
             'days' => $days,
+            'official_conference' => $officialConference,
         ]);
+    }
+
+    public function syncOfficialMonthlyConference(Request $request, FiscalDfeDistributionService $fiscalDfeDistributionService): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureAdmin($user);
+
+        $data = $request->validate([
+            'unit_id' => ['required', 'integer', 'exists:tb2_unidades,tb2_id'],
+            'month' => ['required', 'date_format:Y-m'],
+        ]);
+
+        $unitId = (int) $data['unit_id'];
+
+        if (! ManagementScope::canManageUnit($user, $unitId)) {
+            abort(403, 'Acesso negado.');
+        }
+
+        if (
+            ! $this->fiscalTablesAreAvailable()
+            || ! Schema::hasTable('tb33_dfe_distribuicao_controles')
+            || ! Schema::hasTable('tb34_dfe_documentos_receita')
+        ) {
+            return response()->json([
+                'message' => 'As tabelas de conferencia fiscal ainda nao estao disponiveis neste ambiente. Execute as migrations fiscais do deploy.',
+            ], 503);
+        }
+
+        $configuration = ConfiguracaoFiscal::query()
+            ->where('tb2_id', $unitId)
+            ->with('unidade:tb2_id,tb2_cnpj')
+            ->first();
+
+        if (! $configuration) {
+            return response()->json([
+                'message' => 'Configure os dados fiscais e o certificado da loja antes de consultar a Receita.',
+            ], 422);
+        }
+
+        try {
+            $month = Carbon::createFromFormat('!Y-m', (string) $data['month']);
+
+            return response()->json(
+                $fiscalDfeDistributionService->syncAndCompareMonthly($configuration, $month)
+            );
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'message' => $this->buildSafeExceptionMessage($exception),
+            ], 422);
+        }
     }
 
     public function update(
