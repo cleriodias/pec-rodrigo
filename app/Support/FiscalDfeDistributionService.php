@@ -213,18 +213,27 @@ class FiscalDfeDistributionService
         $cnpj = $this->configurationCnpj($configuration);
         $ambiente = $this->configurationEnvironment($configuration);
 
-        return DfeDistribuicaoControle::query()->firstOrCreate(
+        $control = DfeDistribuicaoControle::query()->firstOrCreate(
             [
                 'tb33_cnpj' => $cnpj,
                 'tb33_ambiente' => $ambiente,
             ],
             [
                 'tb2_id' => $configuration->tb2_id,
-                'tb33_uf_autor' => '91',
+                'tb33_uf_autor' => $this->configurationUfCode($configuration),
                 'tb33_ult_nsu' => '000000000000000',
                 'tb33_max_nsu' => '000000000000000',
             ],
         );
+
+        $ufCode = $this->configurationUfCode($configuration);
+
+        if ($ufCode !== null && $control->tb33_uf_autor !== $ufCode) {
+            $control->update(['tb33_uf_autor' => $ufCode]);
+            $control->refresh();
+        }
+
+        return $control;
     }
 
     private function requestDistributionBatch(ConfiguracaoFiscal $configuration, DfeDistribuicaoControle $control, array $certificateData): array
@@ -240,6 +249,7 @@ class FiscalDfeDistributionService
             $this->configurationCnpj($configuration),
             $ambiente,
             (string) $control->tb33_ult_nsu,
+            $this->configurationUfCode($configuration),
         );
         $soapEnvelope = $this->buildSoapEnvelope($requestXml);
         $responseXml = $this->sendSoapRequest($endpoint, $soapEnvelope, $certificateData);
@@ -247,14 +257,17 @@ class FiscalDfeDistributionService
         return $this->parseDistributionResponse($responseXml);
     }
 
-    private function buildDistributionRequestXml(string $cnpj, string $ambiente, string $ultNsu): string
+    private function buildDistributionRequestXml(string $cnpj, string $ambiente, string $ultNsu, ?string $ufCode): string
     {
         $tpAmb = $ambiente === 'producao' ? '1' : '2';
+        $ufTag = $ufCode !== null
+            ? '<cUFAutor>' . htmlspecialchars($ufCode, ENT_XML1) . '</cUFAutor>'
+            : '';
 
         return '<?xml version="1.0" encoding="UTF-8"?>'
             . '<distDFeInt xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.01">'
             . '<tpAmb>' . $tpAmb . '</tpAmb>'
-            . '<cUFAutor>91</cUFAutor>'
+            . $ufTag
             . '<CNPJ>' . htmlspecialchars($cnpj, ENT_XML1) . '</CNPJ>'
             . '<distNSU><ultNSU>' . str_pad(preg_replace('/\D+/', '', $ultNsu) ?: '0', 15, '0', STR_PAD_LEFT) . '</ultNSU></distNSU>'
             . '</distDFeInt>';
@@ -573,6 +586,48 @@ class FiscalDfeDistributionService
         return strtolower((string) ($configuration->tb26_ambiente ?: 'producao')) === 'homologacao'
             ? 'homologacao'
             : 'producao';
+    }
+
+    private function configurationUfCode(ConfiguracaoFiscal $configuration): ?string
+    {
+        $municipalityCode = preg_replace('/\D+/', '', (string) $configuration->tb26_codigo_municipio);
+
+        if (strlen($municipalityCode) >= 2) {
+            return substr($municipalityCode, 0, 2);
+        }
+
+        $uf = strtoupper(trim((string) $configuration->tb26_uf));
+        $codes = [
+            'RO' => '11',
+            'AC' => '12',
+            'AM' => '13',
+            'RR' => '14',
+            'PA' => '15',
+            'AP' => '16',
+            'TO' => '17',
+            'MA' => '21',
+            'PI' => '22',
+            'CE' => '23',
+            'RN' => '24',
+            'PB' => '25',
+            'PE' => '26',
+            'AL' => '27',
+            'SE' => '28',
+            'BA' => '29',
+            'MG' => '31',
+            'ES' => '32',
+            'RJ' => '33',
+            'SP' => '35',
+            'PR' => '41',
+            'SC' => '42',
+            'RS' => '43',
+            'MS' => '50',
+            'MT' => '51',
+            'GO' => '52',
+            'DF' => '53',
+        ];
+
+        return $codes[$uf] ?? null;
     }
 
     private function isInNoDocumentCooldown(DfeDistribuicaoControle $control): bool

@@ -72,7 +72,7 @@ return new class extends Migration
             $table->unsignedBigInteger('tb2_id')->nullable();
             $table->string('tb33_cnpj', 14);
             $table->string('tb33_ambiente', 20);
-            $table->string('tb33_uf_autor', 2)->default('91');
+            $table->string('tb33_uf_autor', 2)->nullable();
             $table->string('tb33_ult_nsu', 15)->default('000000000000000');
             $table->string('tb33_max_nsu', 15)->default('000000000000000');
             $table->timestamp('tb33_ultima_consulta_em')->nullable();
