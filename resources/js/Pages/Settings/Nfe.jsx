@@ -1114,16 +1114,6 @@ export default function Nfe({
                                         </div>
                                         <div className="grid gap-3 lg:grid-cols-2">
                                             <ConferenceList
-                                                title="No sistema e nao encontrada na Receita"
-                                                items={monthlySummary.officialConference.missing_in_receita ?? []}
-                                                emptyLabel="Nenhuma divergencia deste tipo."
-                                            />
-                                            <ConferenceList
-                                                title="Na Receita e nao encontrada no sistema"
-                                                items={monthlySummary.officialConference.missing_in_system ?? []}
-                                                emptyLabel="Nenhuma divergencia deste tipo."
-                                            />
-                                            <ConferenceList
                                                 title="Valores divergentes"
                                                 items={monthlySummary.officialConference.divergent_values ?? []}
                                                 emptyLabel="Nenhum valor divergente."
