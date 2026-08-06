@@ -930,7 +930,7 @@ export default function Nfe({
                     </div>
                 </div>
 
-                <div className="space-y-5 px-6 py-5">
+                <div className="max-h-[calc(100vh-10rem)] space-y-5 overflow-y-auto overscroll-contain px-6 py-5 sm:max-h-[70vh]">
                     <div>
                         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Loja do resumo</p>
                         <div className="flex flex-wrap gap-2">
