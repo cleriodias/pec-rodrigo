@@ -355,7 +355,7 @@ class FiscalNfceXmlService
         $this->appendTextElement($document, $icms00, 'pICMS', number_format($icmsRate, 4, '.', ''));
         $this->appendTextElement($document, $icms00, 'vICMS', number_format($base * $icmsRate / 100, 2, '.', ''));
 
-        $this->appendAliquotPisCofins($document, $imposto, $base, $rtcTax);
+        $this->appendConfiguredPisCofins($document, $imposto, $base, $rtcTax);
     }
 
     private function appendZeroPisCofins(DOMDocument $document, DOMElement $imposto): void
@@ -379,28 +379,76 @@ class FiscalNfceXmlService
         $this->appendTextElement($document, $cofinsOther, 'vCOFINS', '0.00');
     }
 
-    private function appendAliquotPisCofins(DOMDocument $document, DOMElement $imposto, float $base, array $rtcTax): void
+    private function appendConfiguredPisCofins(DOMDocument $document, DOMElement $imposto, float $base, array $rtcTax): void
     {
-        $pisRate = (float) ($rtcTax['aliquota_pis'] ?? 0);
-        $cofinsRate = (float) ($rtcTax['aliquota_cofins'] ?? 0);
+        $this->appendConfiguredPis($document, $imposto, $base, (string) ($rtcTax['cst_pis'] ?? ''), (float) ($rtcTax['aliquota_pis'] ?? 0));
+        $this->appendConfiguredCofins($document, $imposto, $base, (string) ($rtcTax['cst_cofins'] ?? ''), (float) ($rtcTax['aliquota_cofins'] ?? 0));
+    }
 
+    private function appendConfiguredPis(DOMDocument $document, DOMElement $imposto, float $base, string $cst, float $rate): void
+    {
+        $cst = str_pad($cst, 2, '0', STR_PAD_LEFT);
         $pis = $document->createElement('PIS');
         $imposto->appendChild($pis);
+
+        if (in_array($cst, ['01', '02'], true)) {
+            $pisAliq = $document->createElement('PISAliq');
+            $pis->appendChild($pisAliq);
+            $this->appendTextElement($document, $pisAliq, 'CST', $cst);
+            $this->appendTextElement($document, $pisAliq, 'vBC', number_format($base, 2, '.', ''));
+            $this->appendTextElement($document, $pisAliq, 'pPIS', number_format($rate, 4, '.', ''));
+            $this->appendTextElement($document, $pisAliq, 'vPIS', number_format($base * $rate / 100, 2, '.', ''));
+
+            return;
+        }
+
+        if (in_array($cst, ['04', '06', '07', '08', '09'], true)) {
+            $pisNt = $document->createElement('PISNT');
+            $pis->appendChild($pisNt);
+            $this->appendTextElement($document, $pisNt, 'CST', $cst);
+
+            return;
+        }
+
         $pisAliq = $document->createElement('PISAliq');
         $pis->appendChild($pisAliq);
-        $this->appendTextElement($document, $pisAliq, 'CST', '01');
+        $this->appendTextElement($document, $pisAliq, 'CST', $cst);
         $this->appendTextElement($document, $pisAliq, 'vBC', number_format($base, 2, '.', ''));
-        $this->appendTextElement($document, $pisAliq, 'pPIS', number_format($pisRate, 4, '.', ''));
-        $this->appendTextElement($document, $pisAliq, 'vPIS', number_format($base * $pisRate / 100, 2, '.', ''));
+        $this->appendTextElement($document, $pisAliq, 'pPIS', number_format($rate, 4, '.', ''));
+        $this->appendTextElement($document, $pisAliq, 'vPIS', number_format($base * $rate / 100, 2, '.', ''));
+    }
 
+    private function appendConfiguredCofins(DOMDocument $document, DOMElement $imposto, float $base, string $cst, float $rate): void
+    {
+        $cst = str_pad($cst, 2, '0', STR_PAD_LEFT);
         $cofins = $document->createElement('COFINS');
         $imposto->appendChild($cofins);
+
+        if (in_array($cst, ['01', '02'], true)) {
+            $cofinsAliq = $document->createElement('COFINSAliq');
+            $cofins->appendChild($cofinsAliq);
+            $this->appendTextElement($document, $cofinsAliq, 'CST', $cst);
+            $this->appendTextElement($document, $cofinsAliq, 'vBC', number_format($base, 2, '.', ''));
+            $this->appendTextElement($document, $cofinsAliq, 'pCOFINS', number_format($rate, 4, '.', ''));
+            $this->appendTextElement($document, $cofinsAliq, 'vCOFINS', number_format($base * $rate / 100, 2, '.', ''));
+
+            return;
+        }
+
+        if (in_array($cst, ['04', '06', '07', '08', '09'], true)) {
+            $cofinsNt = $document->createElement('COFINSNT');
+            $cofins->appendChild($cofinsNt);
+            $this->appendTextElement($document, $cofinsNt, 'CST', $cst);
+
+            return;
+        }
+
         $cofinsAliq = $document->createElement('COFINSAliq');
         $cofins->appendChild($cofinsAliq);
-        $this->appendTextElement($document, $cofinsAliq, 'CST', '01');
+        $this->appendTextElement($document, $cofinsAliq, 'CST', $cst);
         $this->appendTextElement($document, $cofinsAliq, 'vBC', number_format($base, 2, '.', ''));
-        $this->appendTextElement($document, $cofinsAliq, 'pCOFINS', number_format($cofinsRate, 4, '.', ''));
-        $this->appendTextElement($document, $cofinsAliq, 'vCOFINS', number_format($base * $cofinsRate / 100, 2, '.', ''));
+        $this->appendTextElement($document, $cofinsAliq, 'pCOFINS', number_format($rate, 4, '.', ''));
+        $this->appendTextElement($document, $cofinsAliq, 'vCOFINS', number_format($base * $rate / 100, 2, '.', ''));
     }
 
     private function appendIbsCbs(DOMDocument $document, DOMElement $imposto, float $base, ?array $rtcTax): void

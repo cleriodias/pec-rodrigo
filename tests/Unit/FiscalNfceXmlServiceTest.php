@@ -164,6 +164,33 @@ class FiscalNfceXmlServiceTest extends TestCase
         $this->assertStringContainsString('<CNAE>4721102</CNAE>', $xml);
     }
 
+    public function test_append_configured_pis_cofins_preserves_configured_cst_zero(): void
+    {
+        $service = new FiscalNfceXmlService(new FiscalWebserviceResolverService());
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('appendConfiguredPisCofins');
+        $method->setAccessible(true);
+
+        $document = new DOMDocument('1.0', 'UTF-8');
+        $imposto = $document->createElement('imposto');
+        $document->appendChild($imposto);
+
+        $method->invoke($service, $document, $imposto, 100.0, [
+            'cst_pis' => '00',
+            'aliquota_pis' => 0,
+            'cst_cofins' => '00',
+            'aliquota_cofins' => 0,
+        ]);
+
+        $xml = $document->saveXML();
+
+        $this->assertNotFalse($xml);
+        $this->assertStringContainsString('<PISAliq><CST>00</CST>', $xml);
+        $this->assertStringContainsString('<COFINSAliq><CST>00</CST>', $xml);
+        $this->assertStringNotContainsString('<PISAliq><CST>01</CST>', $xml);
+        $this->assertStringNotContainsString('<COFINSAliq><CST>01</CST>', $xml);
+    }
+
     public function test_append_emitter_escapes_ampersand_in_company_names(): void
     {
         $service = new FiscalNfceXmlService(new FiscalWebserviceResolverService());

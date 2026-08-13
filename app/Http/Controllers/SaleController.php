@@ -12,6 +12,7 @@ use App\Models\Venda;
 use App\Models\VendaPagamento;
 use App\Support\FiscalInvoicePreparationService;
 use App\Support\FiscalNfceTransmissionService;
+use App\Support\FiscalTaxSummaryService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -674,6 +675,7 @@ class SaleController extends Controller
             $refreshedInvoice = $fiscalInvoicePreparationService->prepareForPayment(
                 $notaFiscal->pagamento,
                 forceFiscalSignature: true,
+                refreshFiscalConfiguration: true,
             );
 
             if (! $refreshedInvoice) {
@@ -1500,7 +1502,7 @@ class SaleController extends Controller
             'consumer' => $consumer,
             'items' => $this->extractFiscalItems($invoice),
             'xml_debug' => $xmlDebug,
-            'tax_summary' => $xmlDebug['tax_summary'] ?? null,
+            'tax_summary' => FiscalTaxSummaryService::forReceipt($invoice, $xmlDebug['tax_summary'] ?? null),
         ];
     }
 

@@ -12,6 +12,7 @@ use App\Support\FiscalDfeDistributionService;
 use App\Support\FiscalInvoicePreparationService;
 use App\Support\FiscalMunicipalityCodeService;
 use App\Support\FiscalNfceTransmissionService;
+use App\Support\FiscalTaxSummaryService;
 use App\Support\FiscalWebserviceResolverService;
 use App\Support\Setor9Rtc2026Service;
 use Carbon\Carbon;
@@ -787,16 +788,26 @@ class FiscalConfigurationController extends Controller
         $invoice = $fiscalInvoicePreparationService->prepareForPayment(
             $notaFiscal->pagamento,
             forceNewNumber: $forceNewNumber,
+            refreshFiscalConfiguration: true,
         );
 
+        $status = $invoice?->tb27_status ?? 'indefinido';
+        $flashType = in_array($status, ['erro_validacao', 'erro_transmissao'], true) ? 'error' : 'success';
+        $message = sprintf(
+            $forceNewNumber
+                ? 'Nota fiscal da venda %d regenerada com novo numero e status %s.'
+                : 'Nota fiscal da venda %d regenerada com status %s.',
+            (int) $notaFiscal->tb4_id,
+            $status
+        );
+        $details = trim((string) ($invoice?->tb27_mensagem ?? ''));
+
+        if ($details !== '') {
+            $message .= ' Detalhe: ' . $details;
+        }
+
         return $this->redirectToInvoiceListing($request, (int) $notaFiscal->tb2_id)
-            ->with('success', sprintf(
-                $forceNewNumber
-                    ? 'Nota fiscal da venda %d regenerada com novo numero e status %s.'
-                    : 'Nota fiscal da venda %d regenerada com status %s.',
-                (int) $notaFiscal->tb4_id,
-                $invoice?->tb27_status ?? 'indefinido'
-            ));
+            ->with($flashType, $message);
     }
 
     public function destroyInvoice(Request $request, NotaFiscal $notaFiscal): RedirectResponse
@@ -1185,7 +1196,7 @@ class FiscalConfigurationController extends Controller
             'receipt' => $invoice->tb27_recibo,
             'consulta_url' => $xmlData['consulta_url'] ?? null,
             'qr_code_data' => $xmlData['qr_code_data'] ?? null,
-            'tax_summary' => $xmlData['tax_summary'] ?? null,
+            'tax_summary' => FiscalTaxSummaryService::forReceipt($invoice, $xmlData['tax_summary'] ?? null),
             'is_preview' => $invoice->tb27_status !== 'emitida',
             'excluded_items' => $excludedItems->values()->all(),
             'items' => $fiscalItems

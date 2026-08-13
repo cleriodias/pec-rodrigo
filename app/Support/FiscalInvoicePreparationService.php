@@ -25,6 +25,7 @@ class FiscalInvoicePreparationService
         ?array $consumer = null,
         bool $forceFiscalSignature = false,
         bool $forceNewNumber = false,
+        bool $refreshFiscalConfiguration = false,
     ): ?NotaFiscal
     {
         $payment->loadMissing([
@@ -44,7 +45,7 @@ class FiscalInvoicePreparationService
         }
 
         try {
-            return DB::transaction(function () use ($payment, $unitId, $consumer, $forceFiscalSignature, $forceNewNumber) {
+            return DB::transaction(function () use ($payment, $unitId, $consumer, $forceFiscalSignature, $forceNewNumber, $refreshFiscalConfiguration) {
                 $config = null;
                 $invoice = NotaFiscal::query()
                     ->where('tb4_id', $payment->tb4_id)
@@ -116,7 +117,7 @@ class FiscalInvoicePreparationService
                 }
 
                 [$eligibleSales, $excludedItems] = $this->splitSalesForFiscal($payment);
-                $rtcTaxSnapshots = $this->resolveRtcTaxSnapshots($invoice, $eligibleSales, $config, $unitId);
+                $rtcTaxSnapshots = $this->resolveRtcTaxSnapshots($invoice, $eligibleSales, $config, $unitId, $refreshFiscalConfiguration);
                 $consumerPayload = $this->resolveConsumerPayload($invoice, $consumer);
                 $payload = $this->buildPayload(
                     $payment,
@@ -586,14 +587,27 @@ class FiscalInvoicePreparationService
 
                     if (in_array((string) $config->tb26_regime_tributario, ['lucro_presumido', 'lucro_real'], true)) {
                         if (($tax['cst_icms'] ?? null) !== '00') {
-                            $missingFields[] = 'CST ICMS 00';
+                            $missingFields[] = sprintf(
+                                'CST ICMS esperado 00 (atual %s)',
+                                $this->formatFiscalRuleValue($tax['cst_icms'] ?? null)
+                            );
                         }
-                        if (($tax['cst_pis'] ?? null) !== '01' || ($tax['cst_cofins'] ?? null) !== '01') {
-                            $missingFields[] = 'CST PIS/COFINS 01';
-                        }
-                        foreach (['aliquota_icms' => 'aliquota ICMS', 'aliquota_pis' => 'aliquota PIS', 'aliquota_cofins' => 'aliquota COFINS'] as $field => $label) {
+                        foreach (['cst_pis' => 'CST PIS', 'cst_cofins' => 'CST COFINS'] as $field => $label) {
                             if (! array_key_exists($field, $tax) || $tax[$field] === null || $tax[$field] === '') {
                                 $missingFields[] = $label;
+                            }
+                        }
+                        foreach (['aliquota_icms' => 'aliquota ICMS'] as $field => $label) {
+                            if (! array_key_exists($field, $tax) || $tax[$field] === null || $tax[$field] === '') {
+                                $missingFields[] = $label . ' nao informada';
+                            }
+                        }
+                        foreach (['cst_pis' => ['aliquota_pis', 'aliquota PIS'], 'cst_cofins' => ['aliquota_cofins', 'aliquota COFINS']] as $cstField => [$rateField, $label]) {
+                            if (
+                                in_array(str_pad((string) ($tax[$cstField] ?? ''), 2, '0', STR_PAD_LEFT), ['01', '02'], true)
+                                && (! array_key_exists($rateField, $tax) || $tax[$rateField] === null || $tax[$rateField] === '')
+                            ) {
+                                $missingFields[] = $label . ' nao informada';
                             }
                         }
                     }
@@ -613,7 +627,20 @@ class FiscalInvoicePreparationService
         return array_values(array_unique($errors));
     }
 
-    private function resolveRtcTaxSnapshots(?NotaFiscal $invoice, $sales, ?ConfiguracaoFiscal $config, int $unitId): array
+    private function formatFiscalRuleValue(mixed $value): string
+    {
+        $value = trim((string) $value);
+
+        return $value !== '' ? $value : 'nao informado';
+    }
+
+    private function resolveRtcTaxSnapshots(
+        ?NotaFiscal $invoice,
+        $sales,
+        ?ConfiguracaoFiscal $config,
+        int $unitId,
+        bool $refreshFiscalConfiguration = false,
+    ): array
     {
         if (! $config?->tb26_rtc_2026_ativa) {
             return [];
@@ -623,7 +650,7 @@ class FiscalInvoicePreparationService
             ? ($invoice->tb27_payload['tributacao_rtc_2026'] ?? null)
             : null;
 
-        if (is_array($storedSnapshot) && $storedSnapshot !== []) {
+        if (! $refreshFiscalConfiguration && is_array($storedSnapshot) && $storedSnapshot !== []) {
             return $storedSnapshot;
         }
 
@@ -764,7 +791,9 @@ class FiscalInvoicePreparationService
                     $excludedCount
                 )
                 : 'Nota preparada e aguardando integracao com a SEFAZ.',
-            'erro_validacao' => $errors[0] ?? 'A nota possui pendencias fiscais.',
+            'erro_validacao' => $errors !== []
+                ? implode(' ', array_map(fn (string $error): string => rtrim($error, '.') . '.', $errors))
+                : 'A nota possui pendencias fiscais.',
             default => 'A unidade ainda nao possui configuracao fiscal suficiente para emitir.',
         };
     }
