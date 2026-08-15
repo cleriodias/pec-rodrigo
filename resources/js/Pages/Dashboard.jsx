@@ -2109,6 +2109,60 @@ export default function Dashboard({
         }
     };
 
+    const handleEmergencyTransmitFiscal = async () => {
+        const paymentId = Number(receiptData?.payment?.id ?? receiptData?.id ?? 0);
+
+        if (!paymentId || transmittingFiscal) {
+            return;
+        }
+
+        setSaleError('');
+        setTransmittingFiscal(true);
+
+        try {
+            const response = await axios.post(route('sales.fiscal.emergency-transmit', { payment: paymentId }));
+            const payload = response?.data ?? {};
+
+            const nextReceiptData = receiptData
+                ? {
+                    ...receiptData,
+                    fiscal: payload.fiscal ?? receiptData.fiscal,
+                    fiscal_emergency_available: false,
+                }
+                : null;
+
+            setReceiptData(nextReceiptData);
+
+            if (nextReceiptData?.fiscal?.status === 'emitida') {
+                window.setTimeout(() => handlePrintFiscalReceipt(nextReceiptData), 0);
+            }
+        } catch (error) {
+            let message = 'Nao foi possivel transmitir a nota fiscal emergencial desta venda.';
+
+            if (error.response?.data?.message) {
+                message = error.response.data.message;
+            } else if (error.message) {
+                message = error.message;
+            }
+
+            setSaleError(message);
+
+            if (error.response?.data?.fiscal) {
+                setReceiptData((current) => (
+                    current
+                        ? {
+                            ...current,
+                            fiscal: error.response.data.fiscal,
+                            fiscal_emergency_available: false,
+                        }
+                        : current
+                ));
+            }
+        } finally {
+            setTransmittingFiscal(false);
+        }
+    };
+
     const resetSaleState = () => {
         setTexto('');
         setSuggestions([]);
@@ -3270,6 +3324,16 @@ export default function Dashboard({
                                         : (receiptData.payment?.tipo_pagamento === 'dinheiro'
                                             ? 'Assinar e transmitir NF'
                                             : 'Transmitir NF')}
+                                </button>
+                            )}
+                            {!receiptData.fiscal && receiptData.fiscal_emergency_available && (
+                                <button
+                                    type="button"
+                                    className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                    onClick={handleEmergencyTransmitFiscal}
+                                    disabled={transmittingFiscal}
+                                >
+                                    {transmittingFiscal ? 'Transmitindo emergencia...' : 'Assinar e transmitir emergencia'}
                                 </button>
                             )}
                             <button

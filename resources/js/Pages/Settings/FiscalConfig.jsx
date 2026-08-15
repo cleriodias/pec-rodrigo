@@ -889,12 +889,20 @@ export default function FiscalConfig({
                                         Selecione a loja pelos botoes abaixo.
                                     </p>
                                 </div>
-                                <Link
-                                    href={route('settings.nfe', selectedUnitId ? { unit_id: selectedUnitId } : {})}
-                                    className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:border-blue-300 hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200 dark:hover:bg-blue-500/20"
-                                >
-                                    Abrir NFe
-                                </Link>
+                                <div className="flex flex-wrap gap-2">
+                                    <Link
+                                        href={route('settings.nfe', selectedUnitId ? { unit_id: selectedUnitId } : {})}
+                                        className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:border-blue-300 hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200 dark:hover:bg-blue-500/20"
+                                    >
+                                        Abrir NFe
+                                    </Link>
+                                    <Link
+                                        href={route('settings.fiscal.tax-limit', selectedUnitId ? { unit_id: selectedUnitId } : {})}
+                                        className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700 transition hover:border-amber-300 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100 dark:hover:bg-amber-500/20"
+                                    >
+                                        Configuracao Limite Imposto
+                                    </Link>
+                                </div>
                             </div>
                             <div className="flex flex-wrap gap-3">
                                 {units.map((store) => {

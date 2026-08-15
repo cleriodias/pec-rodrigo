@@ -338,6 +338,10 @@ Route::middleware('auth')->group(function () {
         ->name('settings.fiscal');
     Route::get('/settings/nfe', [FiscalConfigurationController::class, 'nfeIndex'])
         ->name('settings.nfe');
+    Route::get('/settings/fiscal/limite-imposto', [FiscalConfigurationController::class, 'taxLimitIndex'])
+        ->name('settings.fiscal.tax-limit');
+    Route::post('/settings/fiscal/limite-imposto', [FiscalConfigurationController::class, 'updateTaxLimit'])
+        ->name('settings.fiscal.tax-limit.update');
     Route::post('/settings/fiscal', [FiscalConfigurationController::class, 'update'])
         ->name('settings.fiscal.update');
     Route::post('/settings/fiscal/reprocess', [FiscalConfigurationController::class, 'reprocess'])
@@ -447,6 +451,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/sales/dashboard-status', [SaleController::class, 'dashboardStatus'])->name('sales.dashboard-status');
     Route::get('/sales/comandas/{codigo}/items', [SaleController::class, 'comandaItems'])->name('sales.comandas.items');
     Route::post('/sales', [SaleController::class, 'store'])->name('sales.store');
+    Route::post('/sales/fiscal/payments/{payment}/emergency-transmit', [SaleController::class, 'emergencyTransmitFiscalInvoice'])->name('sales.fiscal.emergency-transmit');
     Route::post('/sales/fiscal/{notaFiscal}/transmit', [SaleController::class, 'transmitFiscalInvoice'])->name('sales.fiscal.transmit');
     Route::post('/sales/fiscal/{notaFiscal}/consumer', [SaleController::class, 'updateConsumerFiscalInvoice'])->name('sales.fiscal.consumer');
     Route::post('/sales/comandas/{codigo}/items', [SaleController::class, 'addComandaItem'])->name('sales.comandas.add-item');
