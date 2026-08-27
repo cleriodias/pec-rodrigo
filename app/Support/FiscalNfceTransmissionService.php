@@ -67,7 +67,7 @@ class FiscalNfceTransmissionService
                 $certificateData,
             );
 
-            $parsed = $this->parseAuthorizationResponse($responseXml);
+            $parsed = $this->parseAuthorizationResponse($responseXml, (string) $invoice->tb27_xml_envio);
 
             $invoice->update([
                 'tb27_status' => $parsed['status'],
@@ -414,7 +414,7 @@ class FiscalNfceTransmissionService
         return $content !== '' ? $content : null;
     }
 
-    private function parseAuthorizationResponse(string $responseXml): array
+    private function parseAuthorizationResponse(string $responseXml, ?string $signedXml = null): array
     {
         $document = new DOMDocument();
         $loaded = @$document->loadXML($responseXml);
@@ -460,6 +460,8 @@ class FiscalNfceTransmissionService
             $message = sprintf('cStat %s - %s', $rootStatus, $message !== '' ? $message : 'A SEFAZ nao autorizou a NFC-e.');
         }
 
+        $message = $this->enrichNcmRejectionMessage($message, $signedXml);
+
         return [
             'status' => 'erro_transmissao',
             'message' => $message !== '' ? $message : 'A SEFAZ nao autorizou a NFC-e.',
@@ -470,9 +472,62 @@ class FiscalNfceTransmissionService
         ];
     }
 
-    private function xpathValue(DOMXPath $xpath, string $expression): string
+    private function enrichNcmRejectionMessage(string $message, ?string $signedXml): string
     {
-        return trim((string) $xpath->evaluate($expression));
+        if ($signedXml === null || $signedXml === '' || ! str_contains($message, 'cStat 778')) {
+            return $message;
+        }
+
+        if (! preg_match('/\[nItem:\s*(\d+)\]/i', $message, $matches)) {
+            return $message;
+        }
+
+        $itemNumber = (int) $matches[1];
+
+        if ($itemNumber <= 0) {
+            return $message;
+        }
+
+        $document = new DOMDocument();
+
+        if (! @$document->loadXML(trim($signedXml))) {
+            return $message;
+        }
+
+        $xpath = new DOMXPath($document);
+        $xpath->registerNamespace('nfe', 'http://www.portalfiscal.inf.br/nfe');
+        $det = $xpath->query(sprintf('//nfe:det[@nItem="%d"]', $itemNumber))->item(0);
+
+        if (! $det) {
+            return $message;
+        }
+
+        $productCode = $this->xpathValue($xpath, 'string(nfe:prod/nfe:cProd)', $det);
+        $productName = $this->xpathValue($xpath, 'string(nfe:prod/nfe:xProd)', $det);
+        $ncm = $this->xpathValue($xpath, 'string(nfe:prod/nfe:NCM)', $det);
+
+        if ($ncm === '') {
+            return $message;
+        }
+
+        $details = sprintf(' Item %d enviado com NCM %s', $itemNumber, $ncm);
+
+        if ($productCode !== '') {
+            $details .= sprintf(', produto %s', $productCode);
+        }
+
+        if ($productName !== '') {
+            $details .= sprintf(' (%s)', $productName);
+        }
+
+        return rtrim($message, '.') . '.' . $details . '. Corrija o NCM no cadastro do produto e regenere/transmita a nota.';
+    }
+
+    private function xpathValue(DOMXPath $xpath, string $expression, mixed $contextNode = null): string
+    {
+        return trim((string) ($contextNode === null
+            ? $xpath->evaluate($expression)
+            : $xpath->evaluate($expression, $contextNode)));
     }
 
     private function extractSignedXmlFromBatch(string $lotXml): string

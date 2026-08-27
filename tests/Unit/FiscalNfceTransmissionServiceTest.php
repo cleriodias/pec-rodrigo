@@ -77,6 +77,46 @@ XML;
         $this->assertSame('522600000000001', $parsed['receipt']);
     }
 
+    public function test_parse_authorization_response_enriches_ncm_rejection_with_xml_item_details(): void
+    {
+        $service = new FiscalNfceTransmissionService(
+            new FiscalCertificateService(),
+            new FiscalWebserviceResolverService(),
+            new FiscalNfceXmlService(new FiscalWebserviceResolverService()),
+        );
+
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('parseAuthorizationResponse');
+        $method->setAccessible(true);
+
+        $response = <<<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<retEnviNFe xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
+    <cStat>104</cStat>
+    <xMotivo>Lote processado</xMotivo>
+    <protNFe>
+        <infProt>
+            <cStat>778</cStat>
+            <xMotivo>Rejeição: Informado NCM inexistente [nItem: 1]</xMotivo>
+        </infProt>
+    </protNFe>
+</retEnviNFe>
+XML;
+
+        $signedXml = <<<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<NFe xmlns="http://www.portalfiscal.inf.br/nfe"><infNFe Id="NFe1" versao="4.00"><ide><cUF>52</cUF><mod>65</mod><tpImp>4</tpImp></ide><det nItem="1"><prod><cProd>10</cProd><xProd>QUEIJO MUSSARELA</xProd><NCM>04069000</NCM><CFOP>5102</CFOP></prod></det></infNFe></NFe>
+XML;
+
+        $parsed = $method->invoke($service, $response, $signedXml);
+
+        $this->assertSame('erro_transmissao', $parsed['status']);
+        $this->assertSame(
+            'cStat 778 - Rejeição: Informado NCM inexistente [nItem: 1]. Item 1 enviado com NCM 04069000, produto 10 (QUEIJO MUSSARELA). Corrija o NCM no cadastro do produto e regenere/transmita a nota.',
+            $parsed['message']
+        );
+    }
+
     public function test_assert_batch_preserves_signed_xml_or_fail_detects_changes_before_soap(): void
     {
         $service = new FiscalNfceTransmissionService(

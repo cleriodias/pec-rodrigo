@@ -81,7 +81,7 @@ class FiscalNfceXmlService
         $this->appendEmitter($document, $infNfe, $configuration, $unitCnpj);
         $this->appendDestination($document, $infNfe, $consumer);
         $this->appendItems($document, $infNfe, $sales, (int) $configuration->tb26_crt, $configuration, $rtcTaxSnapshots);
-        $documentTotal = $this->documentTotal($sales, $rtcTaxSnapshots, (bool) $configuration->tb26_rtc_2026_ativa);
+        $documentTotal = $this->documentTotal($sales);
 
         $this->appendTotals($document, $infNfe, $sales, (int) $configuration->tb26_crt, $rtcTaxSnapshots, (bool) $configuration->tb26_rtc_2026_ativa);
         $this->appendTransport($document, $infNfe);
@@ -515,7 +515,7 @@ class FiscalNfceXmlService
         $totals = $this->calculateIbsCbsTotals($sales, $rtcTaxSnapshots, $rtcEnabled);
         $icmsTotals = $this->calculateIcmsTotals($sales, $rtcTaxSnapshots, $crt === 3 && $rtcEnabled);
         $sumProducts = number_format($totals['base'], 2, '.', '');
-        $documentTotal = number_format($totals['base'] + $totals['ibs_uf'] + $totals['ibs_mun'] + $totals['cbs'], 2, '.', '');
+        $documentTotal = number_format($totals['base'], 2, '.', '');
 
         $total = $document->createElement('total');
         $infNfe->appendChild($total);
@@ -565,11 +565,9 @@ class FiscalNfceXmlService
         $this->appendTextElement($document, $cbs, 'vCredPresCondSus', '0.00');
     }
 
-    private function documentTotal($sales, array $rtcTaxSnapshots, bool $rtcEnabled): float
+    private function documentTotal($sales): float
     {
-        $totals = $this->calculateIbsCbsTotals($sales, $rtcTaxSnapshots, $rtcEnabled);
-
-        return $totals['base'] + $totals['ibs_uf'] + $totals['ibs_mun'] + $totals['cbs'];
+        return (float) $sales->sum('valor_total');
     }
 
     private function calculateIbsCbsTotals($sales, array $rtcTaxSnapshots, bool $rtcEnabled): array

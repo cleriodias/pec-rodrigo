@@ -516,6 +516,39 @@ class FiscalNfceXmlServiceTest extends TestCase
         $this->assertStringContainsString('<cAut>ABC123</cAut>', $xml);
     }
 
+    public function test_append_totals_keeps_vnf_equal_to_products_when_rtc_is_enabled(): void
+    {
+        $service = new FiscalNfceXmlService(new FiscalWebserviceResolverService());
+        $reflection = new ReflectionClass($service);
+        $appendTotals = $reflection->getMethod('appendTotals');
+        $appendTotals->setAccessible(true);
+
+        $document = new DOMDocument('1.0', 'UTF-8');
+        $infNfe = $document->createElement('infNFe');
+        $document->appendChild($infNfe);
+
+        $sale = new Venda([
+            'tb1_id' => 10,
+            'valor_total' => 100,
+        ]);
+
+        $appendTotals->invoke($service, $document, $infNfe, collect([$sale]), 1, [
+            '10' => [
+                'aliquota_ibs_uf' => 0.10,
+                'aliquota_ibs_mun' => 0,
+                'aliquota_cbs' => 0.90,
+            ],
+        ], true);
+
+        $xml = $document->saveXML();
+
+        $this->assertNotFalse($xml);
+        $this->assertStringContainsString('<vProd>100.00</vProd>', $xml);
+        $this->assertStringContainsString('<vNF>100.00</vNF>', $xml);
+        $this->assertStringContainsString('<vIBSUF>0.10</vIBSUF>', $xml);
+        $this->assertStringContainsString('<vCBS>0.90</vCBS>', $xml);
+    }
+
     public function test_build_signed_xml_keeps_official_root_order_with_supplemental_info_before_signature(): void
     {
         $service = new FiscalNfceXmlService(new FiscalWebserviceResolverService());
