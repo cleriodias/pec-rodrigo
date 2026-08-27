@@ -887,6 +887,7 @@ class FiscalConfigurationController extends Controller
 
         $invoice = $fiscalInvoicePreparationService->prepareForPayment(
             $notaFiscal->pagamento,
+            forceFiscalSignature: true,
             forceNewNumber: $forceNewNumber,
             refreshFiscalConfiguration: true,
         );
@@ -978,7 +979,11 @@ class FiscalConfigurationController extends Controller
                     ->with('error', 'Nao foi encontrado o pagamento vinculado a esta nota fiscal.');
             }
 
-            $refreshedInvoice = $fiscalInvoicePreparationService->prepareForPayment($notaFiscal->pagamento);
+            $refreshedInvoice = $fiscalInvoicePreparationService->prepareForPayment(
+                $notaFiscal->pagamento,
+                forceFiscalSignature: true,
+                refreshFiscalConfiguration: true,
+            );
 
             if (! $refreshedInvoice) {
                 return $this->redirectToInvoiceListing($request, (int) $notaFiscal->tb2_id)
@@ -1062,7 +1067,11 @@ class FiscalConfigurationController extends Controller
                     throw new RuntimeException('Nao foi encontrado o pagamento vinculado a esta nota fiscal.');
                 }
 
-                $refreshedInvoice = $fiscalInvoicePreparationService->prepareForPayment($notaFiscal->pagamento);
+                $refreshedInvoice = $fiscalInvoicePreparationService->prepareForPayment(
+                    $notaFiscal->pagamento,
+                    forceFiscalSignature: true,
+                    refreshFiscalConfiguration: true,
+                );
 
                 if (! $refreshedInvoice) {
                     throw new RuntimeException('Esta forma de pagamento nao gera nota fiscal automatica para transmissao.');

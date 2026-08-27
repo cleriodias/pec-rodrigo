@@ -1899,6 +1899,7 @@ class SalesReportController extends Controller
             $refreshedInvoice = $fiscalInvoicePreparationService->prepareForPayment(
                 $notaFiscal->pagamento,
                 forceFiscalSignature: true,
+                refreshFiscalConfiguration: true,
             );
             $currentInvoice = $refreshedInvoice ?? $notaFiscal;
 
